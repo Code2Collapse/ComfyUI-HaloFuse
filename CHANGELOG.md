@@ -1,0 +1,93 @@
+# Changelog
+
+## 0.4.0 — Unreleased (HaloFuse)
+
+The extension becomes **HaloFuse** and is published as `ComfyUI-HaloFuse`, with the cloud runtime in `runtime/`.
+Each entry says whether it is in the code (**landed**), needs the 0.4.0 runtime image (**needs runtime image**: the
+runner code has landed but the image has not been built), or is still being built (**in development**). Nothing that
+needs a real cloud GPU (stop timing, live previews, billing, GPU memory) is verified yet.
+
+### Changed
+
+- **New product name: HaloFuse.** Panel, console, messages, documentation and the job folder use the HaloFuse name.
+  Internal module names, the settings file location and the old routes stay, so saved settings and old outputs keep
+  working. *(landed)*
+- **New install folder and registry id: `ComfyUI-HaloFuse`** (publisher `code2collapse`). *(landed)*
+- **The cloud service address is deployment configuration.** It is no longer shown, saved from or returned to the
+  browser, and a request can no longer change it. It comes from the deployment environment or a private deployment
+  file in ComfyUI's system user folder. An install whose saved address equals the 0.3.x default is carried over once;
+  any other saved value is not carried over (it may have been planted) and needs provisioning; a fresh install needs
+  provisioning. Plain `http://` addresses are refused unless they point at this computer. *(landed)*
+- **Password storage.** The password moves into the system keychain (Windows Credential Manager, macOS Keychain,
+  Linux Secret Service). Without a keychain, plain-text storage needs an explicit opt-in that the panel labels.
+  Existing passwords are migrated automatically and removed from the old settings file only after the keychain copy
+  is verified. *(landed)*
+- **Deployment credentials win.** When the deployment supplies both email and password, they take precedence over
+  panel-saved ones and the account section is read-only. *(landed)*
+- **Downgrade note:** after the migration an older version finds no saved password; enter it again there or use
+  deployment-managed credentials.
+- **New dependency: `keyring`** (pure Python) for the system keychain. *(landed)*
+
+### Added
+
+- **Sidebar panel** with GPU and price estimate, preview mode, render repeats, account, queue, recent jobs and
+  advanced settings. *(landed)*
+- **Floating console:** move, resize, near-full-screen, minimise; Logs with search, filters, copy all and save;
+  Progress, Telemetry, Problems and Summary tabs; reattach after a reload or a ComfyUI restart. *(landed; Progress and
+  Telemetry need runtime image)*
+- **Job records** in `output/HaloFuse/<job id>/` (record, workflow, complete event log, bridge, render and error
+  logs), surviving restarts. *(landed)*
+- **Real cancellation:** Stop now and Stop after current, with every step shown and the completion race handled.
+  *(landed; cloud-side timing not verified)*
+- **Limits and cost:** maximum runtime per job (6 hours by default, status "timed out"), optional per-job and daily
+  cost caps, a running cost estimate. *(landed; panel controls for the limits in development)*
+- **Queue:** reorder, remove, pause, resume, persisted across restarts. *(landed)*
+- **Diagnosis:** a title, likely cause and next step for every failure category. *(landed; most precise with the
+  runtime image)*
+- **Cloud runner 0.4.0:** structured progress events, telemetry, previews, launch presets from an allowlist, one
+  ComfyUI restart after a crash (the rest of a queue chunk still runs), out-of-memory recovery, clean stops that keep
+  partial outputs, outputs that keep their subfolders. *(needs runtime image)*
+- **Live preview** (experimental). *(needs runtime image; not verified)*
+- **Automatic delivery of every output** and the logs into `output/HaloFuse/<job id>/`, size + SHA-256 checked,
+  resumable, **Retry** and **Recover outputs**; images are no longer copied loose into the output root.
+  *(available; partial outputs after a stop need runtime image)*
+- **Workflow Check** (unknown or unavailable nodes, missing models / input files / required inputs, broken links,
+  invalid values, GPU-memory facts; no GPU started) and **Quick Draft** (reduced copy on each widget's own grid).
+  Input files are planned safely: absolute, `..`, drive, UNC and linked paths are refused before anything is copied.
+  *(available)*
+- **Node profiles** and the optimised runtime build. *(in development)*
+- **Documentation:** user manual, operations runbook, getting-started guide, screenshots. *(landed)*
+
+### Security
+
+- Account and settings requests are accepted only from this computer, and changes must come from the HaloFuse panel.
+  *(landed)*
+- Logs, error messages and job folders are scrubbed of passwords, tokens and the service address. *(landed)*
+- Workflow input values that point outside ComfyUI's `input` folder are blocked before upload. *(in development)*
+
+### Tests
+
+- The extension's suite runs without the cloud connector, ComfyUI, a GPU or the network, from any checkout folder
+  name: a shared fake ComfyUI, leak scanners, a security regression suite, and a browser-test harness for an isolated
+  test machine. The runtime has its own suite in `runtime/tests`. *(landed)*
+
+## 0.3.4 and earlier (before the HaloFuse name)
+
+Short summaries; the full notes of these releases are kept with the project's private records.
+
+- **0.3.4 — 2026-10-23.** Long renders are no longer cut off at one hour (no fixed wall-clock ceiling is sent);
+  the 30-minute inactivity detector remains.
+- **0.3.3 — 2026-10-22.** Inactivity detector set to 30 minutes; the requirements file now pins the connector
+  version that model sync needs.
+- **0.3.2 — 2026-07-27.** An explicit one-hour wall-clock ceiling on every job (removed again in 0.3.4).
+- **0.3.1 — 2026-07-27.** Render queue and submission reliability fixes (queue waits no longer fail silently).
+- **0.3.0 — 2026-07-25.** Multi-workflow render queue on one warm machine; seeds honour `control_after_generate`.
+- **0.2.4 — 2026-07-22.** Clearer render queue panel header and documentation.
+- **0.2.3 — 2026-07-18.** The GPU list shows only GPU machine types; UI fixes.
+- **0.2.2 — 2026-07-12.** Settings survive an uninstall or reinstall (moved to ComfyUI's user folder).
+- **0.2.1 — 2026-07-07.** Version indicator in the panel title; fixes from tester feedback.
+- **0.2.0 — 2026-07-02.** Pre-render model check against the cloud model library with consented upload.
+- **0.1.2 — 2026-06-30.** Warm-machine affinity for the queue; safer input-file staging.
+- **0.1.1 — 2026-06-29.** Registry metadata; Python 3.12 minimum.
+- **0.1.0 — 2026-06-21.** First release: panel, single render with live progress, render repeats, render queue,
+  sequential output naming.

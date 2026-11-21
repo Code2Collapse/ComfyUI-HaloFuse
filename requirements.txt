@@ -1,0 +1,7 @@
+# The Spark Fuse API client (the "messenger"). Installs its own deps
+# (httpx, httpx-sse, python-dotenv, ...) transitively.
+spark-fuse-messenger>=0.5.0
+# OS keychain for the account password (Windows Credential Manager, macOS Keychain, Secret Service).
+# Pure Python; imported behind a guard. Without a usable keychain, storing the password unencrypted
+# needs an explicit, labelled opt-in in the panel.
+keyring>=25

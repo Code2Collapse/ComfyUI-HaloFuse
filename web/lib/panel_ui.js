@@ -1,0 +1,305 @@
+// HaloFuse compact control panel (rendered inside the ComfyUI sidebar tab): GPU + price, account, preview
+// mode, render / stop, job status, Open console, queue, recent jobs, advanced settings.
+// The panel element is built once and re-attached when the sidebar tab re-mounts, so closing the tab
+// loses nothing. Side-effect-free ES module.
+
+import { bindH, clear } from "./dom.js";
+import { AccountSection } from "./account_ui.js";
+import { PREVIEW_MODES } from "./controller.js";
+import { cancelActions, cancelInfo, costText, deliveryText, isTerminal, progressText, statusInfo } from "./job_view.js";
+import { fmtBytes, fmtLocal, fmtUsd } from "./format.js";
+import { outputKind } from "./console_panes.js";
+
+export class Panel {
+  /**
+   * @param {{doc: Document, win: Window, api: object, controller: import("./controller.js").Controller,
+   *   session: import("./session.js").JobSession, openConsole: (tab?: string) => void,
+   *   viewUrl: (ref: object) => string, version: string}} o
+   */
+  constructor(o) {
+    Object.assign(this, { doc: o.doc, win: o.win, api: o.api, ctl: o.controller, session: o.session, openConsole: o.openConsole, viewUrl: o.viewUrl });
+    const H = bindH(this.doc);
+    this.H = H;
+    this.version = H("span", { className: "hf-version" });
+    this.account = new AccountSection({ doc: this.doc, win: this.win, api: this.api,
+      onStatus: (s) => { if (s.credentials_configured && !this.ctl.state.skus.length) this.ctl.loadSkus(); } });
+
+    this.skuSel = H("select", { className: "hf-select", id: "hf-sku", onchange: () => this.ctl.setInstanceType(this.skuSel.value) });
+    this.rate = H("div", { className: "hf-hint", attrs: { "aria-live": "polite" } });
+    this.modeSel = H("select", { className: "hf-select", id: "hf-preview-mode", onchange: () => this.ctl.setPreviewMode(this.modeSel.value) },
+      ...PREVIEW_MODES.map(([k, label]) => H("option", { value: k, text: label })));
+    this.modeHint = H("div", { className: "hf-hint" });
+    this.repeats = H("input", { className: "hf-input", type: "number", id: "hf-repeats", min: "1", max: "100", step: "1",
+      onchange: () => this.ctl.setRenderRepeats(this.repeats.value) });
+    this.renderBtn = H("button", { className: "hf-btn hf-primary", type: "button", style: { flex: "1" }, onclick: () => this.ctl.render() });
+    this.consoleBtn = H("button", { className: "hf-btn", type: "button", text: "Open console", onclick: () => this.openConsole() });
+    this.message = H("div", { className: "hf-status", attrs: { role: "status", "aria-live": "polite" } });
+    this.checkBox = H("div");
+    this.consentBox = H("div");
+    this.jobBox = H("div", { attrs: { "aria-live": "off" } });
+    this.queueBox = H("div");
+    this.recentBox = H("div");
+    this.recoverInput = H("input", { className: "hf-input", type: "text", placeholder: "Job id…", attrs: { "aria-label": "Job id to recover" } });
+
+    const lib = H("input", { className: "hf-input", type: "text", id: "hf-lib", placeholder: "/models" });
+    const affinity = H("select", { className: "hf-select", id: "hf-affinity" },
+      H("option", { value: "required", text: "Required (wait for a cached machine)" }),
+      H("option", { value: "preferred", text: "Preferred (start sooner)" }));
+    const guard = H("input", { className: "hf-input", type: "number", id: "hf-guard", min: "1", step: "1" });
+    const libHint = H("div", { className: "hf-hint" });
+    lib.addEventListener("input", () => {
+      const v = lib.value.trim();
+      libHint.textContent = v && !v.startsWith("/") ? "The path must start with “/”." : "";
+      libHint.className = `hf-hint${v && !v.startsWith("/") ? " hf-tone-warning" : ""}`;
+    });
+    this.adv = { lib, affinity, guard };
+    const saveAdv = H("button", { className: "hf-btn", type: "button", text: "Save settings", onclick: () => {
+      const v = lib.value.trim();
+      if (v && !v.startsWith("/")) { this.ctl.say("The cloud model library path must start with “/”.", "warning"); return; }
+      const g = parseInt(guard.value, 10);
+      this.ctl.saveAdvanced({ assets_share_sync_path: v, image_affinity: affinity.value, upload_guard_gb: g > 0 ? g : 50 });
+    } });
+
+    const field = (label, input, hint) => H("label", { className: "hf-field", htmlFor: input.id }, H("span", { text: label }), input, hint || null);
+    this.el = H("div", { className: "hf-root", attrs: { "aria-label": "HaloFuse" } },
+      H("div", { className: "hf-head" }, H("h2", {}, H("span", { className: "hf-mark", attrs: { "aria-hidden": "true" } }), "HaloFuse"), this.version),
+      field("GPU", this.skuSel), this.rate,
+      field("Preview", this.modeSel), this.modeHint,
+      field("Render repeats", this.repeats),
+      H("div", { className: "hf-row", style: { margin: "4px 0 6px" } }, this.renderBtn, this.consoleBtn),
+      this.message, this.checkBox, this.consentBox, this.jobBox,
+      this.account.el,
+      H("details", { className: "hf-section" }, H("summary", { text: "Queue" }), this.queueBox),
+      H("details", { className: "hf-section", ontoggle: (e) => { if (e.target.open) this.ctl.loadRecent(); } },
+        H("summary", { text: "Recent jobs" }), this.recentBox,
+        H("div", { className: "hf-row", style: { marginTop: "8px" } }, H("div", { className: "hf-grow" }, this.recoverInput),
+          H("button", { className: "hf-btn", type: "button", text: "Recover outputs", title: "Download an earlier job's outputs and logs into the HaloFuse output folder",
+            onclick: () => this.ctl.recover(this.recoverInput.value) }))),
+      H("details", { className: "hf-section" }, H("summary", { text: "Advanced" }),
+        field("Cloud model library path", lib, libHint), field("Machine placement", affinity),
+        field("Largest automatic model upload (GB)", guard), saveAdv));
+
+    this._unsubs = [this.ctl.subscribe(() => this.update()), this.session.subscribe((w) => { if (w !== "log") this.update(); })];
+    this._advLoaded = false;
+    this.update();
+  }
+
+  mount(container) {
+    container.append(this.el);
+    this.account.load();
+    this.update();
+  }
+
+  unmount() { this.el.remove(); }
+
+  update() {
+    const st = this.ctl.state;
+    const H = this.H;
+    this.version.textContent = st.settings?.version ? `v${st.settings.version}` : "";
+    if (st.settings && !this._advLoaded) {
+      this._advLoaded = true;
+      this.adv.lib.value = st.settings.assets_share_sync_path || "";
+      this.adv.affinity.value = st.settings.image_affinity === "preferred" ? "preferred" : "required";
+      this.adv.guard.value = st.settings.upload_guard_gb || 50;
+    }
+    // GPU list
+    const want = st.skus.map((s) => s.instance_type).join("|");
+    if (this.skuSel.dataset.list !== want) {
+      this.skuSel.dataset.list = want;
+      clear(this.skuSel);
+      if (!st.skus.length) this.skuSel.append(H("option", { value: "", text: st.skuError ? "GPU list unavailable" : "Loading GPUs…" }));
+      for (const s of st.skus) {
+        const mem = s.gpu_memory_gb ? ` ${s.gpu_memory_gb} GB` : "";
+        this.skuSel.append(H("option", { value: s.instance_type, text: `${s.instance_type}${s.gpu_type ? ` (${s.gpu_type}${mem})` : ""}` }));
+      }
+    }
+    this.skuSel.value = st.instanceType;
+    this.rate.className = `hf-hint${st.skuError ? " hf-tone-danger" : ""}`;
+    this.rate.textContent = st.skuError ? st.skuError : st.rateLoading ? "Checking the price…"
+      : st.rate != null ? `${fmtUsd(st.rate)} per hour (provider estimate)` : st.instanceType ? "Price not available for this GPU." : "";
+    this.modeSel.value = st.previewMode;
+    this.modeHint.textContent = PREVIEW_MODES.find(([k]) => k === st.previewMode)?.[2] || "";
+    if (this.doc.activeElement !== this.repeats) this.repeats.value = String(st.renderRepeats);
+
+    const active = this.ctl.active;
+    const check = st.previewMode === "check";
+    this.renderBtn.textContent = st.busy ? "Working…" : check ? "Check workflow" : st.previewMode === "draft" ? "Render quick draft" : "Render in the cloud";
+    this.renderBtn.disabled = st.busy || (!check && (!st.instanceType || active));
+    this.renderBtn.title = active && !check ? "A render is running. Stop it or wait for it to finish." : "";
+    this.message.className = `hf-status hf-tone-${st.message?.tone || "neutral"}`;
+    this.message.textContent = st.message?.text || "";
+
+    this._renderCheck(st);
+    this._renderConsent(st);
+    this._renderJob();
+    this._renderQueue(st);
+    this._renderRecent(st);
+  }
+
+  _renderCheck(st) {
+    const H = this.H;
+    const box = this.checkBox;
+    clear(box);
+    const p = st.preflight;
+    if (p && (p.blocking?.length || p.warnings?.length || st.previewMode === "check")) {
+      const list = H("div", { className: "hf-list" });
+      for (const b of p.blocking || []) list.append(H("div", { className: "hf-item hf-tone-danger" }, H("span", { className: "hf-grow", title: b.message, text: `${b.node_id ? `Node ${b.node_id}${b.class_type ? ` (${b.class_type})` : ""}: ` : ""}${b.message}` })));
+      for (const w of p.warnings || []) list.append(H("div", { className: "hf-item hf-tone-warning" }, H("span", { className: "hf-grow", title: w.message, text: w.message })));
+      const c = p.checked || {};
+      box.append(H("div", { className: "hf-hint", style: { margin: "4px 0" }, text: `Checked ${c.nodes ?? "?"} nodes, ${c.models ?? "?"} models, ${c.inputs ?? "?"} input files${p.profile ? ` against the “${p.profile}” runtime` : ""}.` }), list);
+    }
+    const d = st.draft;
+    if (d) {
+      box.append(H("div", { className: "hf-hint", style: { margin: "4px 0" }, text: `Quick draft: ${d.changes.length} value(s) reduced${d.unsupported.length ? `, ${d.unsupported.length} not adjustable` : ""}.` }),
+        H("button", { className: "hf-btn", type: "button", text: "Inspect the draft workflow", onclick: () => this._downloadJson("halofuse-quick-draft.json", d) }));
+    }
+  }
+
+  _renderConsent(st) {
+    const H = this.H;
+    clear(this.consentBox);
+    if (st.upload) {
+      const files = st.upload.files || [];
+      const total = files.reduce((s, f) => s + (f.size || 0), 0);
+      const sent = files.reduce((s, f) => s + (f.status === "done" ? (f.size || 0) : (f.sent || 0)), 0);
+      this.consentBox.append(H("div", { className: "hf-consent" },
+        H("div", { text: `Uploading models: ${fmtBytes(sent)} of ${fmtBytes(total)}` }),
+        H("div", { className: "hf-bar" }, H("div", { style: { width: `${total ? Math.floor((sent / total) * 100) : 0}%` } })),
+        H("div", {}, H("button", { className: "hf-btn hf-danger", type: "button", text: "Cancel upload", onclick: () => this.ctl.cancelUpload() }))));
+      return;
+    }
+    const c = st.consent;
+    if (!c) return;
+    const total = c.uploadable.reduce((s, m) => s + (m.size || 0), 0);
+    const onlyMismatch = c.uploadable.length > 0 && !c.overLimit.length && c.uploadable.every((m) => m.size_mismatch);
+    const list = H("div", { className: "hf-list" });
+    for (const m of c.uploadable) {
+      list.append(H("div", { className: "hf-item" }, H("span", { className: "hf-grow", title: `${m.folder}/${m.name}`, text: `${m.folder}/${m.name}` }),
+        H("span", { text: m.size_mismatch ? `local ${fmtBytes(m.size)} ≠ cloud ${fmtBytes(m.remote_size)}` : fmtBytes(m.size) })));
+    }
+    for (const m of c.overLimit) {
+      list.append(H("div", { className: "hf-item hf-tone-warning" }, H("span", { className: "hf-grow", style: { whiteSpace: "normal" },
+        text: `${m.folder}/${m.name} (${fmtBytes(m.size)}) is larger than the ${fmtBytes(m.guard_bytes)} automatic upload limit. Raise the limit under Advanced, or add it to the cloud library another way.` })));
+    }
+    const btns = H("div", { className: "hf-row" });
+    if (c.uploadable.length) {
+      btns.append(H("button", { className: "hf-btn hf-primary", type: "button", text: `Upload ${c.uploadable.length} (${fmtBytes(total)}), then render`, onclick: () => this.ctl.consentUpload(true) }));
+      if (onlyMismatch) btns.append(H("button", { className: "hf-btn", type: "button", text: "Render with the cloud copy", onclick: () => this.ctl.consentProceed() }));
+      btns.append(H("button", { className: "hf-btn", type: "button", text: "Upload only", onclick: () => this.ctl.consentUpload(false) }));
+    } else {
+      btns.append(H("button", { className: "hf-btn hf-primary", type: "button", text: "Render anyway", onclick: () => this.ctl.consentProceed() }));
+    }
+    btns.append(H("button", { className: "hf-btn", type: "button", text: "Cancel", onclick: () => this.ctl.consentCancel() }));
+    this.consentBox.append(H("div", { className: "hf-consent", attrs: { role: "group", "aria-label": "Models need attention" } },
+      H("strong", { text: onlyMismatch ? "These models differ from the cloud library copy" : "These models are not in the cloud library yet" }),
+      list, btns));
+  }
+
+  _renderJob() {
+    const H = this.H;
+    const s = this.session;
+    clear(this.jobBox);
+    if (!s.id) return;
+    const job = s.job;
+    const isQueue = s.kind === "queue";
+    const st = job ? statusInfo(job.status) : { label: "Loading…", tone: "neutral" };
+    const ci = job ? cancelInfo(job.cancel) : null;
+    const run = s.run.snapshot();
+    const prog = run.progress || job?.progress;
+    const frac = prog?.fraction;
+    const acts = cancelActions(job);
+    const bar = H("div", { className: `hf-bar${frac == null && job && !isTerminal(job) ? " hf-indeterminate" : ""}` }, H("div"));
+    if (frac != null) bar.firstChild.style.width = `${Math.round(frac * 100)}%`;
+    else if (job && isTerminal(job)) bar.firstChild.style.width = "100%";
+    const card = H("div", { className: "hf-jobcard", attrs: { role: "group", "aria-label": isQueue ? "Current queue" : "Current render" } },
+      H("div", { className: "hf-jobtitle" }, H("span", { text: isQueue ? "Queue" : job?.label || "Render" }),
+        H("span", { className: `hf-badge hf-tone-${st.tone}`, text: st.label })),
+      bar,
+      job && !isTerminal(job) ? H("div", { className: "hf-meta", text: progressText(prog, job.status) }) : null,
+      ci ? H("div", { className: `hf-meta hf-tone-${ci.tone}`, text: `${ci.label}${ci.detail ? ` — ${ci.detail}` : ""}` }) : null,
+      ci && /confirmed/.test(job.cancel.state) ? H("div", { className: "hf-meta", text: "Billing end is not yet independently confirmed by HaloFuse." }) : null,
+      job?.status_note ? H("div", { className: "hf-meta", text: job.status_note }) : null,
+      job ? H("div", { className: "hf-meta", text: [costText(job.cost), deliveryText(job.delivery)].filter(Boolean).join(" · ") }) : null,
+      job?.diagnosis ? H("div", { className: "hf-meta hf-tone-danger", text: `${job.diagnosis.title || job.diagnosis.code}: ${job.diagnosis.next_action || job.diagnosis.cause || ""}` }) : null,
+      s.error && !job ? H("div", { className: "hf-meta hf-tone-danger", text: s.error.message }) : null);
+    const latest = run.previews.slice().reverse().find((p) => p.dataUrl);
+    const out = (s.outputs || []).find((o) => outputKind(o.filename || o.rel_path, o.kind) === "image");
+    if (this.ctl.state.previewMode !== "none" && (latest || out)) {
+      card.append(H("img", { className: "hf-thumb", src: latest ? latest.dataUrl : this.viewUrl(out), alt: latest ? "Latest preview" : "Latest output" }));
+    }
+    const btns = H("div", { className: "hf-row" });
+    if (acts.now) btns.append(H("button", { className: "hf-btn hf-danger hf-solid", type: "button", text: "Stop now", title: "Cancel the cloud job now; partial outputs are kept", onclick: () => this.ctl.stop("now") }));
+    if (acts.afterCurrent) btns.append(H("button", { className: "hf-btn hf-danger", type: "button", text: "Stop after current", title: "Let the current item finish, then stop", onclick: () => this.ctl.stop("after_current") }));
+    btns.append(H("button", { className: "hf-btn", type: "button", text: "Console", onclick: () => this.openConsole() }));
+    if (job && isTerminal(job)) btns.append(H("button", { className: "hf-btn hf-ghost", type: "button", text: "Dismiss", onclick: () => s.detach() }));
+    card.append(btns);
+    this.jobBox.append(card);
+  }
+
+  _renderQueue(st) {
+    const H = this.H;
+    const s = this.session;
+    clear(this.queueBox);
+    const live = s.kind === "queue" ? s.job : null;
+    if (live) {
+      const items = live.items || [];
+      const list = H("div", { className: "hf-list" });
+      const pendingIds = items.filter((it) => it.status === "pending" || it.status === "queued").map((it) => it.item_id);
+      for (const it of items) {
+        const pend = pendingIds.includes(it.item_id);
+        const sti = statusInfo(it.status);
+        list.append(H("div", { className: "hf-item" },
+          H("span", { className: "hf-grow", title: it.error || it.label, text: `${it.index + 1}. ${it.label} · ×${it.render_repeats}${it.outputs_available ? " · outputs ready" : ""}` }),
+          H("span", { className: `hf-tone-${sti.tone}`, text: sti.label }),
+          pend ? H("button", { className: "hf-btn hf-icon hf-ghost", type: "button", text: "↑", attrs: { "aria-label": `Move ${it.label} up` }, onclick: () => this.ctl.queueOp("move", it.item_id, -1) }) : null,
+          pend ? H("button", { className: "hf-btn hf-icon hf-ghost", type: "button", text: "↓", attrs: { "aria-label": `Move ${it.label} down` }, onclick: () => this.ctl.queueOp("move", it.item_id, 1) }) : null,
+          pend ? H("button", { className: "hf-btn hf-icon hf-ghost", type: "button", text: "⟳", title: "Replace with the current graph", attrs: { "aria-label": `Replace ${it.label} with the current graph` }, onclick: () => this.ctl.queueOp("replace", it.item_id) }) : null,
+          pend ? H("button", { className: "hf-btn hf-icon hf-ghost", type: "button", text: "✕", attrs: { "aria-label": `Remove ${it.label}` }, onclick: () => this.ctl.queueOp("remove", it.item_id) }) : null));
+      }
+      const paused = live.paused || live.status === "paused";
+      this.queueBox.append(list, H("div", { className: "hf-row" },
+        !isTerminal(live) ? H("button", { className: "hf-btn", type: "button", text: paused ? "Resume queue" : "Pause queue", onclick: () => this.ctl.queueOp(paused ? "resume" : "pause") }) : null));
+      return;
+    }
+    const q = st.queueDraft;
+    const list = H("div", { className: "hf-list" });
+    if (!q.length) list.append(H("div", { className: "hf-hint", style: { margin: 0 }, text: "Add the open workflow, switch workflows and add more, then run them back to back on one GPU." }));
+    q.forEach((it, i) => list.append(H("div", { className: "hf-item" },
+      H("span", { className: "hf-grow", text: `${i + 1}. ${it.label} · ×${it.render_repeats}` }),
+      H("button", { className: "hf-btn hf-icon hf-ghost", type: "button", text: "↑", disabled: i === 0, attrs: { "aria-label": `Move ${it.label} up` }, onclick: () => this.ctl.moveDraft(i, -1) }),
+      H("button", { className: "hf-btn hf-icon hf-ghost", type: "button", text: "↓", disabled: i === q.length - 1, attrs: { "aria-label": `Move ${it.label} down` }, onclick: () => this.ctl.moveDraft(i, 1) }),
+      H("button", { className: "hf-btn hf-icon hf-ghost", type: "button", text: "✕", attrs: { "aria-label": `Remove ${it.label}` }, onclick: () => this.ctl.removeDraft(i) }))));
+    this.queueBox.append(list, H("div", { className: "hf-row" },
+      H("button", { className: "hf-btn", type: "button", text: "Add open workflow", disabled: st.busy, onclick: () => this.ctl.addToQueue() }),
+      H("button", { className: "hf-btn hf-primary", type: "button", text: q.length ? `Run queue (${q.length})` : "Run queue", disabled: !q.length || st.busy || this.ctl.active, onclick: () => this.ctl.runQueue() }),
+      q.length ? H("button", { className: "hf-btn hf-ghost", type: "button", text: "Clear", onclick: () => this.ctl.clearDraft() }) : null));
+  }
+
+  _renderRecent(st) {
+    const H = this.H;
+    clear(this.recentBox);
+    if (st.recentError) { this.recentBox.append(H("div", { className: "hf-hint hf-tone-danger", text: st.recentError })); return; }
+    if (!st.recent.length) { this.recentBox.append(H("div", { className: "hf-hint", style: { margin: 0 }, text: "No HaloFuse jobs on this computer yet." })); return; }
+    const list = H("div", { className: "hf-list" });
+    for (const j of st.recent.slice(0, 20)) {
+      const sti = statusInfo(j.status);
+      list.append(H("div", { className: "hf-item" },
+        H("span", { className: "hf-grow", title: j.job_id, text: `${fmtLocal(j.created_at)} · ${j.label || "Render"}` }),
+        H("span", { className: `hf-tone-${sti.tone}`, text: sti.label }),
+        H("button", { className: "hf-btn hf-icon", type: "button", text: "Open", attrs: { "aria-label": `Open ${j.label || "render"} in the console` },
+          onclick: () => { this.ctl.openJob(j.job_id); this.openConsole(); } })));
+    }
+    this.recentBox.append(list);
+  }
+
+  _downloadJson(name, data) {
+    const blob = new this.win.Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = this.win.URL.createObjectURL(blob);
+    const a = this.doc.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    this.doc.body.append(a); a.click(); a.remove();
+    this.win.setTimeout(() => this.win.URL.revokeObjectURL(url), 30000);
+  }
+
+  destroy() { for (const u of this._unsubs) u(); this.el.remove(); }
+}

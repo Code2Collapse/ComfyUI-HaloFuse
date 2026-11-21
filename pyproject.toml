@@ -1,0 +1,44 @@
+[project]
+# Comfy Registry node id under the Code2Collapse publisher = the install folder = the GitHub repo name
+# (owner decision 2026-11-20; registry block from docs/h2vault/V4_registry_naming.md section 6).
+name = "ComfyUI-HaloFuse"
+version = "0.4.0"
+description = "HaloFuse for ComfyUI: render the open workflow on a cloud GPU with one click, follow its progress in a panel, and get the results back in your output folder."
+readme = "README.md"
+license = { text = "AGPL-3.0" }
+requires-python = ">=3.12"
+authors = [{ name = "Code2Collapse" }]
+dependencies = [
+    "spark-fuse-messenger>=0.5.0",
+    # OS keychain for the account password (Windows Credential Manager, macOS Keychain, Secret Service).
+    # Pure Python; the bridge imports it behind a guard and falls back only after an explicit, labelled opt-in.
+    "keyring>=25",
+]
+
+[project.optional-dependencies]
+# Test-only. The suite runs WITHOUT the provider SDK (tests/fakes/fake_sdk) and without ComfyUI (tests/fakes).
+test = ["pytest>=8", "aiohttp>=3.9"]
+# Browser tests (tests/browser, `pytest --run-browser`) against the isolated testbed only.
+browser = ["playwright>=1.45"]
+
+[project.urls]
+Repository = "https://github.com/Code2Collapse/ComfyUI-HaloFuse"
+Documentation = "https://github.com/Code2Collapse/ComfyUI-HaloFuse#readme"
+Issues = "https://github.com/Code2Collapse/ComfyUI-HaloFuse/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+# tests/conftest.py also puts the repo root and tests/ on sys.path, so plain `pytest` and any checkout folder
+# name work (BASELINE 1c). The markers are registered here and in tests/conftest.py.
+markers = [
+    "mocked: uses a fake provider / fake ComfyUI / mocked client; proves bridge logic only (NEW_WORK s14)",
+    "browser: Playwright test against the isolated testbed; needs --run-browser",
+    "security: security regression test (WS8 suite)",
+    "integration: crosses more than one bridge module or a subprocess",
+    "slow: takes more than a few seconds",
+]
+
+[tool.comfy]
+PublisherId = "code2collapse"
+DisplayName = "ComfyUI-HaloFuse"

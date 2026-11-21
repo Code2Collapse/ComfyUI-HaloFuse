@@ -1,0 +1,95 @@
+{
+ "schema": "halofuse.profiles/1",
+ "image_default_profile": "default",
+ "licence_policy": {
+  "permissive": "include",
+  "copyleft": "include-flagged",
+  "network-copyleft": "include-flagged",
+  "non-commercial": "exclude-pending-owner",
+  "restrictive-custom": "exclude-pending-owner",
+  "no-licence": "exclude-pending-owner",
+  "unknown": "exclude-pending-owner"
+ },
+ "licence_policy_note": "Owner decision 12 is open. Lead default: GPL/AGPL packs are installed but flagged (publishing such an image creates source-offer obligations); non-commercial, custom restrictive and unlicensed packs are left out of the new profiles until the owner decides. The `default` profile is exempt because it reproduces the production image.",
+ "profiles": {
+  "default": {
+   "target": "cloud",
+   "strict": true,
+   "members": [
+    "city96/ComfyUI-GGUF",
+    "kijai/comfyui-kjnodes",
+    "Fannovel16/comfyui_controlnet_aux",
+    "yolain/ComfyUI-Easy-Use",
+    "pythongosssss/ComfyUI-Custom-Scripts",
+    "rgthree/rgthree-comfy",
+    "chrisgoringe/cg-use-everywhere",
+    "giriss/comfy-image-saver",
+    "Kosinkadink/ComfyUI-VideoHelperSuite",
+    "pizurny/ComfyUI-AV-Handles",
+    "logtd/ComfyUI-Fluxtapoz",
+    "adieyal/comfyui-dynamicprompts",
+    "Suzie1/ComfyUI_Comfyroll_CustomNodes",
+    "theUpsider/ComfyUI-Logic",
+    "M1kep/ComfyLiterals",
+    "MinorBoy/ComfyUI_essentials_mb",
+    "kijai/ComfyUI-WanVideoWrapper",
+    "kijai/ComfyUI-WanAnimatePreprocess",
+    "kijai/ComfyUI-segment-anything-2",
+    "9nate-drake/Comfyui-SecNodes",
+    "Nekodificador/ComfyUI-NKD-Basic-Tools",
+    "yuvraj108c/ComfyUI-Video-Depth-Anything",
+    "drozbay/MaskVidExperiments",
+    "Lightricks/ComfyUI-LTXVideo",
+    "chflame163/ComfyUI_LayerStyle",
+    "1038lab/ComfyUI-QwenVL",
+    "melMass/comfy_mtb",
+    "akatz-ai/ComfyUI-DepthCrafter-Nodes",
+    "ltdrdata/was-node-suite-comfyui",
+    "regiellis/ComfyUI-EasyColorCorrector",
+    "ClownsharkBatwing/RES4LYF"
+   ],
+   "description": "Exactly the 31 packs of the image the bridge pins today (saved workflows keep working). Licence flags are reported, not applied. Any install failure fails the build, as before."
+  },
+  "core": {
+   "target": "cloud",
+   "description": "Smallest useful set: loaders, video I/O, graph utilities. Fastest cold start."
+  },
+  "image": {
+   "target": "cloud",
+   "description": "Image generation and editing (FLUX/FLUX 2, SD/SDXL, Qwen Image, Z-Image, Krea 2, inpainting, upscaling, faces)."
+  },
+  "video": {
+   "target": "cloud",
+   "description": "Video generation and processing (Wan 2.x, Wan Animate, LTX, MiniMax H3, AnimateDiff, interpolation)."
+  },
+  "audio": {
+   "target": "cloud",
+   "description": "Audio, speech, music separation and lip-sync."
+  },
+  "depth-segmentation": {
+   "target": "cloud",
+   "description": "Depth, normals, segmentation, matting, masks."
+  },
+  "vfx": {
+   "target": "cloud",
+   "description": "Compositing, colour (OCIO/EXR), stabilisation, VFX tools."
+  },
+  "prompting-utilities": {
+   "target": "cloud",
+   "description": "Prompt building, captioning/tagging, logic and math utilities."
+  },
+  "frontend-extensions": {
+   "target": "local",
+   "description": "UI-only or local-tool extensions for the artist's own ComfyUI. Never installed in a cloud image."
+  },
+  "research-experimental": {
+   "target": "cloud",
+   "description": "Experimental or heavy packs; opt-in images only."
+  },
+  "full": {
+   "target": "cloud",
+   "rule": "all-compatible-backend",
+   "description": "Every compatible, legally installable backend extension (licence policy applied); exclusions are reported with reasons."
+  }
+ }
+}

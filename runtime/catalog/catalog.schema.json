@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "halofuse.catalog/1",
+  "title": "HaloFuse custom-node catalog",
+  "type": "object",
+  "required": ["schema", "generated_at", "entries"],
+  "properties": {
+    "schema": {"const": "halofuse.catalog/1"},
+    "generated_at": {"type": "string"},
+    "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}}
+  },
+  "$defs": {
+    "unknown": {
+      "type": "object",
+      "required": ["value", "reason"],
+      "properties": {"value": {"const": "unknown"}, "reason": {"type": "string", "minLength": 3}}
+    },
+    "entry": {
+      "type": "object",
+      "required": ["repo", "url", "category", "backend_frontend", "install_target", "install", "requirements",
+                   "system_deps", "model_download", "license", "compatibility", "conflicts", "profiles",
+                   "enabled_by_default", "pin", "verified"],
+      "properties": {
+        "repo": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+        "url": {"type": "string", "pattern": "^https://github\\.com/"},
+        "category": {"enum": ["backend", "frontend", "combined", "core", "research", "workflows", "external-tool",
+                              "incompatible", "reference-only"]},
+        "backend_frontend": {"enum": ["backend", "frontend", "both", "none", "unknown"]},
+        "install_target": {"enum": ["cloud", "local", "reference-only"]},
+        "install": {
+          "type": "object",
+          "required": ["method"],
+          "properties": {
+            "method": {"enum": ["registry", "git-archive", "base-image", "local-user", "none"]},
+            "folder": {"type": "string", "pattern": "^[A-Za-z0-9_.][A-Za-z0-9_.-]*$"},
+            "registry_id": {"type": "string"}
+          }
+        },
+        "requirements": {"oneOf": [{"$ref": "#/$defs/unknown"},
+                                   {"type": "object", "required": ["python", "torch", "cuda", "pip", "source"]}]},
+        "system_deps": {"oneOf": [{"$ref": "#/$defs/unknown"}, {"type": "array", "items": {"type": "string"}}]},
+        "model_download": {"oneOf": [{"$ref": "#/$defs/unknown"},
+                                     {"type": "object", "required": ["behavior", "evidence"]}]},
+        "license": {
+          "type": "object",
+          "required": ["class", "source"],
+          "properties": {
+            "class": {"enum": ["permissive", "copyleft", "network-copyleft", "non-commercial", "restrictive-custom",
+                               "no-licence", "unknown"]},
+            "spdx": {"type": ["string", "null"]},
+            "flags": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "compatibility": {
+          "type": "object",
+          "required": ["compatible", "notes"],
+          "properties": {"compatible": {"enum": [true, false, "unknown"]}, "notes": {"type": "string"}}
+        },
+        "conflicts": {
+          "type": "object",
+          "required": ["conflicts_with", "overlaps"],
+          "properties": {"conflicts_with": {"type": "array", "items": {"type": "string"}},
+                         "overlaps": {"type": "array"}}
+        },
+        "profiles": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "enabled_by_default": {"type": "boolean"},
+        "pin": {
+          "type": "object",
+          "required": ["commit", "version", "pinned_at"],
+          "properties": {
+            "commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+            "version": {"type": ["string", "null"]},
+            "content_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+          }
+        },
+        "verified": {"type": "object", "required": ["status", "evidence"]}
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+HaloFuse cloud runtime (ComfyUI image)
+======================================
+
+The files in this repository (Dockerfile, runner, build scripts, catalogue) are a modified version of an
+MIT-licensed project. The original copyright and permission notice are kept in ../LICENSE-MIT and apply to those portions:
+
+    MIT License, Copyright (c) 2026 VFXGuru
+
+The repository as a whole, including the HaloFuse changes (2026-11 onward), is distributed under AGPL-3.0
+(../LICENSE).
+
+The runtime IMAGE built from this repository contains third-party software under its own licences. Apart from the
+OpenCV data files below, none of it is stored in this repository; it is fetched at build time from pinned sources:
+
+- the base image named in the Dockerfile `FROM` line (pinned by digest), which contains ComfyUI
+  (GNU GPL-3.0), Python, PyTorch, CUDA libraries and their dependencies, each under its own licence;
+- the custom-node packs listed in the node catalogue (catalog/catalog.json), each under the licence recorded for it
+  there; every pack keeps its own licence files inside its folder in the image. Some packs are GPL-licensed or
+  restrict commercial use (flagged in the catalogue);
+- OpenCV Haar cascade data files, vendored in catalog/vendor/opencv-haarcascades/ with their Intel License Agreement
+  headers kept in each file (OpenCV itself: Apache-2.0); see catalog/vendor/opencv-haarcascades/NOTICE.md.
+
+Publishing a built image redistributes those components. Whoever publishes it must meet each licence's conditions
+(for GPL components: the corresponding source must be available). The catalogue's licence fields are the starting
+point for that review; doubtful cases are decided by the project owner before an image is published.

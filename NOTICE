@@ -1,0 +1,19 @@
+HaloFuse for ComfyUI
+====================
+
+This extension is a modified version of an MIT-licensed ComfyUI cloud-rendering bridge.
+The original copyright and permission notice are kept in LICENSE-MIT and apply to those portions:
+
+    MIT License, Copyright (c) 2026 VFXGuru
+
+This repository as a whole, including the HaloFuse changes (2026-11 onward), is distributed under the GNU
+Affero General Public License v3.0 (LICENSE).
+
+Runtime dependencies (installed separately with requirements.txt; not bundled here):
+- the cloud connector package named in requirements.txt (MIT licence)
+- keyring (MIT licence)
+
+Provided by ComfyUI at runtime (not bundled): aiohttp and the ComfyUI server API.
+
+Test-only material under tests/ is not part of the distributed extension (see .comfyignore). It contains an
+import-surface stand-in of the cloud connector package written for these tests; it copies no code from that package.

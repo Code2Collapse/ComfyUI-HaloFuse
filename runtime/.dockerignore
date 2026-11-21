@@ -1,0 +1,21 @@
+# Allowlist: the build context holds only what the Dockerfile COPYs (catalog/, scripts/, runner/).
+# Everything else (git metadata, docs, tests, CI, local secrets such as .env, job data, model weights) stays out.
+*
+!catalog/
+!scripts/
+!runner/
+
+# Never inside an allowed folder either
+**/__pycache__
+**/*.py[cod]
+**/.env
+**/.env.*
+**/*.log
+**/*.safetensors
+**/*.gguf
+**/*.ckpt
+**/*.pt
+**/*.pth
+**/*.onnx
+catalog/README.md
+runner/**/tests

@@ -1,0 +1,10 @@
+# Verified against comfy-cli's own packer (comfy_cli/file_utils.py:329-427,
+# installed locally) and docs.comfy.org/registry/publishing: `comfy node pack`
+# zips every git-tracked file, then subtracts anything matched here using
+# plain .gitignore syntax. docs/ ships (the manual PDF and the runbook are for
+# artists); developer-only material and the cloud runtime (built separately) are listed below.
+scripts/
+tests/
+.github/
+docs/testing.md
+runtime/
