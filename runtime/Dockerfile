@@ -231,8 +231,10 @@ STOPSIGNAL SIGTERM
 # API readiness (loopback /system_stats). A batch job reports "starting" until the runner has booted ComfyUI.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=900s --retries=3 \
     CMD ["python3.13", "/opt/halofuse/scripts/healthcheck.py"]
-# tini is the ENTRYPOINT and the runner the CMD. The bridge submits command ["python3.13", "/runner/spark_fuse_run.py"]:
-# with Docker CMD semantics that becomes `tini -- python3.13 /runner/...`; with entrypoint-override semantics it is the
-# runner alone (as before, the runner handles SIGTERM itself). Which one the platform uses is provider probe P6.
+# tini is the ENTRYPOINT and the runner the CMD. A bridge written for this image submits command
+# ["python3.13", "/runner/halofuse_run.py"] (bridges pin the image they were written for by digest, together with its
+# command): with Docker CMD semantics that becomes `tini -- python3.13 /runner/...`; with entrypoint-override
+# semantics it is the runner alone (as before, the runner handles SIGTERM itself). Which one the platform uses is
+# provider probe P6.
 ENTRYPOINT ["/usr/local/bin/tini", "--"]
-CMD ["python3.13", "/runner/spark_fuse_run.py"]
+CMD ["python3.13", "/runner/halofuse_run.py"]

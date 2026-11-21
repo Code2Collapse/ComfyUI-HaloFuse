@@ -143,8 +143,8 @@ def list_cloud(be, settings: dict, *, max_depth: int = MAX_LIST_DEPTH,
                max_entries: int = MAX_LIST_ENTRIES) -> tuple[list[dict], bool]:
     """Files under the configured assets path: [{folder, name, size, remote_path}], truncated flag. Breadth-first,
     at most *max_depth* folder levels below each model folder and *max_entries* entries in total."""
-    space = settings.get("assets_share_sync_space_name") or None
-    root = "/".join(_rel_parts(settings.get("assets_share_sync_path")))
+    space = settings.get("assets_library_space") or None
+    root = "/".join(_rel_parts(settings.get("assets_library_path")))
     out: list[dict] = []
     queue: list[tuple[str, int]] = [(root, 0)]
     seen = 0

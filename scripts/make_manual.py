@@ -73,8 +73,7 @@ def version_from_pyproject() -> str:
     return m.group(1) if m else "unknown"
 
 
-# Words that must not appear in a user-facing manual (NEW_WORK section 1). Case-sensitive "Spark" so internal
-# lower-case identifiers (a folder name on disk) do not trip it.
+# Words that must not appear in a user-facing manual (NEW_WORK section 1).
 # Provider / original-project words the manual must not contain, held as SHA-256 so this public script does not
 # spell them out (the same approach as the tests' provider-domain check). A token matches when its lower-case
 # form is listed, or when it starts with the listed case-sensitive five-letter brand prefix.
@@ -98,6 +97,15 @@ def forbidden_words(text: str) -> list[str]:
     return hits
 
 
+_RELATIVE_LINK = re.compile(r'<a href="(?!https?:|mailto:|#)[^"]*">(.*?)</a>', re.S)
+
+
+def unlink_relative(html: str) -> str:
+    """Relative links point at repository files that do not travel with the PDF, and through <base> they would be
+    printed as file:/// URIs carrying this computer's folder names. Keep their text, drop the link."""
+    return _RELATIVE_LINK.sub(r"\1", html)
+
+
 def title_of(md_text: str) -> str:
     m = re.search(r"^#\s+(.+)$", md_text, re.M)
     return m.group(1).strip() if m else "HaloFuse"
@@ -118,7 +126,7 @@ def main() -> None:
     if source == SOURCE.resolve() and version not in md_text[:300]:
         print(f"warning: the manual's header does not mention version {version}")
 
-    body = MarkdownIt("commonmark").enable("table").render(md_text)
+    body = unlink_relative(MarkdownIt("commonmark").enable("table").render(md_text))
     html = (
         "<!doctype html><html><head><meta charset='utf-8'>"
         # Relative image paths (docs/images/...) resolve against the Markdown file's folder, not the temp dir.

@@ -13,7 +13,7 @@ import { HaloFuseConsole } from "./lib/console_ui.js";
 // running when the panel is closed. Only official extension APIs are used: app.registerExtension,
 // app.extensionManager (sidebar tab, toast), api.fetchApi / api.apiURL / api.addEventListener,
 // app.graphToPrompt, app.graph / app.canvas for seed advance and "show node on canvas".
-// The extension id stays "SparkFuse.Bridge" so existing installs and settings keep working.
+// Extension id "HaloFuse.Bridge" (renamed in 0.4; no browser storage key ever used the old id).
 
 function safeStorage() {
   try { return window.localStorage; } catch { return null; } // layout preferences only (lib/layout.js)
@@ -93,7 +93,7 @@ function start() {
 }
 
 app.registerExtension({
-  name: "SparkFuse.Bridge",
+  name: "HaloFuse.Bridge",
   commands: [
     { id: "HaloFuse.OpenConsole", label: "HaloFuse: Open console", icon: "pi pi-align-left", function: () => start().consoleWin.open() },
   ],

@@ -1,4 +1,4 @@
-"""CloudBackend adapter over the provider SDK (`spark-fuse-messenger`, imported as `spark_fuse`).
+"""CloudBackend adapter over the provider SDK (its import name lives in provider/sdk.py).
 
 This is the only module that imports the SDK, and it does so lazily, so the bridge (and its tests) load without it.
 Every SDK exception is translated to a BackendError with a branded message; the redacted technical detail goes to
@@ -6,7 +6,6 @@ the private bridge log only.
 """
 from __future__ import annotations
 
-import importlib
 import inspect
 import logging
 import threading
@@ -16,7 +15,7 @@ from pathlib import Path
 
 import httpx
 
-from . import redact
+from . import redact, sdk as _sdk_binding
 from .backend import (
     TERMINAL_STATUSES,
     AccountCheck,
@@ -40,7 +39,7 @@ from .backend import (
     validate_remote_path,
 )
 
-_log = logging.getLogger("spark_fuse_bridge.provider")
+_log = logging.getLogger("halofuse_bridge.provider")
 
 _DOWNLOAD_TIMEOUT = httpx.Timeout(connect=30.0, read=300.0, write=120.0, pool=30.0)
 _CHUNK = 1 << 20
@@ -48,8 +47,7 @@ _CHUNK = 1 << 20
 
 def _import_sdk():
     try:
-        sdk = importlib.import_module("spark_fuse")
-        errors = importlib.import_module("spark_fuse.errors")
+        sdk, errors = _sdk_binding.load()
     except ImportError:
         raise BackendError("connector_missing", detail="provider SDK not importable") from None
     return sdk, errors
@@ -195,7 +193,7 @@ _CAMEL = {
 }
 
 
-class SparkAdapter:
+class CloudAdapter:
     """CloudBackend over the provider SDK. One instance per operation; close() releases its HTTP clients."""
 
     def __init__(self, endpoint: str, credentials, *, http_client: httpx.Client | None = None) -> None:

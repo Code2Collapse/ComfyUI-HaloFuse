@@ -2,25 +2,24 @@
 
 Usage (contract C-1):
 
-    from spark_fuse_bridge import provider
+    from halofuse_bridge import provider
     with provider.open_backend() as be:
         be.list_skus()
 
-The endpoint comes from deployment configuration only (env SPARK_HOST, else the private deployment.json in the
+The endpoint comes from deployment configuration only (env HALOFUSE_HOST, else the private deployment.json in the
 bridge's system-user settings dir). It is never a user setting and never leaves this package.
 """
 from __future__ import annotations
 
 import contextlib
-import importlib.util
 import json
 import logging
 import os
-import sys
 import threading
 import urllib.parse
 
-from . import redact
+from .. import legacy_names
+from . import redact, sdk
 from .backend import (  # noqa: F401  (re-exported port types)
     AccountCheck,
     BackendError,
@@ -40,7 +39,7 @@ from .backend import (  # noqa: F401  (re-exported port types)
 
 redact.install()
 
-_log = logging.getLogger("spark_fuse_bridge.provider")
+_log = logging.getLogger("halofuse_bridge.provider")
 _factory_lock = threading.Lock()
 _factory = None  # callable(endpoint, credentials) -> CloudBackend; None = the real SDK adapter
 
@@ -49,12 +48,7 @@ DEPLOYMENT_FILE = "deployment.json"
 
 def connector_installed() -> bool:
     """True when the provider SDK is importable. Never imports it."""
-    if "spark_fuse" in sys.modules and sys.modules["spark_fuse"] is None:
-        return False
-    try:
-        return importlib.util.find_spec("spark_fuse") is not None
-    except (ImportError, ValueError):
-        return False
+    return sdk.installed()
 
 
 def _valid_endpoint(value) -> str | None:
@@ -76,7 +70,7 @@ def _valid_endpoint(value) -> str | None:
 
 def resolve_endpoint() -> str | None:
     """The provider endpoint from deployment configuration, or None. Trusted layer only."""
-    endpoint = _valid_endpoint(os.environ.get("SPARK_HOST", ""))
+    endpoint = _valid_endpoint(legacy_names.env(os.environ, "HALOFUSE_HOST"))
     if endpoint is None:
         from .. import config  # lazy: config imports provider lazily too
 
@@ -137,7 +131,7 @@ def open_backend(settings: dict | None = None, *, credentials=None):
     with _factory_lock:
         factory = _factory
     if factory is None:
-        from .spark_adapter import SparkAdapter
+        from .cloud_adapter import CloudAdapter
 
-        factory = SparkAdapter
+        factory = CloudAdapter
     return factory(endpoint, credentials)

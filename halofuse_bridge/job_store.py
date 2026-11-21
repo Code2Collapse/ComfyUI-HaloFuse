@@ -221,11 +221,8 @@ class JobStore:
     @property
     def index_dir(self) -> Path:
         if self._index_dir is None:
-            import folder_paths  # ComfyUI-provided; available at runtime
-            if hasattr(folder_paths, "get_system_user_directory"):
-                self._index_dir = Path(folder_paths.get_system_user_directory("spark_fuse_bridge"))
-            else:
-                self._index_dir = Path(folder_paths.get_user_directory()) / "default" / "spark_fuse_bridge"
+            from . import config  # the bridge's private settings folder (migrated from its 0.3 name there)
+            self._index_dir = config.settings_dir()
         self._index_dir.mkdir(parents=True, exist_ok=True)
         return self._index_dir
 

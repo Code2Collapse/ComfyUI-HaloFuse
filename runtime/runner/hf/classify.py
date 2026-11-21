@@ -3,7 +3,7 @@
 Shapes verified against ComfyUI 0.30.1 / 0.39.0: POST /prompt 400 body `{"error": {...}, "node_errors": {...}}`
 (server.py), validation error types (execution.py validate_inputs/validate_prompt), and `execution_error` message
 data `{node_id, node_type, exception_message, exception_type, traceback, ...}`.
-The bridge (`spark_fuse_bridge/diagnose.py`) owns the artist-facing wording; these messages are short and factual.
+The bridge (`halofuse_bridge/diagnose.py`) owns the artist-facing wording; these messages are short and factual.
 """
 import json
 import signal as _signal

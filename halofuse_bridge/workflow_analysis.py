@@ -267,7 +267,7 @@ class Snapshot:
 
 
 def load_snapshot(profile: str | None = None, root: Path | None = None) -> Snapshot | None:
-    """The node snapshot for *profile* (default: the index's default_profile) from `spark_fuse_bridge/snapshots/`
+    """The node snapshot for *profile* (default: the index's default_profile) from `halofuse_bridge/snapshots/`
     (copied there by the lead from WS7's build). None when no snapshot is shipped. Cached by file mtime."""
     root = Path(root) if root is not None else SNAPSHOT_DIR
     if profile is not None and not _PROFILE_RE.match(str(profile)):

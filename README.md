@@ -87,7 +87,7 @@ administrator. The cloud service itself is configured by the administrator; ther
 ```
 ComfyUI-HaloFuse/            the ComfyUI extension (this folder is what ComfyUI loads)
 ├── __init__.py              registers the HaloFuse routes; no graph nodes
-├── spark_fuse_bridge/       server side: account, jobs, queue, console data, diagnosis (internal package name)
+├── halofuse_bridge/       server side: account, jobs, queue, console data, diagnosis (internal package name)
 ├── web/                     the panel and the floating console
 ├── docs/                    manual, runbook, screenshots
 └── runtime/                 the cloud runtime: Docker image, runner, catalogue (not loaded by ComfyUI)

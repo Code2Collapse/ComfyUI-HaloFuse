@@ -2,13 +2,10 @@
 owner WS5). The lead registers them in routes.py:
 
     routes_preflight.register(PromptServer.instance.routes, prefix="/halofuse")
-    routes_preflight.register(PromptServer.instance.routes, prefix="/spark_fuse", legacy=True)   # 0.3.x /models/*
 
-(the old unguarded /spark_fuse/models/* handlers in routes.py must then be deleted: aiohttp refuses a second
-handler for the same method + path). Every route goes through the single HaloFuse request guard (loopback peer,
-Host allowlist, `X-HaloFuse-Request: 1`; legacy GETs keep working without the header). Errors use the C-4 envelope
-with branded, URL-free text; legacy routes keep the 0.3.x `{"error": "<text>"}` shape. Nothing here starts paid
-compute: the check only lists / stats the library and reads the GPU catalogue.
+Every route goes through the single HaloFuse request guard (loopback peer, Host allowlist, `X-HaloFuse-Request: 1`).
+Errors use the C-4 envelope with branded, URL-free text. Nothing here starts paid compute: the check only lists /
+stats the library and reads the GPU catalogue.
 """
 from __future__ import annotations
 
@@ -297,42 +294,21 @@ _ROUTES = (
     ("GET", "/library/aliases", get_aliases),
     ("POST", "/library/aliases", post_aliases),
 )
-_LEGACY_PATHS = ("/models/check", "/models/upload", "/models/upload/{upload_id}", "/models/uploads",
-                 "/models/upload/{upload_id}/cancel")
 
 
-def _legacy_shape(response: web.Response) -> web.Response:
-    """0.3.x shapes: errors {"error": "<text>"}; upload start {"uploadId"}; cancel {"ok": true} with 200."""
-    try:
-        body = json.loads(response.body)
-    except (TypeError, ValueError):
-        return response
-    if response.status >= 400 and isinstance(body.get("error"), dict):
-        return web.json_response({"error": body["error"].get("message")}, status=response.status)
-    if response.status == 202:
-        body.pop("upload_id", None)
-        return web.json_response(body, status=200)
-    return response
-
-
-def _guarded(handler, legacy: bool):
+def _guarded(handler):
     async def wrapper(request):
-        needs_header = (request.method != "GET") or not legacy
-        refused = request_guard(request, needs_header=needs_header)
-        response = refused if refused is not None else await handler(request)
-        return _legacy_shape(response) if legacy else response
+        refused = request_guard(request, needs_header=True)
+        return refused if refused is not None else await handler(request)
 
     wrapper.__name__ = handler.__name__
     return wrapper
 
 
-def register(route_table, prefix: str = "/halofuse", legacy: bool = False) -> None:
-    """Add the WS5 routes under *prefix* (legacy: only the 0.3.x /models/* paths, old shapes). The non-legacy
-    registration also records runner telemetry peaks for capacity calibration (lifecycle event hook)."""
+def register(route_table, prefix: str = "/halofuse") -> None:
+    """Add the WS5 routes under *prefix*; also records runner telemetry peaks for capacity calibration (lifecycle
+    event hook)."""
     prefix = "/" + prefix.strip("/")
     for method, path, handler in _ROUTES:
-        if legacy and path not in _LEGACY_PATHS:
-            continue
-        route_table.route(method, prefix + path)(_guarded(handler, legacy))
-    if not legacy:
-        lifecycle.register_event_hook(capacity.calibration_event_hook, name="ws5_capacity_calibration")
+        route_table.route(method, prefix + path)(_guarded(handler))
+    lifecycle.register_event_hook(capacity.calibration_event_hook, name="ws5_capacity_calibration")

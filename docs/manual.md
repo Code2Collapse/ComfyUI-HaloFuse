@@ -1,6 +1,6 @@
 # HaloFuse for ComfyUI — User Manual
 
-**Version 0.4.0 (in development) · November 2026**
+**Version 0.5.0 · November 2026**
 
 HaloFuse renders the workflow you have open in ComfyUI on a cloud GPU, lets you follow it live, and brings the
 results back into ComfyUI. You keep authoring locally; the cloud does the heavy lifting.
@@ -336,8 +336,8 @@ folders, original names) is downloaded into `output/HaloFuse/<job id>/outputs/`,
 file's size and SHA-256 are checked; a dropped download resumes where it stopped; the console's **Outputs** row shows
 progress and, when something failed, a **Retry** button. A failed or stopped job still delivers what it wrote (keeping
 partial outputs after a stop needs the 0.4.0 runtime image). **Recover outputs** in the panel takes the id of an older
-job and downloads it into its own folder. Older manual recoveries stay in `output/spark_fuse/` folders and remain
-readable; images are no longer copied loose into the output root.
+job and downloads it into its own folder. Older manual recoveries made with version 0.3 stay in their
+old output folder and remain readable; images are no longer copied loose into the output root.
 
 ## 10. Diagnosis
 

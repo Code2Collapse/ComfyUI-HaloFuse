@@ -1,6 +1,7 @@
 """Account credential storage for HaloFuse (design: _internal/CREDENTIALS_DESIGN.md).
 
-Resolution order: deployment environment (both SPARK_EMAIL and SPARK_PASSWORD set) > system keychain (allowlisted
+Resolution order: deployment environment (both HALOFUSE_EMAIL and HALOFUSE_PASSWORD set; the 0.3 variable names
+are still read, see legacy_names) > system keychain (allowlisted
 keyring backend, every write verified by reading it back) > the documented unencrypted fallback file (only after an
 explicit opt-in) > a legacy plaintext settings file whose migration is still pending.
 
@@ -20,13 +21,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import brand
+from . import brand, legacy_names
 
-_log = logging.getLogger("spark_fuse_bridge.credentials")
+_log = logging.getLogger("halofuse_bridge.credentials")
 
 SERVICE = "HaloFuse"
 USERNAME = "account"
-SETTINGS_NAME = "spark_fuse_settings.json"
+SETTINGS_NAME = "halofuse_settings.json"
 FALLBACK_NAME = "credentials.json"
 DEPLOYMENT_NAME = "deployment.json"
 LOCK_NAME = ".credentials-migration.lock"
@@ -191,7 +192,8 @@ class CredentialStore:
 
     def _env_credentials(self) -> Credentials | None:
         env = self._environ()
-        email, password = env.get("SPARK_EMAIL") or "", env.get("SPARK_PASSWORD") or ""
+        email = legacy_names.env(env, "HALOFUSE_EMAIL")
+        password = legacy_names.env(env, "HALOFUSE_PASSWORD")
         if email and password:
             return Credentials(email, password)
         return None

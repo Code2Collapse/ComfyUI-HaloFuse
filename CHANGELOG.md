@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0 — 2026-11-21
+
+- **One name, inside and out.** Every internal name is HaloFuse now: the Python package (`halofuse_bridge`), the
+  runner (`runtime/runner/halofuse_run.py`), the job manifest, settings and data files, environment variables
+  (`HALOFUSE_HOST`, `HALOFUSE_EMAIL`, `HALOFUSE_PASSWORD`; the old ones still work and log one warning), the front-end
+  extension id. Existing settings, credentials and job history move over automatically on first start.
+- **Breaking:** the one-release `/spark_fuse/*` route aliases are gone; the panel has used `/halofuse/*` since 0.4.0.
+- The cloud-provider SDK and the deployed runtime image are now referenced in one place each
+  (`halofuse_bridge/provider/`), so a HaloFuse-built runtime image is a one-file change.
+- Every route sits behind the request guard; the extension loads without the cloud SDK installed.
+- Published as one repository: the ComfyUI extension at the root, the cloud runtime in `runtime/`.
+
 ## 0.4.0 — Unreleased (HaloFuse)
 
 The extension becomes **HaloFuse** and is published as `ComfyUI-HaloFuse`, with the cloud runtime in `runtime/`.
@@ -9,9 +21,19 @@ needs a real cloud GPU (stop timing, live previews, billing, GPU memory) is veri
 
 ### Changed
 
-- **New product name: HaloFuse.** Panel, console, messages, documentation and the job folder use the HaloFuse name.
-  Internal module names, the settings file location and the old routes stay, so saved settings and old outputs keep
-  working. *(landed)*
+- **New product name: HaloFuse, everywhere.** Panel, console, messages, documentation, the job folder and every
+  internal name use the HaloFuse name: the Python package is `halofuse_bridge`, the front-end extension id is
+  `HaloFuse.Bridge`. *(landed)*
+- **Settings migrate by themselves.** The settings folder (`halofuse_bridge` in ComfyUI's system user folder) and the
+  settings file (`halofuse_settings.json`) have new names; on the first start the 0.3 folder is moved to the new name
+  with everything in it (settings, deployment file, job index, install id), and a settings file under the 0.3 name is
+  renamed. The library settings are now `assets_library_path` and `assets_library_space`; the 0.3 keys are read and
+  rewritten under the new names. *(landed)*
+- **Deployment environment variables:** `HALOFUSE_HOST`, `HALOFUSE_EMAIL`, `HALOFUSE_PASSWORD`. The 0.3 variable
+  names are still read, with a warning in the ComfyUI log asking to rename them; the new names win when both are set.
+  *(landed)*
+- **The 0.3 route aliases are removed.** Only `/halofuse/*` routes are served (the shipped panel never used the old
+  ones). A script that called the 0.3 routes must move to `/halofuse/*`. *(landed)*
 - **New install folder and registry id: `ComfyUI-HaloFuse`** (publisher `code2collapse`). *(landed)*
 - **The cloud service address is deployment configuration.** It is no longer shown, saved from or returned to the
   browser, and a request can no longer change it. It comes from the deployment environment or a private deployment

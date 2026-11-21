@@ -3,8 +3,7 @@
 ``submit_render`` stages the workflow + its input files into a temporary folder, submits it through the C-1
 provider port, removes the staging folder (X9), records the cloud job in the job store and hands the job to a
 ``lifecycle.JobWatcher``. Status, logs, cancellation, the runtime limit and cost are owned by ``lifecycle``; this
-module keeps the workflow helpers shared with the queue and model sync, and the 0.3.4 compatibility shims
-(``submit_workflow`` / ``get_job_state``) used by the legacy ``/spark_fuse/*`` routes.
+module keeps the workflow helpers shared with the queue and model sync.
 
 No provider SDK, ComfyUI or bridge-config import at module import time (tests run without them).
 """
@@ -23,7 +22,7 @@ from typing import NamedTuple
 
 from . import cost as costmod
 from . import lifecycle
-from .job_store import HaloFuseError, JobStore, default_store
+from .job_store import HaloFuseError, JobStore
 from .provider.backend import SubmitSpec
 
 _log = logging.getLogger(__name__)
@@ -72,7 +71,7 @@ def _build_env(settings: dict, batch_count: int) -> dict:
 def _build_chunk_env(settings: dict) -> dict:
     """Env for a manifest-mode (queue chunk) job. batch_count travels per entry
     inside the manifest itself; the runner's manifest branch never reads
-    BATCH_COUNT (spark_fuse_run.py's run_manifest() takes it from the parsed
+    BATCH_COUNT (the runner's run_manifest() takes it from the parsed
     JSON, only the single-workflow fallback path reads the env var), so it is
     intentionally omitted here rather than sent as a value nothing will honour.
     """
@@ -342,8 +341,8 @@ def stage_and_submit(backend, *, settings: dict, instance_type: str, files: dict
             instance_type=instance_type, env=dict(env), input_dir=tmp,
             max_wall_clock_s=max_wall_clock_s, container_inactivity_s=_container_inactivity_s(settings),
             tags=tuple(tags), instance_handle=instance_handle,
-            assets_path=settings.get("assets_share_sync_path") or None,
-            assets_space=settings.get("assets_share_sync_space_name") or None,
+            assets_path=settings.get("assets_library_path") or None,
+            assets_space=settings.get("assets_library_space") or None,
             image_affinity=settings.get("image_affinity") or None,
         )
         return backend.submit(spec)
@@ -446,41 +445,3 @@ def _attach_cloud_job(store: JobStore, job_id: str, ref, sku: str, *, policy=Non
     if start_watcher:
         lifecycle.start_watch(job_id, store=store, policy=policy)
     return store.get(job_id)
-
-
-# ---- 0.3.4 compatibility shims (legacy /spark_fuse/* routes) ----------------------------------------------------
-
-def _first_image_ref(job_id: str, store: JobStore) -> dict | None:
-    """The first delivered image as a ComfyUI /view reference (files live in output/HaloFuse/<job_id>/)."""
-    from . import delivery
-    return next((r for r in delivery.outputs(job_id, store) if r.get("kind") == "image"), None)
-
-
-_LEGACY_STATUS = {"timed_out": "cancelled"}
-
-
-def submit_workflow(api_prompt: dict, instance_type: str | None = None) -> str:
-    """Legacy: submit and return the job id the old panel polls with."""
-    return submit_render(api_prompt, instance_type=instance_type)["job_id"]
-
-
-def get_job_state(job_id: str, store: JobStore | None = None) -> dict | None:
-    """Legacy 0.3.4 ``/job/{id}`` shape, read from the durable record (bounded line tail, no in-memory log)."""
-    store = store or default_store()
-    resolved = store.resolve_id(job_id)
-    rec = store.get(resolved) if resolved else None
-    if rec is None:
-        return None
-    cloud = rec.get("cloud") or {}
-    err = rec.get("error")
-    state = rec.get("state")
-    return {
-        "status": _LEGACY_STATUS.get(state, state), "state": state, "terminal": bool(rec.get("terminal")),
-        "lines": store.tail_text(resolved, 2000),
-        "image": None, "image_ref": _first_image_ref(resolved, store),
-        "error": err.get("message") if isinstance(err, dict) else None,
-        "exit_code": cloud.get("exit_code"), "image_cache_hit": cloud.get("image_cache_hit"),
-        "image_affinity": cloud.get("image_affinity"),
-        "cancel": {"state": (rec.get("cancel") or {}).get("state"), "note": rec.get("status_note")},
-        "job_id": resolved,
-    }

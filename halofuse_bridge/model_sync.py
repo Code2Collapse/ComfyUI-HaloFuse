@@ -37,7 +37,7 @@ class UploadCancelled(Exception):
 
 
 # Folder keys the cloud image registers under /assets — a hardcoded copy of
-# MODEL_SUBDIRS in the runner (spark-fuse-comfyui repo, runner/spark_fuse_run.py).
+# MODEL_SUBDIRS in the runner (runtime repo, runner/halofuse_run.py).
 # The two lists are maintained by hand in their two repos; keep them identical.
 # test_model_sync.py asserts every folder in MODEL_FILE_NODES stays within this
 # list, so a map entry can never point at a folder the cloud never searches.
@@ -172,7 +172,7 @@ def _upload_guard_bytes(settings: dict) -> int | None:
 def _remote_path(assets_path: str, folder: str, name: str) -> str | None:
     """The library path (relative to the space root, `/`-separated) for folder/name, or None when any part could
     escape its parent (TM-011: `..`, `.`, empty, backslash, NUL, drive letter). Leading/trailing slashes of the
-    configured assets path are dropped: the SDK strips them as well (sharesync `remote_path.strip('/')`)."""
+    configured assets path are dropped: the SDK strips them as well (its upload call strips them)."""
     parts = [p for p in str(assets_path or "").split("/") if p]
     parts += [str(folder)] + str(name).split("/")
     for part in parts:
@@ -240,8 +240,8 @@ def classify_models(refs: list, settings: dict, be) -> dict:
     second PUT is ever offered. A name that could escape the library folder lands in "invalid" and is never sent to
     the service (TM-011); a reference whose folder could not be determined lands in "unverified"."""
     result = _empty_result()
-    assets_path = (settings.get("assets_share_sync_path") or "").rstrip("/")
-    space = settings.get("assets_share_sync_space_name") or None
+    assets_path = (settings.get("assets_library_path") or "").rstrip("/")
+    space = settings.get("assets_library_space") or None
     guard = _upload_guard_bytes(settings)
     in_flight = {(f["folder"], f["name"]) for f in _active_upload_files()}
     for ref in refs:
@@ -354,7 +354,7 @@ def prepare_upload_files(files: list[dict], settings: dict | None = None) -> lis
     nominates folder+name from a check result; it never dictates local paths.
     Raises ValueError when a nominated file cannot be resolved locally."""
     settings = settings or load_settings()
-    assets_path = (settings.get("assets_share_sync_path") or "").rstrip("/")
+    assets_path = (settings.get("assets_library_path") or "").rstrip("/")
     prepared: list[dict] = []
     for f in files:
         folder = str(f.get("folder") or "")
@@ -462,8 +462,8 @@ def _fail_upload(upload_id: str, index: int, name: str, message: str) -> None:
 
 
 def _run_upload(upload_id: str, settings: dict) -> None:
-    space = settings.get("assets_share_sync_space_name") or None
-    assets_path = (settings.get("assets_share_sync_path") or "").rstrip("/")
+    space = settings.get("assets_library_space") or None
+    assets_path = (settings.get("assets_library_path") or "").rstrip("/")
     try:
         with provider.open_backend(settings) as be:
             _set_upload(upload_id, status="running")

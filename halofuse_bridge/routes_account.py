@@ -3,7 +3,6 @@
 The lead registers them in routes.py:
 
     routes_account.register(PromptServer.instance.routes, prefix="/halofuse")
-    routes_account.register(PromptServer.instance.routes, prefix="/spark_fuse", legacy=True)   # one-release alias
 
 Every route answers loopback peers only (unless the file-only setting `allow_lan_clients` is true), checks the Host
 header against an allowlist (DNS rebinding), and requires `X-HaloFuse-Request: 1` for anything that changes state or
@@ -25,7 +24,7 @@ from . import __version__, brand, config, credentials, provider
 from .credentials import CredentialError, Credentials
 from .provider.backend import BackendError, validate_instance_type
 
-_log = logging.getLogger("spark_fuse_bridge.routes_account")
+_log = logging.getLogger("halofuse_bridge.routes_account")
 
 REQUEST_HEADER = "X-HaloFuse-Request"
 _LOOPBACK_NAMES = {"localhost", "127.0.0.1", "::1"}
@@ -302,45 +301,31 @@ async def _get_estimate(request):
 # ---- registration ------------------------------------------------------------------------------
 
 _ROUTES = (
-    # method, path, handler, header required (strict), header required (legacy)
-    ("GET", "/settings", _get_settings, False, False),
-    ("POST", "/settings", _post_settings, True, True),
-    ("GET", "/account", _get_account, False, False),
-    ("POST", "/account/credentials", _post_credentials, True, True),
-    ("DELETE", "/account/credentials", _delete_credentials, True, True),
-    ("POST", "/account/test", _post_test, True, True),
-    ("GET", "/skus", _get_skus, True, False),
-    ("GET", "/estimate", _get_estimate, True, False),
+    # method, path, handler, X-HaloFuse-Request header required
+    ("GET", "/settings", _get_settings, False),
+    ("POST", "/settings", _post_settings, True),
+    ("GET", "/account", _get_account, False),
+    ("POST", "/account/credentials", _post_credentials, True),
+    ("DELETE", "/account/credentials", _delete_credentials, True),
+    ("POST", "/account/test", _post_test, True),
+    ("GET", "/skus", _get_skus, True),
+    ("GET", "/estimate", _get_estimate, True),
 )
 
 
-def _legacy_error_shape(response: web.Response) -> web.Response:
-    """C-4 section 8: legacy aliases keep the 0.3.x error shape {"error": "<text>"} (text is the branded message)."""
-    if response.status < 400 or not isinstance(response, web.Response) or response.body is None:
-        return response
-    try:
-        import json
-
-        message = json.loads(response.body)["error"]["message"]
-    except (ValueError, KeyError, TypeError):
-        return response
-    return web.json_response({"error": message}, status=response.status)
-
-
-def _guarded(handler, needs_header: bool, legacy: bool):
+def _guarded(handler, needs_header: bool):
     async def wrapper(request):
         response = _guard(request, needs_header=needs_header)
         if response is None:
             response = await handler(request)
-        return _legacy_error_shape(response) if legacy else response
+        return response
 
     wrapper.__name__ = handler.__name__
     return wrapper
 
 
-def register(route_table, prefix: str = "/halofuse", legacy: bool = False) -> None:
+def register(route_table, prefix: str = "/halofuse") -> None:
     """Add the WS1 routes under *prefix* to an aiohttp RouteTableDef (e.g. PromptServer.instance.routes)."""
     prefix = "/" + prefix.strip("/")
-    for method, path, handler, strict_header, legacy_header in _ROUTES:
-        needs_header = legacy_header if legacy else strict_header
-        route_table.route(method, prefix + path)(_guarded(handler, needs_header, legacy))
+    for method, path, handler, needs_header in _ROUTES:
+        route_table.route(method, prefix + path)(_guarded(handler, needs_header))

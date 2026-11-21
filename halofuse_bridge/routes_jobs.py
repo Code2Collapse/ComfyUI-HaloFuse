@@ -1,7 +1,7 @@
 """HTTP routes for jobs, logs, cancellation, queues and cost (C-4 §2/§3/§7 with the C-2 §8 decisions).
 
-The lead's ``routes.py`` calls ``register(PromptServer.instance.routes, prefix="/halofuse")`` and registers
-``LEGACY_ROUTES`` (the 0.3.4 ``/spark_fuse/*`` shapes). This module never imports ComfyUI's ``server``.
+The lead's ``routes.py`` calls ``register(PromptServer.instance.routes, prefix="/halofuse")``. This module never
+imports ComfyUI's ``server``.
 Errors use the envelope ``{"error": {"code", "message", "id"}}``; messages are branded and URL-free, and the
 correlation id is logged privately next to the (redacted) detail.
 """
@@ -339,103 +339,3 @@ def register(routes, prefix: str = "/halofuse", *, boot: bool = True) -> None:
             lifecycle.boot()
         except Exception:  # noqa: BLE001 - reattachment must never stop ComfyUI from starting
             _log.warning("HaloFuse could not reattach to running jobs at startup")
-
-
-# ---- legacy 0.3.4 shapes (/spark_fuse/*) ------------------------------------------------------------------------
-
-def _legacy_error(exc: BaseException, status: int = 400) -> web.Response:
-    err = lifecycle.as_halofuse_error(exc)
-    return web.json_response({"error": err.message}, status=status)
-
-
-async def legacy_submit(request):
-    try:
-        body = await request.json()
-    except ValueError:
-        return web.json_response({"error": "No workflow provided."}, status=400)
-    prompt = body.get("workflow") or body.get("prompt")
-    if not prompt:
-        return web.json_response({"error": "No workflow provided."}, status=400)
-    try:
-        job_id = await _run(lambda: jobs.submit_workflow(prompt, body.get("instance_type")))
-    except Exception as exc:  # noqa: BLE001
-        return _legacy_error(exc)
-    return web.json_response({"jobId": job_id})
-
-
-async def legacy_get_job(request):
-    try:
-        state = jobs.get_job_state(request.match_info["job_id"])
-    except Exception:  # noqa: BLE001
-        state = None
-    if state is None:
-        return web.json_response({"error": "unknown job"}, status=404)
-    return web.json_response(state)
-
-
-async def legacy_post_queue(request):
-    try:
-        body = await request.json()
-    except ValueError:
-        return web.json_response({"error": "No workflows in the queue."}, status=400)
-    items = body.get("items") or []
-    if not items:
-        return web.json_response({"error": "No workflows in the queue."}, status=400)
-    for it in items:
-        wf = it.get("workflow") or it.get("prompt")
-        if not wf:
-            return web.json_response({"error": "A queued item is missing its workflow."}, status=400)
-        it["workflow"] = wf
-    try:
-        qid = await _run(lambda: render_queue.submit_queue(items, body.get("instance_type")))
-    except Exception as exc:  # noqa: BLE001
-        return _legacy_error(exc)
-    return web.json_response({"queueId": qid})
-
-
-async def legacy_get_queue(request):
-    try:
-        state = render_queue.get_queue_state(request.match_info["queue_id"])
-    except Exception:  # noqa: BLE001
-        state = None
-    if state is None:
-        return web.json_response({"error": "unknown queue"}, status=404)
-    return web.json_response(state)
-
-
-async def legacy_cancel_queue(request):
-    try:
-        await _run(lambda: render_queue.cancel_queue(request.match_info["queue_id"], "after_current"))
-    except Exception as exc:  # noqa: BLE001
-        return _legacy_error(exc)
-    return web.json_response({"ok": True})
-
-
-LEGACY_ROUTES = [
-    ("POST", "/spark_fuse/submit", legacy_submit),
-    ("GET", "/spark_fuse/job/{job_id}", legacy_get_job),
-    ("POST", "/spark_fuse/queue", legacy_post_queue),
-    ("GET", "/spark_fuse/queue/{queue_id}", legacy_get_queue),
-    ("POST", "/spark_fuse/queue/{queue_id}/cancel", legacy_cancel_queue),
-]
-
-
-def _legacy_guarded(handler):
-    """Legacy shapes keep {"error": "<text>"} but get the same request policy as /halofuse/* (a POST here can start
-    a paid render, so it needs X-HaloFuse-Request like the legacy account POSTs)."""
-    async def wrapped(request):
-        refused = _guard(request)
-        if refused is not None:
-            try:
-                text = json.loads(refused.body)["error"]["message"]
-            except (ValueError, KeyError, TypeError):
-                text = "This request is not allowed."
-            return web.json_response({"error": text}, status=refused.status)
-        return await handler(request)
-    wrapped.__name__ = handler.__name__
-    return wrapped
-
-
-def register_legacy(routes) -> None:
-    for method, path, handler in LEGACY_ROUTES:
-        getattr(routes, method.lower())(path)(_legacy_guarded(handler))

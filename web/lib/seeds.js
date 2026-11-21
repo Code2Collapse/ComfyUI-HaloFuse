@@ -1,5 +1,5 @@
 // Seed control_after_generate for HaloFuse submissions. Side-effect-free ES module.
-// Behaviour moved unchanged from the 0.3.4 web/spark_fuse.js (compat contract: WORKSTREAMS §4).
+// Behaviour moved unchanged from the 0.3.4 extension entry script (compat contract: WORKSTREAMS §4).
 //
 // The bridge submits app.graphToPrompt() output directly, bypassing ComfyUI's own Queue path, so
 // control_after_generate never fires by itself. Like ComfyUI, the prompt is captured FIRST with the current

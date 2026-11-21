@@ -2,7 +2,7 @@
 # Comfy Registry node id under the Code2Collapse publisher = the install folder = the GitHub repo name
 # (owner decision 2026-11-20; registry block from docs/h2vault/V4_registry_naming.md section 6).
 name = "ComfyUI-HaloFuse"
-version = "0.4.0"
+version = "0.5.0"
 description = "HaloFuse for ComfyUI: render the open workflow on a cloud GPU with one click, follow its progress in a panel, and get the results back in your output folder."
 readme = "README.md"
 license = { text = "AGPL-3.0" }

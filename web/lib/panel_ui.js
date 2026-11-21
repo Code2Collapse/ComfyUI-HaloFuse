@@ -57,7 +57,7 @@ export class Panel {
       const v = lib.value.trim();
       if (v && !v.startsWith("/")) { this.ctl.say("The cloud model library path must start with “/”.", "warning"); return; }
       const g = parseInt(guard.value, 10);
-      this.ctl.saveAdvanced({ assets_share_sync_path: v, image_affinity: affinity.value, upload_guard_gb: g > 0 ? g : 50 });
+      this.ctl.saveAdvanced({ assets_library_path: v, image_affinity: affinity.value, upload_guard_gb: g > 0 ? g : 50 });
     } });
 
     const field = (label, input, hint) => H("label", { className: "hf-field", htmlFor: input.id }, H("span", { text: label }), input, hint || null);
@@ -98,7 +98,7 @@ export class Panel {
     this.version.textContent = st.settings?.version ? `v${st.settings.version}` : "";
     if (st.settings && !this._advLoaded) {
       this._advLoaded = true;
-      this.adv.lib.value = st.settings.assets_share_sync_path || "";
+      this.adv.lib.value = st.settings.assets_library_path || "";
       this.adv.affinity.value = st.settings.image_affinity === "preferred" ? "preferred" : "required";
       this.adv.guard.value = st.settings.upload_guard_gb || 50;
     }

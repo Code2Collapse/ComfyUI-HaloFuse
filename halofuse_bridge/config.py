@@ -23,11 +23,14 @@ import tempfile
 import time
 from pathlib import Path
 
-_log = logging.getLogger("spark_fuse_bridge.config")
+from . import legacy_names
+from .provider import image_contract
+
+_log = logging.getLogger("halofuse_bridge.config")
 
 _ROOT = Path(__file__).resolve().parent.parent
-_LEGACY_SETTINGS_PATH = _ROOT / "spark_fuse_settings.json"
-SETTINGS_NAME = "spark_fuse_settings.json"
+SETTINGS_NAME = "halofuse_settings.json"
+SETTINGS_DIR_NAME = legacy_names.SETTINGS_DIR_NAME
 
 # Cache so settings_dir() resolves (and migrates the pre-0.2.2 copy) only once per process.
 _settings_dir_cache: Path | None = None
@@ -37,11 +40,11 @@ _settings_ok = True
 # image and command are node-version constants (always taken from here, never from a stale saved settings file).
 # Cached-image affinity still resolves the image to a digest at submit time.
 DEFAULTS = {
-    "image": "ghcr.io/nithin-ml/spark-fuse-comfyui:sha-70e0ff4b38b431b2c77e90f2936f93d04516ccc9",
-    "command": ["python3.13", "/runner/spark_fuse_run.py"],
+    "image": image_contract.IMAGE,
+    "command": list(image_contract.COMMAND),
     "instance_type": "g7e.2xlarge",
-    "assets_share_sync_path": "/models",
-    "assets_share_sync_space_name": "",
+    "assets_library_path": "/models",
+    "assets_library_space": "",
     "model_base_dir": "/assets",
     "image_affinity": "required",
     "batch_count": 1,
@@ -65,7 +68,7 @@ DEFAULTS = {
 
 # The only keys the browser may read or write. Never the endpoint, a credential or the runtime image.
 PUBLIC_KEYS = [
-    "instance_type", "assets_share_sync_path", "assets_share_sync_space_name",
+    "instance_type", "assets_library_path", "assets_library_space",
     "model_base_dir", "image_affinity", "batch_count", "upload_guard_gb",
     "max_runtime_seconds", "max_job_cost_usd", "daily_spend_cap_usd",
     "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode",
@@ -82,7 +85,7 @@ _PRIVATE_KEYS = ("host", "endpoint", "email", "password")
 
 _INSTANCE_TYPE_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
-# Queue chunking: the maximum number of workflows per manifest job (see render_queue.py and spark_fuse_run.py's
+# Queue chunking: the maximum number of workflows per manifest job (see render_queue.py and the runner's
 # multi-workflow mode). Deliberately NOT in PUBLIC_KEYS: it can only be changed by hand-editing the settings file.
 # A user raising it risks losing a larger chunk's worth of completed work at once if its job is killed.
 DEFAULT_QUEUE_CHUNK_SIZE = 10
@@ -124,18 +127,23 @@ def settings_dir() -> Path:
 
     if hasattr(folder_paths, "get_system_user_directory"):
         # System User directory: internal-only, never exposed through ComfyUI's HTTP /userdata endpoints.
-        directory = Path(folder_paths.get_system_user_directory("spark_fuse_bridge"))
+        directory = Path(folder_paths.get_system_user_directory(SETTINGS_DIR_NAME))
     else:
         # Older ComfyUI without the System User Protection API (Manager's legacy convention).
-        directory = Path(folder_paths.get_user_directory()) / "default" / "spark_fuse_bridge"
+        directory = Path(folder_paths.get_user_directory()) / "default" / SETTINGS_DIR_NAME
+    legacy_names.adopt_dir(directory)  # the 0.3 folder (old name) moves here once, with every file in it
     directory.mkdir(parents=True, exist_ok=True)
+    legacy_names.adopt_file(directory, SETTINGS_NAME, legacy_names.SETTINGS_FILE)
     _migrate_legacy_settings(directory / SETTINGS_NAME)
     _settings_dir_cache = directory
     return directory
 
 
 def settings_path() -> Path:
-    return settings_dir() / SETTINGS_NAME
+    directory = settings_dir()
+    if _override_dir is not None:  # an override folder may hold a file under the 0.3 name
+        legacy_names.adopt_file(directory, SETTINGS_NAME, legacy_names.SETTINGS_FILE)
+    return directory / SETTINGS_NAME
 
 
 # Backwards-compatible name used by older code.
@@ -163,19 +171,41 @@ def _reset_credential_store() -> None:
     credentials.set_default_store(None)
 
 
+def _old_settings_file(directory) -> Path | None:
+    """The 0.3-named settings file inside *directory* (matched by hash), or None."""
+    return legacy_names.find(directory, legacy_names.SETTINGS_FILE)
+
+
 def legacy_settings_paths() -> list[Path]:
-    """Every file that may hold a plaintext credential from an older version (CREDENTIALS_DESIGN s4 a-d)."""
-    paths = [settings_path()]
+    """Every file that may hold a plaintext credential from an older version (CREDENTIALS_DESIGN s4 a-d).
+
+    The current file comes first; old copies are found by hash (legacy_names), so only existing ones are listed.
+    """
+    current = settings_path()
+    paths = [current]
     if _override_dir is None:
         try:
             import folder_paths
 
             if hasattr(folder_paths, "get_system_user_directory"):
-                paths.append(Path(folder_paths.get_user_directory()) / "default" / "spark_fuse_bridge" / SETTINGS_NAME)
+                # the pre-system-user location: user/default/<0.3 folder>/<0.3 file>
+                user_default = Path(folder_paths.get_user_directory()) / "default"
+                old = _old_settings_file(legacy_names.find(user_default, legacy_names.SETTINGS_DIR))
+                if old is not None:
+                    paths.append(old)
+            # a 0.3 folder left next to the new one (it could not be moved and was copied instead)
+            name = current.parent.name
+            if name.endswith(SETTINGS_DIR_NAME):
+                sibling = legacy_names.find(current.parent.parent, legacy_names.SETTINGS_DIR,
+                                            prefix=name[:-len(SETTINGS_DIR_NAME)])
+                old = _old_settings_file(sibling)
+                if old is not None:
+                    paths.append(old)
         except Exception:  # noqa: BLE001 - outside ComfyUI there is no old location
             pass
-    paths.append(_LEGACY_SETTINGS_PATH)
-    paths.append(_LEGACY_SETTINGS_PATH.with_name(_LEGACY_SETTINGS_PATH.name + ".migrated"))
+    for old in (_old_settings_file(_ROOT), legacy_names.find(_ROOT, legacy_names.SETTINGS_FILE, suffix=".migrated")):
+        if old is not None:
+            paths.append(old)
     return paths
 
 
@@ -184,12 +214,12 @@ def _migrate_legacy_settings(new_path: Path) -> None:
 
     The credential migration (credentials.py) later scrubs the password from every copy.
     """
-    if new_path.is_file() or not _LEGACY_SETTINGS_PATH.is_file():
+    legacy = _old_settings_file(_ROOT)
+    if new_path.is_file() or legacy is None:
         return
     try:
-        shutil.copyfile(_LEGACY_SETTINGS_PATH, new_path)
-        backup_path = _LEGACY_SETTINGS_PATH.with_name(_LEGACY_SETTINGS_PATH.name + ".migrated")
-        _LEGACY_SETTINGS_PATH.rename(backup_path)
+        shutil.copyfile(legacy, new_path)
+        legacy.rename(legacy.with_name(legacy.name + ".migrated"))
     except OSError:
         pass
 
@@ -207,6 +237,7 @@ def _read_raw() -> tuple[dict, bool]:
         return {}, False
     if not isinstance(data, dict):
         return {}, False
+    legacy_names.migrate_keys(data)  # 0.3 setting key names -> HaloFuse names (written back on the next save)
     return data, True
 
 
@@ -234,7 +265,7 @@ def load_settings() -> dict:
 def _valid_pref(key: str, value) -> bool:
     if key == "instance_type":
         return isinstance(value, str) and bool(_INSTANCE_TYPE_RE.match(value))
-    if key in ("assets_share_sync_path", "assets_share_sync_space_name", "model_base_dir"):
+    if key in ("assets_library_path", "assets_library_space", "model_base_dir"):
         return isinstance(value, str) and len(value) <= 512 and "\x00" not in value
     if key == "image_affinity":
         return value in ("required", "preferred")
@@ -315,7 +346,8 @@ def _atomic_write(path: Path, data: dict) -> None:
 def save_settings(values: dict) -> dict:
     """Save the web-writable preferences. The endpoint and credentials are never taken from *values*."""
     global _settings_ok
-    values = values if isinstance(values, dict) else {}
+    values = dict(values) if isinstance(values, dict) else {}
+    legacy_names.migrate_keys(values)  # a panel cached from 0.3 may still send the old key names
     path = settings_path()
     raw, ok = _read_raw()
     if not ok and path.exists():
@@ -361,6 +393,6 @@ def make_client(settings: dict | None = None):
     *settings* is accepted for compatibility and ignored: the endpoint and credentials come from the trusted layer
     only. Raises a branded `provider.BackendError` (a RuntimeError) when HaloFuse is not configured.
     """
-    from .provider import spark_adapter
+    from .provider import cloud_adapter
 
-    return spark_adapter.legacy_sdk_client()
+    return cloud_adapter.legacy_sdk_client()

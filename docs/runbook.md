@@ -25,7 +25,7 @@ development). Labels as in the [manual](manual.md): *available*, *needs the 0.4.
 | Cloud ComfyUI and runner log | `output/HaloFuse/<job id>/logs/render.log` | available; relayed lines, scrubbed |
 | Errors only | `output/HaloFuse/<job id>/logs/error.log` | available; created on the first error |
 | All outputs of a job | `output/HaloFuse/<job id>/outputs/` | available; size + SHA-256 checked, resumable |
-| Older manual recoveries | `output/spark_fuse/<8 characters>/` | readable, never moved |
+| Older manual recoveries (version 0.3) | their 0.3 output folder | readable, never moved |
 | ComfyUI server log | the ComfyUI console window, or ComfyUI's log panel | available |
 | Browser side | the browser developer console (F12) | available |
 | Settings | the HaloFuse settings file in ComfyUI's `user` folder (a system folder the web UI cannot read) | available |

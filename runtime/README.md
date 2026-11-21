@@ -17,9 +17,9 @@ build or run it. It is for whoever builds and maintains the cloud runtime. Artis
 ```
 cloud GPU machine
 └── this image (one job per container)
-    ├── /input    workflow.json (API format) or spark_fuse_job.json (manifest), plus staged input files
+    ├── /input    workflow.json (API format) or halofuse_job.json (manifest), plus staged input files
     ├── /assets   the artist's cloud model library, mounted read-only (MODEL_BASE_DIR=/assets)
-    ├── runner    runner/spark_fuse_run.py (the entry point) + runner/hf/ (supervisor, events, telemetry, ...)
+    ├── runner    runner/halofuse_run.py (the entry point) + runner/hf/ (supervisor, events, telemetry, ...)
     │     1. start ComfyUI on 127.0.0.1:8188 (loopback only, no published ports)
     │     2. wait until it is ready; relay its websocket progress as run events
     │     3. queue each workflow (render repeats with fresh seeds) and follow it to completion
@@ -35,7 +35,7 @@ All ComfyUI and runner output goes to stdout, which HaloFuse streams to the arti
 | Path / name | Meaning |
 | --- | --- |
 | `/input/workflow.json` | one **API-format** workflow (UI-format exports are rejected with a clear error) |
-| `/input/spark_fuse_job.json` | manifest `{"workflows": [{"workflow": {...}, "batch_count": N}]}` for a queue chunk; each entry's outputs go to `/output/wf_NN/` with their subfolders |
+| `/input/halofuse_job.json` | manifest `{"workflows": [{"workflow": {...}, "batch_count": N}]}` for a queue chunk; each entry's outputs go to `/output/wf_NN/` with their subfolders |
 | `MODEL_BASE_DIR` | model root (`/input/models` by default, `/assets` for the cloud model library); the runner writes `extra_model_paths.yaml` from it |
 | `/output/` | results; `/output/_halofuse/` holds the runner's own files (render log, events, previews) and is never an output |
 | stdout markers | `[runner] workflow M/T started`, `succeeded (N file(s))`, `failed: reason (N partial file(s))`, unchanged |

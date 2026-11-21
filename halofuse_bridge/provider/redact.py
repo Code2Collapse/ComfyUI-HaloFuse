@@ -17,6 +17,8 @@ import re
 import threading
 import urllib.parse
 
+from . import sdk
+
 WITHHELD = "[line withheld: redaction error]"
 
 _LOCK = threading.Lock()
@@ -34,8 +36,10 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-Z\\-_]")
 _CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _NEWLINE_RE = re.compile(r"\r\n|\r|\n")
 
-_PREFIXES = ("spark_fuse", "httpx", "httpcore", "hpack")
-_FILTERED_LOGGERS = ("spark_fuse", "spark_fuse_bridge", "httpx", "httpcore")
+# Loggers whose records are redacted at creation (name prefix match, so child loggers are covered too): the SDK's,
+# the bridge's own and the HTTP stack's.
+_PREFIXES = (sdk.MODULE, "halofuse_bridge", "httpx", "httpcore", "hpack")
+_FILTERED_LOGGERS = (sdk.MODULE, "halofuse_bridge", "httpx", "httpcore")
 _installed = False
 
 

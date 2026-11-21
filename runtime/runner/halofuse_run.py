@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Spark Fuse job runner — drives one or more headless ComfyUI workflows per
+"""HaloFuse job runner — drives one or more headless ComfyUI workflows per
 container, against a single ComfyUI process.
 
 Job contract:
-  /input/spark_fuse_job.json   optional manifest: {"workflows": [{"workflow":
+  /input/halofuse_job.json     optional manifest: {"workflows": [{"workflow":
                                 {...API-format graph...}, "batch_count": N}, ...]}.
                                 When present, every entry runs in manifest order
                                 against ONE ComfyUI boot; outputs land under
@@ -11,6 +11,9 @@ Job contract:
                                 manifest order), keeping each file's subfolder.
                                 An entry may also carry "partial_execution_targets":
                                 [node ids] (run only up to those output nodes).
+                                The manifest name earlier bridges write is
+                                accepted too (matched by SHA-256, see
+                                _manifest_path()).
   /input/workflow.json         single-workflow fallback, used only when the
                                 manifest above is absent. Exact pre-manifest
                                 behaviour: one workflow, BATCH_COUNT repeats,
@@ -21,8 +24,8 @@ Job contract:
   /output/_halofuse/     runner files (render.log, events.jsonl, previews/);
                          never counted as workflow outputs
 
-The ComfyUI server only ever listens on container-internal loopback; Spark
-Fuse publishes no ports and none are needed.
+The ComfyUI server only ever listens on container-internal loopback; the cloud
+platform publishes no ports and none are needed.
 
 Besides the [runner] lines below, the runner prints structured `[hf] {...}`
 event lines (contract C-3: phase, progress, node, telemetry, preview, output,
@@ -55,6 +58,7 @@ Exit codes (manifest mode):
   workflow is marked failed and the job moves on to the next entry, then
   exits 1 overall rather than dying on the spot.
 """
+import hashlib
 import json
 import os
 import random
@@ -87,7 +91,10 @@ COMFYUI_DIR = Path(os.environ.get("COMFYUI_DIR", "/default-comfyui-bundle/ComfyU
 INPUT_DIR = Path(os.environ.get("INPUT_DIR", "/input"))
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "/output"))
 WORKFLOW_PATH = Path(os.environ.get("WORKFLOW_PATH", str(INPUT_DIR / "workflow.json")))
-MANIFEST_PATH = Path(os.environ.get("MANIFEST_PATH", str(INPUT_DIR / "spark_fuse_job.json")))
+MANIFEST_PATH = Path(os.environ.get("MANIFEST_PATH", str(INPUT_DIR / "halofuse_job.json")))
+# SHA-256 of the manifest file name that bridges written for the previous image write (the name is not spelled out:
+# no provider name in this source). Accepted when halofuse_job.json is absent, so those bridges keep working.
+LEGACY_MANIFEST_SHA256 = "eff5cf5368b583ec334d9f61f863aa3953d4cfbffc5ce463912db9c474626bd5"
 PORT = int(os.environ.get("COMFY_PORT", "8188"))
 BASE_URL = f"http://127.0.0.1:{PORT}"
 STARTUP_TIMEOUT = int(os.environ.get("STARTUP_TIMEOUT_SECONDS", "300"))
@@ -103,7 +110,7 @@ except ValueError:
 # Inputs whose value is randomised between batch renders so each image differs.
 SEED_KEYS = ("seed", "noise_seed")
 # Where ComfyUI looks for models. Defaults to the per-job /input mount today;
-# set MODEL_BASE_DIR=/assets/models to use Spark Fuse's persistent assets mount
+# set MODEL_BASE_DIR=/assets/models to use the platform's persistent assets mount
 # when it ships (one submit-time --env flag, no image rebuild, no workflow edits).
 MODEL_BASE_DIR = os.environ.get("MODEL_BASE_DIR", str(INPUT_DIR / "models"))
 MODEL_SUBDIRS = [
@@ -112,22 +119,22 @@ MODEL_SUBDIRS = [
     "embeddings", "configs",
 ]
 # Generated at runtime from MODEL_BASE_DIR (see write_extra_model_paths()).
-EXTRA_MODEL_PATHS = Path("/tmp/spark_fuse_extra_model_paths.yaml")
+EXTRA_MODEL_PATHS = Path("/tmp/halofuse_extra_model_paths.yaml")
 # Model prefetch (Halo Hues). ComfyUI's dynamic-VRAM loader reads weights from
 # /assets in many small random reads while sampling ("Model Initializing"),
-# which is very slow on the Fuse assets mount and its on-node cache. Copying the
+# which is very slow on the platform's assets mount and its on-node cache. Copying the
 # model files this job references to the node's local NVMe first, in large
 # sequential reads, and pointing ComfyUI there makes every later read local.
 # PREFETCH_MODELS=0 turns it off.
 PREFETCH_MODELS = os.environ.get("PREFETCH_MODELS", "1").lower() not in ("0", "false", "no")
-LOCAL_MODEL_DIR = Path(os.environ.get("LOCAL_MODEL_DIR", "/tmp/spark-models"))
+LOCAL_MODEL_DIR = Path(os.environ.get("LOCAL_MODEL_DIR", "/tmp/halofuse-models"))
 PREFETCH_THREADS = max(1, int(os.environ.get("PREFETCH_THREADS", "4")))
 MODEL_EXTS = (".safetensors", ".sft", ".ckpt", ".pt", ".pth", ".bin", ".gguf", ".onnx")
 # ComfyUI's input directory. /input is read-only for the life of the job, and
 # ComfyUI creates folders there at startup (Load3D's 3d/, uploads, and so on),
 # so the runner copies the job files here and passes this path instead.
 # Kept out of /tmp/comfyui because ComfyUI clears its temp directory on boot.
-STAGED_INPUT_DIR = Path("/tmp/spark-fuse-input")
+STAGED_INPUT_DIR = Path("/tmp/halofuse-input")
 # ComfyUI's --temp-directory (ComfyUI appends "temp/"); PreviewImage & co. write there.
 COMFY_TEMP_DIR = Path("/tmp/comfyui")
 # HaloFuse: launch allowlist (D3), probes for telemetry (F5) and the fingerprint (D4).
@@ -136,7 +143,7 @@ NVIDIA_SMI = ["nvidia-smi"]
 PROC_ROOT = Path("/proc")
 CGROUP_ROOT = Path("/sys/fs/cgroup")
 NODE_SNAPSHOT_PATH = Path(os.environ.get("HF_NODE_SNAPSHOT_PATH", "/etc/halofuse/node_snapshot.json"))
-CLIENT_ID = "spark-fuse-runner"
+CLIENT_ID = "halofuse-runner"
 INTERRUPT_GRACE_SECONDS = 5.0
 _MEMORY_OOM_CODES = ("vram_oom", "vae_decode_oom", "host_ram_oom")
 _DEFAULT_ERRORS = {1: "execution_error", 2: "bad_input", 3: "validation_failed", 4: "timeout",
@@ -215,7 +222,7 @@ def http_json(path, payload=None, timeout=30):
 
 
 def log_banner():
-    log(f"spark-fuse-comfyui runner (python {sys.version.split()[0]})")
+    log(f"HaloFuse runner (python {sys.version.split()[0]})")
     version_file = COMFYUI_DIR / "comfyui_version.py"
     if version_file.is_file():
         match = re.search(r'__version__\s*=\s*"([^"]+)"', version_file.read_text())
@@ -273,8 +280,23 @@ def load_workflow():
     return workflow
 
 
+def _manifest_path() -> Path:
+    """The manifest to run: MANIFEST_PATH (default /input/halofuse_job.json) when it exists or was set explicitly,
+    else a manifest under the name earlier bridges write (found by SHA-256 of the name), else MANIFEST_PATH."""
+    if MANIFEST_PATH.is_file() or os.environ.get("MANIFEST_PATH"):
+        return MANIFEST_PATH
+    try:
+        names = sorted(os.listdir(INPUT_DIR))
+    except OSError:
+        return MANIFEST_PATH
+    for name in names:
+        if hashlib.sha256(name.encode("utf-8")).hexdigest() == LEGACY_MANIFEST_SHA256 and (INPUT_DIR / name).is_file():
+            return INPUT_DIR / name
+    return MANIFEST_PATH
+
+
 def load_manifest():
-    """Load and validate /input/spark_fuse_job.json; return [(workflow, batch_count, targets), ...]
+    """Load and validate the manifest (/input/halofuse_job.json); return [(workflow, batch_count, targets), ...]
     in manifest order. Any structural problem is fatal (exit 2), checked entirely
     before ComfyUI starts — same severity and timing as a bad workflow.json today.
     """
@@ -317,7 +339,7 @@ def write_extra_model_paths():
 
     Done at runtime, not baked into the image, so the model library location is
     a submit-time choice: /input/models by default, or /assets/models once the
-    Spark Fuse assets mount is available, with no rebuild and no workflow edits.
+    platform's assets mount is available, with no rebuild and no workflow edits.
     """
     names = list(MODEL_SUBDIRS)
     extra = _extra_model_dirs()
@@ -326,10 +348,10 @@ def write_extra_model_paths():
     if PREFETCH_MODELS:
         # Listed first: ComfyUI returns the first match, so a prefetched local
         # copy wins over the /assets original. Files never prefetched are still
-        # found under spark_fuse below.
-        lines += ["spark_local:", f"  base_path: {LOCAL_MODEL_DIR}"]
+        # found under halofuse below.
+        lines += ["halofuse_local:", f"  base_path: {LOCAL_MODEL_DIR}"]
         lines += [f"  {name}: {name}" for name in MODEL_SUBDIRS]
-    lines += ["spark_fuse:", f"  base_path: {MODEL_BASE_DIR}"]
+    lines += ["halofuse:", f"  base_path: {MODEL_BASE_DIR}"]
     lines += [f"  {name}: {name}" for name in names]
     EXTRA_MODEL_PATHS.write_text("\n".join(lines) + "\n")
     log(f"model search base: {MODEL_BASE_DIR}")
@@ -558,7 +580,7 @@ def start_comfyui(extra_args=None):
     _OOM_BEFORE = _SAMPLER.oom_kill_count() if _SAMPLER is not None else None
     _CTX.phase("comfy_start", "start")
     # stdout/stderr are relayed line by line so ComfyUI's own logs still reach
-    # the Spark Fuse stream (same stream, same text) and render.log.
+    # the cloud log stream (same stream, same text) and render.log.
     return hf_sup.ComfyProcess(cmd, COMFYUI_DIR, env, _em(),
                                on_node_import=lambda d: _CTX.phase("node_import", "mark", dur=round(d, 3))).start()
 
@@ -1146,8 +1168,10 @@ def _run():
     log_banner()
 
     # Manifest presence decides the mode entirely: an old bridge never writes
-    # /input/spark_fuse_job.json, so it always takes the fallback branch below,
+    # a manifest, so it always takes the fallback branch below,
     # unchanged from before this file gained manifest support.
+    global MANIFEST_PATH
+    MANIFEST_PATH = _manifest_path()
     manifest = load_manifest() if MANIFEST_PATH.is_file() else None
     workflow = None if manifest is not None else load_workflow()
     if manifest is not None:

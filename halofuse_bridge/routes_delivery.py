@@ -1,12 +1,10 @@
-"""Delivery routes (C-4 section 4 + the previews of section 6; WS3), plus the 0.3.x /spark_fuse download aliases.
+"""Delivery routes (C-4 section 4 + the previews of section 6; WS3).
 
 The lead's routes.py calls::
 
     routes_delivery.register(routes, prefix="/halofuse")
-    routes_delivery.register(routes, prefix="/spark_fuse", legacy=True)   # one-release alias, old shapes
 
-Every route goes through the WS1 request guard (loopback peer + Host allowlist; the X-HaloFuse-Request header on all
-new routes and on the legacy POST). Job ids from the path are validated before any filesystem or cloud use; preview
+Every route goes through the WS1 request guard (loopback peer + Host allowlist; the X-HaloFuse-Request header). Job ids from the path are validated before any filesystem or cloud use; preview
 files are served only from the job's own previews/ folder. No response carries a URL, a host or exception text.
 """
 from __future__ import annotations
@@ -20,12 +18,13 @@ import threading
 
 from aiohttp import web
 
-from . import brand, delivery, lifecycle, output_download
+from . import brand, delivery, lifecycle
 from .job_store import HaloFuseError, default_store
 from .routes_account import request_guard
 
 _log = logging.getLogger(__name__)
 
+_JOB_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$")  # C-2 section 1 (a local or a cloud job id)
 _PREVIEW_RE = re.compile(r"^[A-Za-z0-9._-]{1,120}$")
 _MIME = {".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
          ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm", ".wav": "audio/wav", ".mp3": "audio/mpeg"}
@@ -57,7 +56,7 @@ def _int(value, default: int, lo: int, hi: int) -> int:
 def _job_id(request) -> str:
     """The path id resolved to a local job id (accepts a cloud job id). Raises HaloFuseError."""
     any_id = request.match_info["job_id"].strip()
-    if not output_download.valid_job_id(any_id):
+    if not _JOB_ID_RE.fullmatch(any_id):
         raise HaloFuseError("bad_request", delivery.MESSAGES["bad_request"], 400)
     resolved = default_store().resolve_id(any_id)
     if resolved is None:
@@ -173,56 +172,12 @@ _NEW = (
 )
 
 
-# ---- legacy 0.3.x shapes ----------------------------------------------------------------------------------------------
-
-def _legacy_error(message: str, status: int) -> web.Response:
-    return web.json_response({"error": message}, status=status)
-
-
-async def legacy_recent_jobs(request):
-    try:
-        return web.json_response({"jobs": await _run(output_download.recent_jobs)})
-    except Exception as exc:  # noqa: BLE001
-        return _legacy_error(lifecycle.as_halofuse_error(exc).message, 400)
-
-
-async def legacy_post_download(request):
-    job_id = request.match_info["job_id"].strip()
-    try:
-        state = await _run(lambda: output_download.start_download(job_id))
-    except ValueError:
-        return _legacy_error(delivery.MESSAGES["bad_request"], 400)
-    except Exception as exc:  # noqa: BLE001
-        return _legacy_error(lifecycle.as_halofuse_error(exc).message, 400)
-    return web.json_response(state)
-
-
-async def legacy_get_download(request):
-    job_id = request.match_info["job_id"].strip()
-    if not output_download.valid_job_id(job_id):
-        return _legacy_error(delivery.MESSAGES["bad_request"], 400)
-    state = await _run(lambda: output_download.get_download_state(job_id))
-    if state is None:
-        return _legacy_error("HaloFuse has not delivered this job yet.", 404)
-    return web.json_response(state)
-
-
-_LEGACY = (
-    ("GET", "/recent_jobs", legacy_recent_jobs, False),
-    ("POST", "/download/{job_id}", legacy_post_download, True),
-    ("GET", "/download/{job_id}", legacy_get_download, False),
-)
-
-
 # ---- registration -------------------------------------------------------------------------------------------------------
 
-def _guarded(handler, needs_header: bool, legacy: bool):
+def _guarded(handler):
     async def wrapper(request):
-        refused = request_guard(request, needs_header=needs_header)
+        refused = request_guard(request, needs_header=True)
         if refused is not None:
-            if legacy:
-                return _legacy_error(brand.message("forbidden_origin" if refused.status == 403 else "unknown"),
-                                     refused.status)
             return refused
         return await handler(request)
 
@@ -230,16 +185,12 @@ def _guarded(handler, needs_header: bool, legacy: bool):
     return wrapper
 
 
-def register(route_table, prefix: str = "/halofuse", legacy: bool = False, *, resume: bool = True) -> None:
+def register(route_table, prefix: str = "/halofuse", *, resume: bool = True) -> None:
     """Add the delivery routes under *prefix*. ``resume`` restarts deliveries a ComfyUI restart interrupted."""
     prefix = "/" + prefix.strip("/")
-    if legacy:
-        for method, path, handler, needs_header in _LEGACY:
-            route_table.route(method, prefix + path)(_guarded(handler, needs_header, True))
-    else:
-        for method, path, handler in _NEW:
-            route_table.route(method, prefix + path)(_guarded(handler, True, False))
-    if resume and not legacy:
+    for method, path, handler in _NEW:
+        route_table.route(method, prefix + path)(_guarded(handler))
+    if resume:
         threading.Thread(target=_resume, daemon=True, name="halofuse-delivery-resume").start()
 
 

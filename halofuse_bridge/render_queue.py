@@ -21,6 +21,7 @@ import uuid
 from . import cost as costmod
 from . import jobs, lifecycle
 from .job_store import HaloFuseError, JobStore, default_store
+from .provider import image_contract
 
 _log = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ DEFAULT_CHUNK_SIZE = 10
 DEFAULT_IDLE_WARN_S = 120
 _ITEM_TERMINAL = frozenset({"succeeded", "failed", "cancelled"})
 
-# Matches the runner's exact marker strings (spark_fuse_run.py run_manifest()) — compatibility contract:
+# Matches the runner's exact marker strings (the runner's run_manifest()) — compatibility contract:
 #   [runner] workflow 2/5 started
 #   [runner] workflow 2/5 succeeded (3 file(s))
 #   [runner] workflow 2/5 failed: <reason>
@@ -544,7 +545,7 @@ class QueueRunner:
             manifest = {"workflows": entries}
             ref = jobs.stage_and_submit(
                 self.backend, settings=self.settings, instance_type=sku,
-                files={"spark_fuse_job.json": json.dumps(manifest)},
+                files={image_contract.MANIFEST_NAME: json.dumps(manifest)},
                 workflows_for_inputs=[e["workflow"] for e in entries],
                 env=jobs._job_env(self.settings, jobs._build_chunk_env(self.settings), max_runtime_s=max_rt,
                                   preview_mode=None, nonce=nonce),
@@ -716,34 +717,3 @@ def queue_view(rec: dict, store: JobStore | None = None) -> dict:
                   if isinstance(rec.get("error"), dict) else None),
         "log_total": store.total_events(rec["job_id"]),
     }
-
-
-_LEGACY_ITEM_STATUS = {"pending": "queued", "submitted": "queued"}
-_LEGACY_QUEUE_STATUS = {"paused": "running", "queued": "preparing", "cancelling": "running"}
-
-
-def get_queue_state(qid: str, store: JobStore | None = None) -> dict | None:
-    """Legacy 0.3.4 ``/queue/{id}`` shape, read from the store."""
-    store = store or default_store()
-    try:
-        rec = _get_queue(store, qid)
-    except (HaloFuseError, ValueError):
-        return None
-    lines = store.tail_text(qid, 100)
-    chunk_ids = [it.get("chunk_id") for it in rec["items"] if it.get("chunk_id")]
-    last_chunk = rec["queue"].get("active_chunk_id") or (chunk_ids[-1] if chunk_ids else None)
-    if last_chunk and store.exists(last_chunk):
-        lines += ["  " + t for t in store.tail_text(last_chunk, 150)]
-    items = []
-    for it in rec["items"]:
-        chunk = store.get(it["chunk_id"]) if it.get("chunk_id") else None
-        cids = ((chunk or {}).get("cloud") or {}).get("job_ids") or []
-        items.append({"index": it.get("index"), "label": it.get("label"), "batch_count": it.get("render_repeats"),
-                      "status": _LEGACY_ITEM_STATUS.get(it.get("status"), it.get("status")),
-                      "job_id": cids[0] if cids else None, "images": [],
-                      "error": it.get("error")})
-    err = rec.get("error")
-    return {"status": _LEGACY_QUEUE_STATUS.get(rec.get("state"), rec.get("state")), "lines": lines,
-            "items": items, "image": None, "instance_handle": None,
-            "error": err.get("message") if isinstance(err, dict) else None, "cancel": bool(rec["queue"].get(
-                "stop_mode"))}

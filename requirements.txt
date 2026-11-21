@@ -1,4 +1,4 @@
-# The Spark Fuse API client (the "messenger"). Installs its own deps
+# The cloud provider's API client (used only by halofuse_bridge/provider/). Installs its own deps
 # (httpx, httpx-sse, python-dotenv, ...) transitively.
 spark-fuse-messenger>=0.5.0
 # OS keychain for the account password (Windows Credential Manager, macOS Keychain, Secret Service).

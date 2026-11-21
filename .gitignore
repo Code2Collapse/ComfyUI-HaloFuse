@@ -12,8 +12,11 @@ venv/
 !.env.example
 # Settings and credential files can hold the account password or the service endpoint. They live in ComfyUI's
 # user folder at runtime; these lines guard against a copy landing in the checkout.
-spark_fuse_settings.json
-spark_fuse_settings.json.*
+halofuse_settings.json
+halofuse_settings.json.*
+# any older settings file name too
+*_settings.json
+*_settings.json.*
 credentials.json
 deployment.json
 *.migrated
@@ -58,3 +61,9 @@ build/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Tests stay local (owner rule 2026-10-23): the suites live on the developer's disk, never in the published repository.
+/tests/
+/runtime/tests/
+/runtime/pytest.ini
+/docs/testing.md
