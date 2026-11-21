@@ -50,9 +50,15 @@ FROM base AS nodes
 ARG PROFILE=default
 
 # Init process for PID 1 (WS4 request R-WS4-1, audit X5): forwards SIGTERM/SIGINT to the runner and reaps zombies.
-# Static tini 0.19.0; checksum verified by BuildKit (matches the release's published .sha256sum).
-ADD --checksum=sha256:c5b0666b4cb676901f90dfcb37106783c5fe2077b04590973b885950611b30ee --chmod=0755 \
-    https://github.com/krallin/tini/releases/download/v0.19.0/tini-static-amd64 /usr/local/bin/tini
+# Static tini 0.19.0, SHA-256 verified before it is installed (matches the release's published .sha256sum). Fetched in
+# a RUN step, not `ADD --checksum`: the CI linter (hadolint) does not parse that flag. A mismatch fails the build.
+ARG TINI_URL=https://github.com/krallin/tini/releases/download/v0.19.0/tini-static-amd64
+ARG TINI_SHA256=c5b0666b4cb676901f90dfcb37106783c5fe2077b04590973b885950611b30ee
+RUN python3.13 -c "import hashlib, os, sys, urllib.request; \
+data = urllib.request.urlopen(os.environ['TINI_URL'], timeout=120).read(); \
+got = hashlib.sha256(data).hexdigest(); \
+sys.exit('tini checksum mismatch: ' + got) if got != os.environ['TINI_SHA256'] else None; \
+open('/usr/local/bin/tini', 'wb').write(data); os.chmod('/usr/local/bin/tini', 0o755)"
 
 # The base ships ComfyUI-Manager as a pip package with its startup cache-update already patched out; this rm only
 # guards against bundle layouts that drop a self-updating Manager into custom_nodes (it is never in a profile).
