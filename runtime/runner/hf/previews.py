@@ -3,19 +3,33 @@
 - `node` start/done (with duration and a stage heuristic) and `cached`;
 - `progress` at most once per second per node (always the final step), with rate/ETA only after two samples;
 - latent preview frames: throttled (C-3: <= 1 per 2 s), written to /output/_halofuse/previews/latest_<node>.<ext>
-  and sent inline when the line fits;
+  and sent inline, re-encoded to the byte cap;
 - intermediate PreviewImage/PreviewMask (type "temp") outputs copied out of ComfyUI's temp dir as soon as the node
-  finishes (they were discarded before).
+  finishes (they were discarded before), with an inline thumbnail in live mode;
+- output thumbnails (images, and a 4-frame sheet for videos) in live mode.
 The relay also tracks the currently executing node, which the supervisor uses to attribute a process death.
+
+Live preview (C-3 section 11, PREVIEW_DESIGN sections 2-3): every frame that travels inline is re-encoded to the
+HF_PREVIEW_MAX_BYTES cap (hf/frames.py). Latent frames, temp-output/mask thumbnails and output thumbnails each have
+their own throttle, so frames never starve masks. Output thumbnails are made on one worker thread. A throttle or a
+full worker queue drops (and counts) a preview; nothing here blocks the websocket thread on a slow encode.
 """
 import base64
+import os
+import queue
+import re
 import threading
 import time
 from pathlib import Path
 
+from . import events as hf_events
+from . import frames as hf_frames
 from . import outputs as hf_outputs
 
 _EXT = {"image/jpeg": "jpg", "image/png": "png"}
+_METHODS = ("latent2rgb", "taesd", "none")
+_NODE_SAFE = re.compile(r"[^A-Za-z0-9-]")
+_FALLBACK_RE = re.compile(r"TAESD previews enabled, but could not find\s+(\S+)")
 
 
 def stage_of(class_type) -> str:
@@ -33,9 +47,43 @@ def stage_of(class_type) -> str:
     return "other"
 
 
+def node_safe(node) -> str:
+    """A node id as a file-name part: `12:5` (subgraph) -> `12-5`, at most 24 characters."""
+    return (_NODE_SAFE.sub("-", str(node if node is not None else "")) or "x")[:24]
+
+
+class TokenBucket:
+    """`rate` previews per second with a burst of `burst`; over the rate a preview is dropped and counted."""
+
+    def __init__(self, rate: float, burst: int, clock=time.monotonic):
+        self.rate, self.burst, self._clock = float(rate), float(burst), clock
+        self._tokens = float(burst)
+        self._last = None
+        self._dropped = 0
+        self._lock = threading.Lock()
+
+    def allow(self) -> bool:
+        with self._lock:
+            now = self._clock()
+            if self._last is not None:
+                self._tokens = min(self.burst, self._tokens + (now - self._last) * self.rate)
+            self._last = now
+            if self._tokens >= 1.0:
+                self._tokens -= 1.0
+                return True
+            self._dropped += 1
+            return False
+
+    def take_dropped(self) -> int:
+        with self._lock:
+            n, self._dropped = self._dropped, 0
+            return n
+
+
 class LiveRelay:
     def __init__(self, emitter, *, output_dir, temp_root, previews_enabled, throttle, clock=time.monotonic,
-                 progress_interval=1.0):
+                 progress_interval=1.0, max_bytes=None, preview_method=None, thumb_throttle=None,
+                 output_throttle=None, ring_size=30, async_thumbs=True):
         self.em = emitter
         self.output_dir = Path(output_dir)
         self.preview_dir = self.output_dir / hf_outputs.RESERVED_DIR / "previews"
@@ -51,6 +99,24 @@ class LiveRelay:
         self._progress = {}         # (prompt_id, node) -> {"first": (t, v), "last_emit": t}
         self._copied = set()
         self._pending = None
+        # live preview (C-3 section 11); every new option defaults from the job env, so the runner's existing
+        # constructor call keeps working unchanged
+        self.max_bytes = int(max_bytes) if max_bytes else hf_frames.max_bytes_from_env()
+        method = preview_method if preview_method is not None else (os.environ.get("HF_PREVIEW_METHOD") or "")
+        method = str(method).strip().lower()
+        self.preview_method = method if method in _METHODS else None
+        self.thumb_throttle = thumb_throttle or TokenBucket(0.5, 4, clock=clock)
+        self.output_throttle = output_throttle or hf_events.PreviewThrottle(5.0, clock=clock)
+        self.ring_size = int(ring_size)
+        self.live_dir = self.preview_dir / "live"
+        self._seq_frame = 0
+        self._steps = {}            # (prompt_id, node) -> (value, max): latest progress, before the emit throttle
+        self._fallback_sent = False
+        self._async = bool(async_thumbs)
+        self._jobs = queue.Queue(maxsize=2)
+        self._worker = None
+        self._output_dropped = 0
+        self._seen_outputs = set()
 
     # -- registration --------------------------------------------------------------------------------------
     def expect_prompt(self, workflow, **context):
@@ -101,6 +167,7 @@ class LiveRelay:
             output = data.get("output")
             if isinstance(output, dict) and node is not None:
                 self.collect_temp_outputs(prompt_id, {str(node): output})
+                self._queue_output_thumbs(prompt_id, str(node), output)
         elif kind in ("execution_error", "execution_interrupted", "execution_success"):
             self._on_executing(prompt_id, None)
 
@@ -131,6 +198,7 @@ class LiveRelay:
         now = self.clock()
         key = (prompt_id, node)
         with self._lock:
+            self._steps[key] = (value, maximum)
             series = self._progress.get(key)
             if series is None or value < series["first"][1]:
                 series = {"first": (now, value), "last_emit": None, "samples": 0}
@@ -149,6 +217,34 @@ class LiveRelay:
                 fields["eta_s"] = round(max(0, maximum - value) / rate, 1)
         self.em.emit("progress", prompt_id=prompt_id, **self._ctx(prompt_id), **fields)
 
+    # -- latent frames ----------------------------------------------------------------------------------------
+    def _next_frame_seq(self) -> int:
+        with self._lock:
+            self._seq_frame += 1
+            return self._seq_frame
+
+    @staticmethod
+    def _write_atomic(path: Path, data: bytes) -> bool:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(path.name + ".part")
+            tmp.write_bytes(data)
+            tmp.replace(path)
+            return True
+        except OSError:
+            return False
+
+    def _prune_ring(self) -> None:
+        try:
+            names = sorted(p for p in self.live_dir.iterdir() if p.is_file() and not p.name.endswith(".part"))
+        except OSError:
+            return
+        for old in names[:max(0, len(names) - self.ring_size)]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
+
     def on_preview(self, mime, image, meta):
         if not self.previews_enabled:
             return
@@ -158,27 +254,42 @@ class LiveRelay:
         with self._lock:
             node = meta.get("node_id") or meta.get("display_node_id") or self.current["node"]
             prompt_id = meta.get("prompt_id") or self.current["prompt_id"]
+            step = self._steps.get((prompt_id, None if node is None else str(node)))
         ext = _EXT.get(mime, "jpg")
-        rel = None
-        try:
-            self.preview_dir.mkdir(parents=True, exist_ok=True)
-            name = f"latest_{node or 'latent'}.{ext}"
-            tmp = self.preview_dir / (name + ".part")
-            tmp.write_bytes(image)
-            tmp.replace(self.preview_dir / name)
-            rel = f"{hf_outputs.RESERVED_DIR}/previews/{name}"
-        except OSError:
-            pass
+        name = f"latest_{node or 'latent'}.{ext}"
         fields = {"kind": "latent", "node": None if node is None else str(node), "mime": mime, "bytes": len(image)}
-        if rel:
-            fields["path"] = rel
-        fields["data"] = base64.b64encode(image).decode("ascii")
+        if self._write_atomic(self.preview_dir / name, image):  # full-quality last frame, for delivery
+            fields["path"] = f"{hf_outputs.RESERVED_DIR}/previews/{name}"
+        fitted = hf_frames.fit(image, mime, self.max_bytes, 384)
+        if fitted is not None:
+            seq_frame = self._next_frame_seq()
+            live_name = f"f{seq_frame:06d}_latent_{node_safe(node or 'latent')}.jpg"
+            if self._write_atomic(self.live_dir / live_name, fitted.data):
+                fields["name"] = live_name
+                self._prune_ring()
+            fields.update(mime=fitted.mime, bytes=len(fitted.data), data=base64.b64encode(fitted.data).decode("ascii"),
+                          w=fitted.w, h=fitted.h, src_bytes=len(image), seq_frame=seq_frame)
+        if step is not None:
+            fields["step"], fields["steps"] = step
+        if self.preview_method:
+            fields["method"] = self.preview_method
         fields["dropped"] = dropped
         self.em.emit("preview", prompt_id=prompt_id, **self._ctx(prompt_id), **fields)
 
+    def on_comfy_line(self, line) -> None:
+        """Call for each ComfyUI output line: a missing preview decoder becomes one `preview_fallback` mark."""
+        if self._fallback_sent or not isinstance(line, str):
+            return
+        m = _FALLBACK_RE.search(line)
+        if not m:
+            return
+        self._fallback_sent = True
+        missing = m.group(1).replace("\\", "/").rsplit("/", 1)[-1]
+        self.em.emit("phase", phase="preview_fallback", state="mark", detail=missing[:120])
+
     # -- temp outputs -----------------------------------------------------------------------------------------
     def collect_temp_outputs(self, prompt_id, history_outputs):
-        """Copy temp-type outputs once; emit a preview event each (inline data only within the throttle)."""
+        """Copy temp-type outputs once; emit a preview event each (inline thumbnail only when live and allowed)."""
         pending = {}
         for node_id, node_out in (history_outputs or {}).items():
             items = []
@@ -201,12 +312,101 @@ class LiveRelay:
         for path, node_id in copied:
             fields = {"kind": "temp_output", "node": node_id, "mime": _mime_of(path), "bytes": path.stat().st_size,
                       "path": f"{hf_outputs.RESERVED_DIR}/previews/{path.name}"}
-            if self.previews_enabled and fields["mime"] and self.throttle.allow():
-                fields["data"] = base64.b64encode(path.read_bytes()).decode("ascii")
-                fields["dropped"] = self.throttle.take_dropped()
+            if self.previews_enabled and fields["mime"]:
+                try:
+                    raw = path.read_bytes()
+                except OSError:
+                    raw = b""
+                mask = "Mask" in (self._class_type(prompt_id, node_id) or "") or hf_frames.is_grey(raw)
+                fields["mask"] = bool(mask)
+                if raw and self.thumb_throttle.allow():
+                    fitted = hf_frames.fit(raw, fields["mime"], self.max_bytes, 384, mask=mask)
+                    if fitted is not None:
+                        fields.update(mime=fitted.mime, bytes=len(fitted.data), w=fitted.w, h=fitted.h,
+                                      data=base64.b64encode(fitted.data).decode("ascii"), src_bytes=len(raw),
+                                      seq_frame=self._next_frame_seq())
+                fields["dropped"] = self.thumb_throttle.take_dropped()
             self.em.emit("preview", prompt_id=prompt_id, **self._ctx(prompt_id),
                          **{k: v for k, v in fields.items() if v is not None})
         return copied
+
+    # -- output thumbnails ------------------------------------------------------------------------------------
+    def _output_path(self, item):
+        filename, subfolder = item.get("filename"), item.get("subfolder") or ""
+        if not isinstance(filename, str) or not filename or not isinstance(subfolder, str):
+            return None
+        try:
+            base = self.output_dir.resolve()
+            path = (self.output_dir / subfolder / filename).resolve()
+        except OSError:
+            return None
+        if base not in path.parents or not path.is_file():
+            return None
+        return path
+
+    def _queue_output_thumbs(self, prompt_id, node_id, output) -> None:
+        if not self.previews_enabled:
+            return
+        for value in output.values():
+            if not isinstance(value, list):
+                continue
+            for item in value:
+                if not isinstance(item, dict) or item.get("type") != "output":
+                    continue
+                key = (prompt_id, node_id, item.get("subfolder"), item.get("filename"))
+                if key in self._seen_outputs:
+                    continue
+                self._seen_outputs.add(key)
+                path = self._output_path(item)
+                if path is None or not (hf_frames.is_video(path) or hf_frames.is_image(path)):
+                    continue
+                if not self.output_throttle.allow():
+                    continue
+                if not self._async:
+                    self._output_thumb(prompt_id, node_id, path)
+                    continue
+                self._ensure_worker()
+                try:
+                    self._jobs.put_nowait((prompt_id, node_id, path))
+                except queue.Full:
+                    with self._lock:
+                        self._output_dropped += 1
+
+    def _ensure_worker(self) -> None:
+        if self._worker is not None and self._worker.is_alive():
+            return
+        self._worker = threading.Thread(target=self._work, daemon=True, name="hf-output-thumbs")
+        self._worker.start()
+
+    def _work(self) -> None:
+        while True:
+            job = self._jobs.get()
+            try:
+                self._output_thumb(*job)
+            except Exception:  # noqa: BLE001 - a thumbnail failure never stops the relay
+                pass
+
+    def _output_thumb(self, prompt_id, node_id, path) -> None:
+        video = hf_frames.is_video(path)
+        fitted = (hf_frames.video_sheet(path, self.max_bytes, 512) if video
+                  else hf_frames.image_thumb(path, self.max_bytes, 384))
+        if fitted is None:
+            return
+        with self._lock:
+            dropped = self.output_throttle.take_dropped() + self._output_dropped
+            self._output_dropped = 0
+        try:
+            src_bytes = path.stat().st_size
+        except OSError:
+            src_bytes = None
+        fields = {"kind": "output_thumb", "node": node_id, "mime": fitted.mime, "bytes": len(fitted.data),
+                  "data": base64.b64encode(fitted.data).decode("ascii"), "w": fitted.w, "h": fitted.h,
+                  "source_kind": "video" if video else "image", "src_bytes": src_bytes,
+                  "seq_frame": self._next_frame_seq(), "dropped": dropped}
+        if video:
+            fields["frames"] = 4
+        self.em.emit("preview", prompt_id=prompt_id, **self._ctx(prompt_id),
+                     **{k: v for k, v in fields.items() if v is not None})
 
 
 def _mime_of(path):

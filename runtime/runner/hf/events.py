@@ -177,7 +177,11 @@ class Emitter:
             obj = fit_event(build_event(t, fields, seq=self._seq, ts=self._clock(), nonce=self.nonce), self.max_bytes)
             text = _dump(obj)
             self._write_stream("stdout", text)
-            self._write_files(text, {k: v for k, v in obj.items() if k != "data"})
+            log_text = text
+            if isinstance(obj.get("data"), str):
+                # render.log is delivered with the outputs: never a second copy of the frame bytes (C-3 section 11)
+                log_text = _dump({k: (f"<omitted {len(v)} bytes>" if k == "data" else v) for k, v in obj.items()})
+            self._write_files(log_text, {k: v for k, v in obj.items() if k != "data"})
             return obj
 
     def attach_dir(self, path) -> bool:
