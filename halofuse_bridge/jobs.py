@@ -309,7 +309,8 @@ def _job_env(settings: dict, base: dict, *, max_runtime_s: int, preview_mode: st
                                extra_env=settings.get("extra_env") or None,
                                preview=(preview_mode or settings.get("preview_mode")) == "live", nonce=nonce,
                                oom_ladder=settings.get("oom_ladder") or None,   # R-WS4-9
-                               preview_method=preview_method or settings.get("preview_method") or None))
+                               preview_method=preview_method or settings.get("preview_method") or None,
+                               ignore_cache=settings.get("ignore_cache") is True))
     return env
 
 
@@ -370,7 +371,8 @@ _CLIENT_REF_LOCK = threading.Lock()
 def submit_render(workflow: dict, *, instance_type: str | None = None, render_repeats=None, max_runtime_s=None,
                   max_job_cost_usd=None, label: str = "Render", client_ref: str | None = None,
                   preview_mode: str | None = None, store: JobStore | None = None, policy: lifecycle.LifecyclePolicy | None = None,
-                  start_watcher: bool = True, preview_method: str | None = None) -> dict:
+                  start_watcher: bool = True, preview_method: str | None = None, ui_workflow: dict | None = None,
+                  workflow_name: str | None = None) -> dict:
     """Submit one render. Returns the job record. Raises HaloFuseError (branded) on failure."""
     if not isinstance(workflow, dict) or not workflow:
         raise HaloFuseError("bad_request", "No workflow provided.", 400)
@@ -385,6 +387,7 @@ def submit_render(workflow: dict, *, instance_type: str | None = None, render_re
     settings = _load_settings()
     costmod.check_daily_cap(store, settings, time.time())
     _normalize_model_paths(workflow)
+    workflow, auto_added = with_auto_previews(workflow, settings)
     sku = instance_type or settings.get("instance_type")
     repeats = _batch_count({"batch_count": render_repeats if render_repeats is not None
                             else settings.get("batch_count")})
@@ -401,12 +404,19 @@ def submit_render(workflow: dict, *, instance_type: str | None = None, render_re
         "workflow": {"sha256": hashlib.sha256(wf_text.encode("utf-8")).hexdigest(), "path": "workflow.json"},
         "limits": {"max_runtime_s": max_rt, "max_wall_clock_s_sent": max_rt + WALL_CLOCK_MARGIN_S,
                    "max_job_cost_usd": cap},
+        "workflow_name": _workflow_name(workflow_name), "auto_preview": auto_added or None,
+        "ignore_cache": settings.get("ignore_cache") is True,
     })
     job_id = rec["job_id"]
+    _write_ui_workflow(store, job_id, ui_workflow)
     if client_ref:
         with _CLIENT_REF_LOCK:
             _CLIENT_REFS[client_ref] = job_id
     store.write_file(job_id, "workflow.json", wf_text)
+    if auto_added:
+        store.append_event(job_id, "note", text=f"Auto-preview: {len(auto_added)} one-frame preview(s) added to the "
+                                                f"cloud copy of the workflow (your graph is unchanged).",
+                           data={"auto_preview": auto_added})
     store.append_event(job_id, "note", text=f"Render created on {sku} ({repeats} render repeat(s), "
                                             f"maximum runtime {max_rt} s).")
     backend = None
@@ -428,6 +438,40 @@ def submit_render(workflow: dict, *, instance_type: str | None = None, render_re
         if backend is not None:
             lifecycle.close_backend(backend)
     return _attach_cloud_job(store, job_id, ref, sku, policy=policy, start_watcher=start_watcher)
+
+
+def with_auto_previews(workflow: dict, settings: dict) -> tuple[dict, list]:
+    """The cloud copy with the opt-in auto-previews (auto_preview.py); the workflow itself when off or on error."""
+    mode = settings.get("auto_preview") or "off"
+    if mode == "off":
+        return workflow, []
+    try:
+        from . import auto_preview, node_board
+        return auto_preview.apply(workflow, mode, node_board.default_defs(workflow))
+    except Exception as exc:  # noqa: BLE001 - a preview helper never blocks the render
+        _log.warning("HaloFuse auto-preview skipped (%s)", type(exc).__name__)
+        return workflow, []
+
+
+_UI_WORKFLOW_MAX = 8 * 1024 * 1024
+
+
+def _workflow_name(value) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip().replace("\\", "/")[-200:]
+
+
+def _write_ui_workflow(store: JobStore, job_id: str, ui_workflow) -> None:
+    """The frontend graph (titles, layout) kept locally for the organised copy; never sent to the cloud."""
+    if not isinstance(ui_workflow, dict):
+        return
+    try:
+        text = json.dumps(ui_workflow)
+    except (TypeError, ValueError):
+        return
+    if len(text) <= _UI_WORKFLOW_MAX:
+        store.write_file(job_id, "workflow_ui.json", text)
 
 
 def _record_rate(store: JobStore, job_id: str, backend, sku: str) -> None:

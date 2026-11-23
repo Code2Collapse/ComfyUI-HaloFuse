@@ -79,6 +79,11 @@ def render(ev: dict) -> str:
         return "Resources: " + (" · ".join(parts) if parts else "no data")
     if t == "preview":
         return f"Preview ({ev.get('kind', '?')})" + (f" from node {ev['node']}" if ev.get("node") else "")
+    if t == "ui":
+        keys = ev.get("keys") if isinstance(ev.get("keys"), dict) else {}
+        parts = ", ".join(f"{k} {_num(v)}" for k, v in list(keys.items())[:8])
+        return (f"Node {ev.get('node', '?')} output" + (" (cached)" if ev.get("cached") is True else "")
+                + (f": {parts}" if parts else ""))
     if t == "output":
         return f"Output: {ev.get('path', '?')} ({_num(ev.get('bytes'))} bytes)"
     if t == "error":

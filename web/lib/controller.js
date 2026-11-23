@@ -208,7 +208,11 @@ export class Controller {
   async _capture() {
     const prompt = await this.comfy.graphToPrompt();
     const summary = seedSummary(advanceSeeds(this.comfy.graphNodes()));
-    return { workflow: prompt.output, summary };
+    // the frontend graph (titles) and the workflow's file name stay on this computer: they name the organised output
+    // folder and its workflow_ui.json; the cloud gets only the API workflow
+    let workflowName = null;
+    try { workflowName = this.comfy.workflowName?.() || null; } catch { workflowName = null; }
+    return { workflow: prompt.output, uiWorkflow: prompt.workflow || null, workflowName, summary };
   }
 
   async render() {
@@ -216,9 +220,10 @@ export class Controller {
     if (!this.state.instanceType && this.state.previewMode !== "check") { this.say("Pick a GPU first.", "warning"); return; }
     this._set({ busy: true, preflight: null, consent: null, draft: null });
     try {
-      const { workflow, summary } = await this._capture();
+      const { workflow, uiWorkflow, workflowName, summary } = await this._capture();
       if (summary) this.say(summary, "neutral");
       const mode = this.state.previewMode;
+      this._captured = { uiWorkflow, workflowName };
       const check = await this._preflight([workflow]);
       if (mode === "check") {
         this.say(check ? (check.ok ? "Workflow check passed. Nothing was started." : "Workflow check found problems. Nothing was started.")
@@ -295,6 +300,8 @@ export class Controller {
       client_ref: uid(),
     };
     if (mode === "live") body.preview_method = this.effectivePreviewMethod;
+    if (this._captured?.uiWorkflow) body.ui_workflow = this._captured.uiWorkflow;
+    if (this._captured?.workflowName) body.workflow_name = String(this._captured.workflowName);
     const res = await this.api.submitJob(body);
     const job = res.job || { job_id: res.jobId };
     this.session.attach(job.job_id, "job");

@@ -28,6 +28,11 @@ from . import delivery, lifecycle, routes_delivery  # noqa: E402
 # R-WS3-01: delivery is THE terminal hook; it replaces the transitional 0.3.4 image copy
 delivery.install()
 lifecycle.unregister_terminal_hook("legacy_images")
+# Owner 2026-11-23: when delivery finishes, the outputs are also saved by input name / date / node title next to the
+# job folder, and the node sections remember their last result (organize.py, node_board.py)
+from . import organize  # noqa: E402
+
+organize.install()
 routes_delivery.register(routes, prefix="/halofuse")  # also resumes interrupted deliveries
 from . import routes_jobs  # noqa: E402
 

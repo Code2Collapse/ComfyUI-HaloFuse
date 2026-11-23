@@ -251,4 +251,28 @@ export const HF_CSS = `
 .hf-live-modes legend { color: var(--hf-muted); padding: 0 4px; }
 .hf-thumbwrap { position: relative; margin: 6px 0 0; }
 @media (max-width: 720px) { .hf-live-body { grid-template-columns: 1fr; } }
+.hf-tone-info { color: var(--hf-runner); }
+.hf-nodes { margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; align-items: start; }
+.hf-nodes > .hf-nodes-wide { grid-column: 1 / -1; margin: 0; }
+.hf-nodes-compact { margin-top: 6px; display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
+.hf-nodes-compact > .hf-hint { grid-column: 1 / -1; margin: 0; }
+.hf-node-card { border: 1px solid var(--hf-border); border-radius: 6px; padding: 6px 8px; background: var(--hf-input); min-width: 0; }
+.hf-node-card.hf-node-state-running { border-color: var(--hf-active); }
+.hf-node-card.hf-node-state-failed { border-color: var(--hf-err); }
+.hf-node-card > .hf-hint { margin: 2px 0 4px; }
+.hf-node-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hf-node-title { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hf-node-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.hf-node-item { margin: 0; min-width: 0; }
+.hf-node-item img, .hf-node-item video { width: 100%; max-height: 220px; object-fit: contain; display: block; background: #000; border-radius: 4px; }
+.hf-nodes-compact .hf-node-item img { max-height: 90px; margin-top: 4px; }
+.hf-node-item audio { width: 100%; display: block; }
+.hf-node-item figcaption { font-size: 11px; color: var(--hf-muted); padding-top: 2px; overflow-wrap: anywhere; }
+.hf-node-item img.hf-node-mask { background: repeating-conic-gradient(#3a3a3a 0% 25%, #2a2a2a 0% 50%) 50% / 16px 16px; }
+.hf-node-item.hf-node-text { grid-column: 1 / -1; }
+.hf-node-pre { margin: 0; padding: 6px; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px;
+  background: var(--hf-bg2); border-radius: 4px; }
+.hf-node-chip { display: inline-block; padding: 2px 8px; border: 1px solid var(--hf-border); border-radius: 999px; font-size: 11px;
+  color: var(--hf-text, inherit); overflow-wrap: anywhere; }
+.hf-node-pending { color: var(--hf-muted); border-style: dashed; }
 `;

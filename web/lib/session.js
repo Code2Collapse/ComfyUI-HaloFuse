@@ -37,6 +37,9 @@ export class JobSession {
     this._previews = null;
     this._previewSince = 0;
     this._previewsFinal = false;
+    this.nodes = null; // per-node preview sections (GET /jobs/{id}/nodes), followed while the job is watched
+    this._nodesPoller = null;
+    this._nodesDone = false;
     this.stopping = false;
   }
 
@@ -59,6 +62,8 @@ export class JobSession {
     this.live.reset();
     this._previewSince = 0;
     this._previewsFinal = false;
+    this.nodes = null;
+    this._nodesDone = false;
     this.stopping = false;
     this.warnings = [];
     this.warningCount = 0;
@@ -94,10 +99,21 @@ export class JobSession {
         // an older bridge (404) has no live previews: stop quietly; other errors back off inside the poller
         onError: (err) => { if (err?.status === 404) this._previews?.stop(); },
       });
+      if (typeof api.getNodes === "function") {
+        this._nodesPoller = createPoller({
+          timers: this.timers,
+          intervalMs: this._interval,
+          load: () => api.getNodes(id),
+          onValue: (board) => this._onNodes(board),
+          // an older bridge (404) has no node sections: stop quietly
+          onError: (err) => { if (err?.status === 404) this._nodesPoller?.stop(); },
+        });
+      }
     }
     this._poller.start();
     this._pager.start(0);
     this._previews?.start();
+    this._nodesPoller?.start();
     this._emit("attach");
   }
 
@@ -105,9 +121,11 @@ export class JobSession {
     this._poller?.stop();
     this._pager?.stop();
     this._previews?.stop();
+    this._nodesPoller?.stop();
     this._poller = null;
     this._pager = null;
     this._previews = null;
+    this._nodesPoller = null;
     const had = this.id;
     this.id = null;
     this.kind = null;
@@ -119,9 +137,20 @@ export class JobSession {
     this._interval = on ? 1000 : 5000;
     this._poller?.setInterval(this._interval);
     this._previews?.setInterval(this._interval);
+    if (!this._nodesDone) this._nodesPoller?.setInterval(this._interval);
   }
 
-  poke() { this._poller?.poke(); this._pager?.poke(); this._previews?.poke(); }
+  poke() { this._poller?.poke(); this._pager?.poke(); this._previews?.poke(); this._nodesPoller?.poke(); }
+
+  _onNodes(board) {
+    if (!board || !Array.isArray(board.sections)) return;
+    const same = this.nodes && this.nodes.version === board.version && this.nodes.terminal === board.terminal
+      && JSON.stringify(this.nodes.sections) === JSON.stringify(board.sections);
+    this.nodes = board;
+    if (!same) this._emit("nodes");
+    // after the job ended, files still arrive with delivery; once it is final one last answer is enough
+    if (this._nodesDone) this._nodesPoller?.stop();
+  }
 
   _onPreviews(page) {
     const items = Array.isArray(page?.previews) ? page.previews : [];
@@ -197,6 +226,10 @@ export class JobSession {
     if (isTerminal(rec) && !this._previewsFinal) {
       this._previewsFinal = true;
       this._previews?.poke();
+    }
+    if (isTerminal(rec) && (!d || FINAL_DELIVERY.has(d.state)) && !this._nodesDone) {
+      this._nodesDone = true;
+      this._nodesPoller?.poke();
     }
     if (isTerminal(rec) && (!d || FINAL_DELIVERY.has(d.state))) {
       // finished: keep a slow poll so a manual delivery retry is still noticed

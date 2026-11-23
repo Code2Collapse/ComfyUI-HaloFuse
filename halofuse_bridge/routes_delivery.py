@@ -174,6 +174,20 @@ async def get_preview_file(request):
         "Content-Security-Policy": "default-src 'none'; sandbox"})
 
 
+async def get_nodes(request):
+    """Per-node preview sections of a job (NODE_PREVIEWS_DESIGN section 2): ids, titles, states and items only;
+    files are named for the previews route or ComfyUI's /view (outputs/ of the job folder), never by URL."""
+    try:
+        job_id = await _run(lambda: _job_id(request))
+
+        def read():
+            from . import node_board
+            return node_board.board_for(job_id, default_store()).view()
+        return web.json_response(await _run(read))
+    except Exception as exc:  # noqa: BLE001
+        return _from_exc(exc)
+
+
 _NEW = (
     ("GET", "/jobs/{job_id}/delivery", get_delivery),
     ("POST", "/jobs/{job_id}/delivery/retry", post_retry),
@@ -181,6 +195,7 @@ _NEW = (
     ("POST", "/recovery/{job_id}", post_recovery),
     ("GET", "/jobs/{job_id}/previews", get_previews),
     ("GET", "/jobs/{job_id}/previews/{name}", get_preview_file),
+    ("GET", "/jobs/{job_id}/nodes", get_nodes),
 )
 
 

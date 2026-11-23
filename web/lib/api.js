@@ -139,6 +139,8 @@ export function createApi(fetchImpl) {
     listModelUploads: () => get("/halofuse/models/uploads"),
     cancelModelUpload: (id) => post(`/halofuse/models/upload/${enc(id)}/cancel`),
     listPreviews: (id, since = 0, limit = 200) => get(`${J(id)}/previews${query({ since, limit })}`),
+    /** Per-node preview sections of a job (an older bridge answers 404). */
+    getNodes: (id) => get(`${J(id)}/nodes`),
     createQueue: (body) => post("/halofuse/queues", body),
     getQueue: (id) => get(Q(id)),
     listQueues: ({ active } = {}) => get(`/halofuse/queues${query({ active: active ? 1 : undefined })}`),
