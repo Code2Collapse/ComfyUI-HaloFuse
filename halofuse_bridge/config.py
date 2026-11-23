@@ -75,6 +75,14 @@ DEFAULTS = {
     # The artist's own custom node packs (owner 2026-11-23): resolved, pinned entries (user_nodes.py), installed at
     # job start by runtimes that support it. Repository names, ids and pins only: never a URL or a token.
     "user_nodes": [],
+    # Warm cloud machine (owner 2026-11-23, warm_machine.py): renders start / reuse one held GPU machine that stays on
+    # until the artist shuts it down. warm_hold_seconds = how long the cloud keeps it after its last job when
+    # HaloFuse is not running (nothing re-arms the hold then): the billing backstop.
+    "keep_warm": False,
+    "warm_hold_seconds": 1800,
+    # Housekeeping between the workflows of one cloud job (runtime hf/housekeeping.py).
+    "clean_between_renders": True,
+    "unload_models_between_renders": False,
 }
 
 # The only keys the browser may read or write. Never the endpoint or a credential. `runtime_image` is the NAME of a
@@ -86,6 +94,7 @@ PUBLIC_KEYS = [
     "max_runtime_seconds", "max_job_cost_usd", "daily_spend_cap_usd",
     "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode", "preview_method",
     "runtime_image", "user_nodes",
+    "keep_warm", "warm_hold_seconds", "clean_between_renders", "unload_models_between_renders",
 ]
 
 # Public keys whose value may be explicitly cleared with null.
@@ -292,8 +301,10 @@ def _valid_pref(key: str, value) -> bool:
         return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 1000
     if key == "upload_guard_gb":
         return _number(value) and value >= 0
-    if key == "auto_upload_models":
+    if key in ("auto_upload_models", "keep_warm", "clean_between_renders", "unload_models_between_renders"):
         return isinstance(value, bool)
+    if key == "warm_hold_seconds":
+        return isinstance(value, int) and not isinstance(value, bool) and 300 <= value <= 86400
     if key == "max_runtime_seconds":
         return isinstance(value, int) and not isinstance(value, bool) and 60 <= value <= 7 * 86400
     if key in _NULLABLE_KEYS:

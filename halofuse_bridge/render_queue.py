@@ -19,7 +19,7 @@ import time
 import uuid
 
 from . import cost as costmod
-from . import jobs, lifecycle
+from . import jobs, lifecycle, warm_machine
 from .job_store import HaloFuseError, JobStore, default_store
 from .provider import image_contract
 
@@ -332,6 +332,7 @@ class QueueRunner:
         self.sleep = sleep
         self.backend = None
         self.handle: str | None = None
+        self.warm = False            # the handle belongs to the artist's warm machine: never released here
         self.settings: dict = {}
         self.stop_reason: str | None = None
 
@@ -419,7 +420,23 @@ class QueueRunner:
     def _ensure_session(self) -> None:
         be = self.backend
         rec = self._rec()
-        handle = self.handle or rec["queue"]["session"].get("handle")
+        if self.warm and warm_machine.handle_for(None, self.store) == self.handle:
+            return
+        sku = rec["queue"].get("instance_type") or self.settings.get("instance_type")
+        warm = warm_machine.queue_handle(sku, store=self.store, settings=self.settings, note=self._note,
+                                         should_stop=lambda: bool(self._rec()["queue"].get("stop_mode")))
+        if warm:
+            self.handle, self.warm = warm, True
+            self.store.mutate(self.qid, lambda r: r["queue"]["session"].update(held=True, handle=warm,
+                                                                             idle_since=self.clock(), warm=True))
+            self._note("Running on the warm machine (it stays on after the queue).")
+            return
+        if self.warm:  # the warm machine ended or changed: its handle is not this queue's to keep or release
+            self.handle = None
+        self.warm = False
+        sess = rec["queue"]["session"]
+        # a handle saved while the queue ran on the warm machine is never adopted (it would be released at the end)
+        handle = self.handle or (None if sess.get("warm") else sess.get("handle"))
         if handle:
             try:
                 s = be.get_session(handle)
@@ -430,7 +447,6 @@ class QueueRunner:
                 pass
             self.handle = None
             self.store.mutate(self.qid, lambda r: r["queue"]["session"].update(held=False, handle=None))
-        sku = rec["queue"].get("instance_type") or self.settings.get("instance_type")
         affinity = str(self.settings.get("session_affinity") or "preferred").lower()
         session = None
         for attempt in range(1, _AFFINITY_RETRIES + 1):
@@ -467,7 +483,7 @@ class QueueRunner:
         self.handle = handle
         t = self.clock()
         self.store.mutate(self.qid, lambda r: r["queue"]["session"].update(held=True, handle=handle, idle_since=t,
-                                                                         idle_warned=False))
+                                                                         idle_warned=False, warm=False))
         self._note("Warm machine ready.")
 
     def _idle_warning(self, rec: dict) -> None:
@@ -481,6 +497,14 @@ class QueueRunner:
                        "paused, and idle time is billed. Resume or stop the queue.", "warning", "idle_session")
 
     def _release(self) -> None:
+        if self.warm:  # the artist's warm machine: it stays on until they shut it down in the panel
+            self.handle, self.warm = None, False
+            self._note("The warm machine stays on; shut it down in the panel when you are done.")
+            try:
+                self.store.mutate(self.qid, lambda r: r["queue"]["session"].update(held=False, handle=None))
+            except KeyError:
+                pass
+            return
         if not self.handle or self.backend is None:
             return
         try:
@@ -567,7 +591,7 @@ class QueueRunner:
                                     data={"code": err.code})
             self.stop_reason = "submit_failed"
             return None
-        jobs._attach_cloud_job(self.store, chunk_id, ref, sku, policy=self.policy)
+        jobs._attach_cloud_job(self.store, chunk_id, ref, sku, policy=self.policy, warm=self.warm)
         return chunk_id
 
     def _wait_chunk(self, chunk_id: str) -> None:

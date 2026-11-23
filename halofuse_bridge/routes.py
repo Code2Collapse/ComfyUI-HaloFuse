@@ -33,6 +33,11 @@ from . import routes_jobs  # noqa: E402
 
 routes_jobs.register(routes, prefix="/halofuse")
 
+# Warm cloud machine (owner 2026-11-23): status / start / shut down / check; boot re-checks a machine left running.
+from . import routes_warm  # noqa: E402
+
+routes_warm.register(routes, prefix="/halofuse")
+
 
 # R-WS5-01: the /halofuse/models/* + preflight / draft / capacity / library routes, all through
 # routes_account.request_guard (the old handlers here had no guard).
