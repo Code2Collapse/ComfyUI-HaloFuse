@@ -1931,7 +1931,15 @@
    "install_target": "cloud",
    "install": {
     "method": "git-archive",
-    "folder": "ComfyUI-LTXVideo"
+    "folder": "ComfyUI-LTXVideo",
+    "requirement_overrides": [
+     {
+      "name": "ninja",
+      "upstream": "ninja~=1.11.1.4",
+      "use": "ninja>=1.11.1.4",
+      "reason": "ninja is a build tool the pack's Python never imports or runs; the image already has ninja 1.13.2 (installed earlier by Comfyui-SecNodes, also an original-image pack) and the base ships its own ninja binary. The ~= cap made the `full` install impossible (ResolutionImpossible, CI run 45185552082)."
+     }
+    ]
    },
    "requirements": {
     "python": ">=3.10",
@@ -1968,7 +1976,7 @@
    },
    "compatibility": {
     "compatible": true,
-    "notes": "no blocker found by static inspection; import NOT VERIFIED"
+    "notes": "no blocker found by static inspection. `full` (L9.323): upstream ninja~=1.11.1.4 cannot resolve against the image's frozen ninja 1.13.2, so non-strict profiles install ninja>=1.11.1.4 (install.requirement_overrides); `default` (strict) installs upstream as before. Installs and imports on a replica of the full image (WSL, Python 3.13, ComfyUI 0.46.0, the image's package set from CI run 45185552082); the image itself is confirmed by the next CI build."
    },
    "conflicts": {
     "conflicts_with": [],
@@ -4182,7 +4190,7 @@
    },
    "compatibility": {
     "compatible": true,
-    "notes": "no blocker found by static inspection; import NOT VERIFIED"
+    "notes": "requirements install cleanly. Imports only when torch sees a CUDA or MPS device: src/interfaces/dit_model_loader.py:54 and vae_model_loader.py:55 use devices[0] of get_device_list(), which is empty on a CPU-only host (IndexError 'list index out of range' in comfy_entrypoint). The image build boots ComfyUI on CPU for the snapshot and smoke stages, so the image snapshot reports IMPORT FAILED and lists none of its 4 node classes, although the pack loads on the GPU host (all 4 schemas build with one CUDA device, L9.323 replica). Upstream fix not merged (numz PR #565, open 2026-04-05; issue #512). Recorded, not patched: the catalog has no patch mechanism (NEEDS_OWNER)."
    },
    "conflicts": {
     "conflicts_with": [],
@@ -4649,7 +4657,15 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI-LivePortraitKJ",
-    "archive": "https://github.com/kijai/ComfyUI-LivePortraitKJ/archive/<commit>.zip"
+    "archive": "https://github.com/kijai/ComfyUI-LivePortraitKJ/archive/<commit>.zip",
+    "requirement_overrides": [
+     {
+      "name": "numpy",
+      "upstream": "numpy<=1.26.4",
+      "use": "numpy",
+      "reason": "the image runs numpy 2.4.4 (base image and every other pack); the cap dates from 2024 (upstream HEAD 2024-08-04). The pack installs and imports on numpy 2.4.4 in the L9.323 replica."
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -4684,7 +4700,7 @@
    },
    "compatibility": {
     "compatible": true,
-    "notes": "no blocker found by static inspection; import NOT VERIFIED"
+    "notes": "no blocker found by static inspection. `full` (L9.323): numpy<=1.26.4 cap relaxed (install.requirement_overrides); installs and imports on the full-image replica (WSL, Python 3.13, ComfyUI 0.46.0, CI run 45185552082 package set). Known leftover: face_alignment/utils.py crop() uses np.int (removed in NumPy 2) on its 2-D grayscale branch only."
    },
    "conflicts": {
     "conflicts_with": [],
@@ -13432,7 +13448,21 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI_Detonate",
-    "archive": "https://github.com/aTanguay/ComfyUI_Detonate/archive/<commit>.zip"
+    "archive": "https://github.com/aTanguay/ComfyUI_Detonate/archive/<commit>.zip",
+    "requirement_overrides": [
+     {
+      "name": "numpy",
+      "upstream": "numpy>=1.23.5,<2.0.0",
+      "use": "numpy>=1.23.5",
+      "reason": "the <2 cap protects other packs ('numpy 2.x breaks compatibility with many ComfyUI packages', README), not this code; the image runs numpy 2.4.4 everywhere and the pack imports on it (47 nodes, L9.323 replica)."
+     },
+     {
+      "name": "pillow",
+      "upstream": "pillow>=9.0.0,<11.0.0",
+      "use": "pillow>=9.0.0",
+      "reason": "the <11 cap is for gradio (README), which this image does not run; the pack only uses PIL.Image/ImageDraw (roto_bezier) and imports on the image's Pillow 12.2.0 (L9.323 replica)."
+     }
+    ]
    },
    "requirements": {
     "python": ">=3.8",
@@ -13462,7 +13492,7 @@
    },
    "compatibility": {
     "compatible": true,
-    "notes": "no blocker found by static inspection; import NOT VERIFIED"
+    "notes": "no blocker found by static inspection. `full` (L9.323): numpy<2 and pillow<11 caps relaxed (install.requirement_overrides); installs and imports (47 nodes) on the full-image replica (WSL, Python 3.13, ComfyUI 0.46.0, CI run 45185552082 package set)."
    },
    "conflicts": {
     "conflicts_with": [],
@@ -13674,7 +13704,15 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI_LayerStyle_Advance",
-    "archive": "https://github.com/chflame163/ComfyUI_LayerStyle_Advance/archive/<commit>.zip"
+    "archive": "https://github.com/chflame163/ComfyUI_LayerStyle_Advance/archive/<commit>.zip",
+    "requirement_overrides": [
+     {
+      "name": "google-generativeai",
+      "upstream": "google-generativeai",
+      "use": null,
+      "reason": "the deprecated google-generativeai SDK resolves only to google-ai-generativelanguage 0.2.0, which needs protobuf<5; the image has protobuf 7.36.1, so pip refused the whole pack. It is imported lazily, only inside the legacy Gemini / PromptTagger / PromptEmbellish nodes."
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -13750,7 +13788,7 @@
    },
    "compatibility": {
     "compatible": true,
-    "notes": "no blocker found by static inspection; import NOT VERIFIED"
+    "notes": "no blocker found by static inspection. `full` (L9.323): google-generativeai dropped (needs protobuf<5, image has 7.36.1); installs and imports on the full-image replica (WSL, Python 3.13, ComfyUI 0.46.0, CI run 45185552082 package set). Known leftover: the legacy Gemini, PromptTagger and PromptEmbellish nodes raise ImportError when run; the Gemini V2 nodes use google-genai (installed)."
    },
    "conflicts": {
     "conflicts_with": [],
@@ -15762,7 +15800,17 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI_AudioTools",
-    "archive": "https://github.com/billwuhao/ComfyUI_AudioTools/archive/<commit>.zip"
+    "archive": "https://github.com/billwuhao/ComfyUI_AudioTools/archive/<commit>.zip",
+    "extra_requirements": [
+     {
+      "requirement": "torch-complex>=0.4",
+      "reason": "imported at load time (look2hear/layers/stft_tfgn.py: from torch_complex.tensor import ComplexTensor) but missing from requirements.txt"
+     },
+     {
+      "requirement": "pytorch-lightning>=2.0",
+      "reason": "imported at load time (look2hear/utils/lightning_utils.py: from pytorch_lightning.utilities import rank_zero_only) but missing from requirements.txt"
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -15798,7 +15846,7 @@
    },
    "compatibility": {
     "compatible": true,
-    "notes": "a git+ requirement (silentcipher) needs git at build time; sox needs the SoX binary"
+    "notes": "a git+ requirement (silentcipher) needs git at build time (the base has it). `full` (L9.323): the import failed on two counts, found one after the other on the full-image replica: (1) MWAudioRecorderAT.py imports sounddevice, which needs the PortAudio shared library (OSError 'PortAudio library not found'): the Dockerfile installs EPEL portaudio for non-default profiles; (2) torch-complex and pytorch-lightning are imported at load but not declared: install.extra_requirements. With both, the pack imports (15 node classes) on the replica (WSL, Python 3.13, ComfyUI 0.46.0, CI run 45185552082 package set, EL10 portaudio libraries)."
    },
    "conflicts": {
     "conflicts_with": [],
@@ -18046,7 +18094,15 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI-SAM2",
-    "archive": "https://github.com/neverbiasu/ComfyUI-SAM2/archive/<commit>.zip"
+    "archive": "https://github.com/neverbiasu/ComfyUI-SAM2/archive/<commit>.zip",
+    "requirement_overrides": [
+     {
+      "name": "numpy",
+      "upstream": "numpy<2",
+      "use": "numpy",
+      "reason": "the image runs numpy 2.4.4 (base image and every other pack); the pack uses no API NumPy 2 removed and imports on numpy 2.4.4 (L9.323 replica)."
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -18081,7 +18137,7 @@
    },
    "compatibility": {
     "compatible": true,
-    "notes": "no blocker found by static inspection; import NOT VERIFIED"
+    "notes": "no blocker found by static inspection. `full` (L9.323): numpy<2 cap relaxed (install.requirement_overrides); installs and imports on the full-image replica (WSL, Python 3.13, ComfyUI 0.46.0, CI run 45185552082 package set)."
    },
    "conflicts": {
     "conflicts_with": [],
@@ -19620,7 +19676,15 @@
    "install": {
     "method": "git-archive",
     "folder": "audio-separation-nodes-comfyui",
-    "archive": "https://github.com/christian-byrne/audio-separation-nodes-comfyui/archive/<commit>.zip"
+    "archive": "https://github.com/christian-byrne/audio-separation-nodes-comfyui/archive/<commit>.zip",
+    "requirement_overrides": [
+     {
+      "name": "librosa",
+      "upstream": "librosa>=0.10.2,<1",
+      "use": "librosa>=0.10.2",
+      "reason": "librosa 1.0.1 is already in the image (installed earlier by ComfyUI-MMAudio); the <1 cap is a precaution (CHANGELOG 2.0.0). The pack calls only librosa.onset.onset_strength and librosa.beat.beat_track, which ran on librosa 1.0.1 in the L9.323 replica."
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -19649,7 +19713,7 @@
    },
    "compatibility": {
     "compatible": true,
-    "notes": "no blocker found by static inspection; import NOT VERIFIED"
+    "notes": "no blocker found by static inspection. `full` (L9.323): librosa<1 cap relaxed (install.requirement_overrides); installs and imports on the full-image replica (WSL, Python 3.13, ComfyUI 0.46.0, CI run 45185552082 package set). Known leftover: moviepy resolves to 0.2.3.1 (moviepy 2.x needs pillow<12, the image has 12.2.0), so Combine Video With Audio fails when run (moviepy 0.2.3.1 calls ndarray.tostring, removed in NumPy 2); the separation nodes do not use moviepy."
    },
    "conflicts": {
     "conflicts_with": [],
