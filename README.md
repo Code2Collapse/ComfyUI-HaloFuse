@@ -57,7 +57,8 @@ authoring locally and the cloud does the heavy lifting.
    .\python.exe -m pip install hatchling
    .\python.exe -m pip install --no-build-isolation -r "..\ComfyUI\custom_nodes\ComfyUI-HaloFuse\requirements.txt"
    ```
-3. Restart ComfyUI. A **HaloFuse** tab appears in the left sidebar.
+3. Restart ComfyUI. A **HaloFuse** tab appears in the left sidebar. Prefer a floating panel? Set **Settings >
+   HaloFuse > Panel location** to *Floating window* (a movable panel opened from a draggable bolt button) or *Both*.
 
 You need ComfyUI on Python 3.12 or newer and a HaloFuse account (email and password) from your HaloFuse
 administrator. The cloud service itself is configured by the administrator; there is nothing to enter about it.

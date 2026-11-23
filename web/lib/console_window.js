@@ -3,19 +3,22 @@
 // Side-effect-free ES module: DOM is created in the constructor.
 
 import { bindH } from "./dom.js";
-import { clampGeometry, loadLayout, nearFullScreen, saveLayout } from "./layout.js";
+import { LAYOUT_KEY, clampGeometry, loadLayout, nearFullScreen, saveLayout } from "./layout.js";
 
 const HANDLES = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 
 export class FloatingWindow {
   /**
-   * @param {{doc: Document, win: Window, storage: Storage|null, title: string}} opts
+   * @param {{doc: Document, win: Window, storage: Storage|null, title: string, layoutKey?: string,
+   *   initialGeometry?: (vp: {width: number, height: number}) => object, label?: string, minimizable?: boolean}} opts
+   *   layoutKey / initialGeometry: a second window (the floating HaloFuse panel) keeps its own geometry.
    */
-  constructor({ doc, win, storage, title }) {
+  constructor({ doc, win, storage, title, layoutKey = LAYOUT_KEY, initialGeometry = null, label = "console", minimizable = true }) {
     this.doc = doc;
     this.win = win;
     this.storage = storage;
-    this.layout = loadLayout(storage, this._vp());
+    this.layoutKey = layoutKey;
+    this.layout = loadLayout(storage, this._vp(), layoutKey, initialGeometry);
     this._listeners = new Set();
     this._raf = 0;
     this._saveTimer = 0;
@@ -23,15 +26,16 @@ export class FloatingWindow {
     const titleId = `hf-console-title-${Math.random().toString(36).slice(2, 8)}`;
 
     this.btnMin = H("button", { className: "hf-btn hf-ghost hf-icon", type: "button", text: "–", title: "Minimise",
-      attrs: { "aria-label": "Minimise console" }, onclick: () => this.minimize() });
+      attrs: { "aria-label": `Minimise ${label}` }, onclick: () => this.minimize() });
     this.btnMax = H("button", { className: "hf-btn hf-ghost hf-icon", type: "button", text: "□", title: "Near full screen",
       attrs: { "aria-label": "Near full screen", "aria-pressed": "false" }, onclick: () => this.toggleMax() });
     this.btnClose = H("button", { className: "hf-btn hf-ghost hf-icon", type: "button", text: "✕", title: "Close (the render keeps running)",
-      attrs: { "aria-label": "Close console" }, onclick: () => this.close() });
+      attrs: { "aria-label": `Close ${label}` }, onclick: () => this.close() });
     this.titleEl = H("span", { className: "hf-win-title", id: titleId, tabIndex: -1 },
       H("span", { className: "hf-mark", attrs: { "aria-hidden": "true" } }), title);
     this.jobEl = H("span", { className: "hf-win-job" });
     this.statusSlot = H("span");
+    if (!minimizable) this.btnMin.hidden = true;
     this.head = H("div", { className: "hf-win-head" }, this.titleEl, this.jobEl, this.statusSlot, this.btnMin, this.btnMax, this.btnClose);
     this.body = H("div", { className: "hf-tabpanel", style: { display: "flex" } });
     this.el = H("section", { className: "hf-console", hidden: true,
@@ -41,8 +45,8 @@ export class FloatingWindow {
     }
     this.pillText = H("span", { className: "hf-pill-text", text: title });
     this.pillDot = H("span", { className: "hf-dot hf-tone-neutral" });
-    this.pill = H("button", { className: "hf-pill", type: "button", hidden: true, title: "Restore the HaloFuse console",
-      attrs: { "aria-label": "Restore the HaloFuse console" }, onclick: () => this.restore() }, this.pillDot, this.pillText);
+    this.pill = H("button", { className: "hf-pill", type: "button", hidden: true, title: `Restore the HaloFuse ${label}`,
+      attrs: { "aria-label": `Restore the HaloFuse ${label}` }, onclick: () => this.restore() }, this.pillDot, this.pillText);
 
     this._onPointerDown = (ev) => this._pointerDown(ev);
     this._onResize = () => this._scheduleFit();
@@ -154,7 +158,7 @@ export class FloatingWindow {
     if (this._saveTimer) this.win.clearTimeout(this._saveTimer);
     this._saveTimer = this.win.setTimeout(() => {
       this._saveTimer = 0;
-      saveLayout(this.storage, this.layout, this._vp());
+      saveLayout(this.storage, this.layout, this._vp(), this.layoutKey);
     }, 250);
   }
 

@@ -57,21 +57,23 @@ export function sanitizeLayout(obj, vp) {
   };
 }
 
-/** Read preferences; any failure gives defaults. */
-export function loadLayout(storage, vp) {
+/** Read preferences; any failure gives defaults. `key` lets a second window keep its own geometry; `initial(vp)`
+ *  is that window's starting geometry when nothing is stored yet. */
+export function loadLayout(storage, vp, key = LAYOUT_KEY, initial = null) {
+  const fresh = () => sanitizeLayout(initial ? { geometry: initial(vp) } : null, vp);
   try {
-    const raw = storage ? storage.getItem(LAYOUT_KEY) : null;
-    return sanitizeLayout(raw ? JSON.parse(raw) : null, vp);
+    const raw = storage ? storage.getItem(key) : null;
+    return raw ? sanitizeLayout(JSON.parse(raw), vp) : fresh();
   } catch {
-    return sanitizeLayout(null, vp);
+    return fresh();
   }
 }
 
 /** Write preferences (sanitised); returns false when storage is unavailable. */
-export function saveLayout(storage, layout, vp) {
+export function saveLayout(storage, layout, vp, key = LAYOUT_KEY) {
   try {
     if (!storage) return false;
-    storage.setItem(LAYOUT_KEY, JSON.stringify(sanitizeLayout(layout, vp)));
+    storage.setItem(key, JSON.stringify(sanitizeLayout(layout, vp)));
     return true;
   } catch {
     return false;

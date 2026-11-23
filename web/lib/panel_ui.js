@@ -20,16 +20,17 @@ export class Panel {
     Object.assign(this, { doc: o.doc, win: o.win, api: o.api, ctl: o.controller, session: o.session, openConsole: o.openConsole, viewUrl: o.viewUrl });
     const H = bindH(this.doc);
     this.H = H;
+    const uid = Math.random().toString(36).slice(2, 8); // the panel can show twice (sidebar + floating): unique ids
     this.version = H("span", { className: "hf-version" });
     this.account = new AccountSection({ doc: this.doc, win: this.win, api: this.api,
       onStatus: (s) => { if (s.credentials_configured && !this.ctl.state.skus.length) this.ctl.loadSkus(); } });
 
-    this.skuSel = H("select", { className: "hf-select", id: "hf-sku", onchange: () => this.ctl.setInstanceType(this.skuSel.value) });
+    this.skuSel = H("select", { className: "hf-select", id: `hf-sku-${uid}`, onchange: () => this.ctl.setInstanceType(this.skuSel.value) });
     this.rate = H("div", { className: "hf-hint", attrs: { "aria-live": "polite" } });
-    this.modeSel = H("select", { className: "hf-select", id: "hf-preview-mode", onchange: () => this.ctl.setPreviewMode(this.modeSel.value) },
+    this.modeSel = H("select", { className: "hf-select", id: `hf-preview-mode-${uid}`, onchange: () => this.ctl.setPreviewMode(this.modeSel.value) },
       ...PREVIEW_MODES.map(([k, label]) => H("option", { value: k, text: label })));
     this.modeHint = H("div", { className: "hf-hint" });
-    this.repeats = H("input", { className: "hf-input", type: "number", id: "hf-repeats", min: "1", max: "100", step: "1",
+    this.repeats = H("input", { className: "hf-input", type: "number", id: `hf-repeats-${uid}`, min: "1", max: "100", step: "1",
       onchange: () => this.ctl.setRenderRepeats(this.repeats.value) });
     this.renderBtn = H("button", { className: "hf-btn hf-primary", type: "button", style: { flex: "1" }, onclick: () => this.ctl.render() });
     this.consoleBtn = H("button", { className: "hf-btn", type: "button", text: "Open console", onclick: () => this.openConsole() });
@@ -41,11 +42,11 @@ export class Panel {
     this.recentBox = H("div");
     this.recoverInput = H("input", { className: "hf-input", type: "text", placeholder: "Job id…", attrs: { "aria-label": "Job id to recover" } });
 
-    const lib = H("input", { className: "hf-input", type: "text", id: "hf-lib", placeholder: "/models" });
-    const affinity = H("select", { className: "hf-select", id: "hf-affinity" },
+    const lib = H("input", { className: "hf-input", type: "text", id: `hf-lib-${uid}`, placeholder: "/models" });
+    const affinity = H("select", { className: "hf-select", id: `hf-affinity-${uid}` },
       H("option", { value: "required", text: "Required (wait for a cached machine)" }),
       H("option", { value: "preferred", text: "Preferred (start sooner)" }));
-    const guard = H("input", { className: "hf-input", type: "number", id: "hf-guard", min: "1", step: "1" });
+    const guard = H("input", { className: "hf-input", type: "number", id: `hf-guard-${uid}`, min: "1", step: "1" });
     const libHint = H("div", { className: "hf-hint" });
     lib.addEventListener("input", () => {
       const v = lib.value.trim();
