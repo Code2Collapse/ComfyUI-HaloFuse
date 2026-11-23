@@ -169,6 +169,73 @@ def _archive(entry, cache: Path | None, opener) -> bytes:
     return blob
 
 
+# ------------------------------------------------------------------ extra_nodes.txt (owner additions)
+
+EXTRA_FILE = "extra_nodes.txt"
+GITHUB_COMMIT_API = "https://api.github.com/repos/{repo}/commits/{ref}"
+_EXTRA_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]{0,99})/([A-Za-z0-9._-]{1,100})(?:@([A-Za-z0-9._/+-]{1,200}))?$")
+
+
+def parse_extra_nodes(path) -> list:
+    """`owner/repo[@ref]` per line; '#' starts a comment. Returns [(repo, ref or None)]."""
+    out = []
+    p = Path(path)
+    if not p.is_file():
+        return out
+    for i, raw in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        m = _EXTRA_RE.match(line)
+        if not m or ".." in line or m.group(2) in (".", ".."):
+            raise InstallError(f"{EXTRA_FILE} line {i}: expected owner/repo or owner/repo@ref, got {line!r}")
+        out.append((f"{m.group(1)}/{m.group(2)}", m.group(3)))
+    return out
+
+
+def _resolve_commit(repo: str, ref, opener) -> str:
+    if ref and re.fullmatch(r"[0-9a-f]{40}", ref):
+        return ref
+    meta = json.loads(opener(GITHUB_COMMIT_API.format(repo=repo, ref=ref or "HEAD")))
+    sha = str(meta.get("sha") or "")
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise InstallError(f"could not resolve {repo}@{ref or 'HEAD'} to a commit")
+    return sha
+
+
+def _fetch_extras(catalog_dir, dest: Path, report: dict, cache, opener) -> None:
+    """Extras are always optional: a failure is recorded and the build goes on (also in strict profiles)."""
+    have = {p["repo"].lower() for p in report["packs"]}
+    for repo, ref in parse_extra_nodes(Path(catalog_dir) / EXTRA_FILE):
+        if repo.lower() in have:
+            log(f"extra {repo}: already in the profile, skipped")
+            continue
+        folder = repo.split("/", 1)[1]
+        rec = {"repo": repo, "folder": folder, "method": "git-archive", "commit": None, "version": None,
+               "status": "fetched", "content_sha256": None, "hash_verified": False, "error": None,
+               "extra": True, "requested_ref": ref}
+        try:
+            commit = _resolve_commit(repo, ref, opener)
+            rec["commit"] = commit
+            fake = {"repo": repo, "url": f"https://github.com/{repo}", "install": {"method": "git-archive"},
+                    "pin": {"commit": commit}}
+            log(f"fetch extra {repo} -> {folder} @ {commit}")
+            blob = _archive(fake, cache, opener)
+            with tempfile.TemporaryDirectory(dir=dest.parent) as tmp:
+                staged = Path(tmp) / folder
+                extract_zip(blob, staged)
+                rec["content_sha256"] = content_hash(staged)
+                if (dest / folder).exists():
+                    raise InstallError(f"folder {folder} already exists in custom_nodes")
+                shutil.move(str(staged), str(dest / folder))
+        except Exception as exc:  # noqa: BLE001
+            rec["status"] = "failed"
+            rec["error"] = _short(exc)
+            log(f"FAILED extra {repo}: {rec['error']} (optional: the build continues)")
+        report["packs"].append(rec)
+        have.add(repo.lower())
+
+
 # ------------------------------------------------------------------ fetch step
 
 def _load(catalog_dir) -> tuple[dict, dict]:
@@ -219,6 +286,7 @@ def fetch(catalog_dir, profile: str, dest: Path, cache: Path | None = None, open
             if res.strict:
                 raise InstallError(f"{entry['repo']}: {rec['error']}") from exc
         report["packs"].append(rec)
+    _fetch_extras(catalog_dir, dest, report, cache, opener)
     return report
 
 
@@ -276,7 +344,7 @@ def install_deps(catalog_dir, profile: str, custom_nodes: Path, report: dict, pi
             continue
         rec["status"] = "failed"
         rec["error"] = _short(err.strip().splitlines()[-1] if err.strip() else f"pip exit {code}")
-        if res.strict:
+        if res.strict and not rec.get("extra"):              # extras are optional even in strict profiles
             raise InstallError(f"{rec['repo']} ({rec['folder']}): requirements failed: {rec['error']}")
         disabled.mkdir(parents=True, exist_ok=True)
         shutil.move(str(custom_nodes / rec["folder"]), str(disabled / rec["folder"]))

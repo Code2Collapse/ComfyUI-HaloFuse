@@ -37,7 +37,7 @@ ENV COMFYUI_DIR=/default-comfyui-bundle/ComfyUI \
 FROM base AS fetch
 ARG PROFILE=default
 ARG REQUIRE_HASHES=0
-COPY catalog/catalog.json catalog/profiles.json /build/catalog/
+COPY catalog/catalog.json catalog/profiles.json catalog/extra_nodes.txt /build/catalog/
 COPY scripts/hf_catalog.py scripts/install_nodes.py /build/scripts/
 RUN --mount=type=cache,id=halofuse-archives,target=/var/cache/halofuse/archives \
     python3.13 /build/scripts/install_nodes.py fetch \
