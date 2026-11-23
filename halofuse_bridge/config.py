@@ -51,6 +51,10 @@ DEFAULTS = {
     # Pre-render model sync: largest single model the bridge will upload in-node, in GB. A practicality guard
     # against huge non-resumable transfers, not a server limit. 0 disables the guard.
     "upload_guard_gb": 50,
+    # Owner 2026-11-23: a model the workflow needs that is on this computer but not in the cloud library is
+    # uploaded without asking (same folder layout as the local models folder), then the render starts. Models
+    # larger than upload_guard_gb still ask. False = ask every time (the earlier behaviour).
+    "auto_upload_models": True,
     # Job lifecycle and spend limits (WS2, REQUESTS R-WS2-01). Money values are estimates; None = no cap.
     "max_runtime_seconds": 21600,
     "cancel_confirm_timeout_seconds": 90,
@@ -73,7 +77,7 @@ DEFAULTS = {
 # The only keys the browser may read or write. Never the endpoint, a credential or the runtime image.
 PUBLIC_KEYS = [
     "instance_type", "assets_library_path", "assets_library_space",
-    "model_base_dir", "image_affinity", "batch_count", "upload_guard_gb",
+    "model_base_dir", "image_affinity", "batch_count", "upload_guard_gb", "auto_upload_models",
     "max_runtime_seconds", "max_job_cost_usd", "daily_spend_cap_usd",
     "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode", "preview_method",
 ]
@@ -282,6 +286,8 @@ def _valid_pref(key: str, value) -> bool:
         return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 1000
     if key == "upload_guard_gb":
         return _number(value) and value >= 0
+    if key == "auto_upload_models":
+        return isinstance(value, bool)
     if key == "max_runtime_seconds":
         return isinstance(value, int) and not isinstance(value, bool) and 60 <= value <= 7 * 86400
     if key in _NULLABLE_KEYS:

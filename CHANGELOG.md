@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — 2026-11-23
+
+- **Workflow Check no longer reports false "required input is not set".** Core's Math Expression node (and any node
+  with growing inputs: a, b, c ...) stores its inputs under names like `values.a`; the check now reads them the way
+  ComfyUI does. A node that feeds no Save / Preview output is no longer checked either: ComfyUI never runs it (the
+  check says how many such nodes it skipped). A node that does feed an output and misses an input still blocks.
+- **Node availability is checked against the real cloud image.** The extension now ships the node list of the cloud
+  runtime image (31 packs, ComfyUI 0.43.0, captured by the image build), so "No runtime profile snapshot is installed"
+  is gone and a node the cloud cannot run is named before anything starts.
+- **The sidebar panel scrolls.** It used to stop at the bottom of the window with Account / Queue / Advanced out of
+  reach.
+- **Models are found wherever they sit in the cloud library.** A model that is not at the expected path is looked up
+  by file name and size anywhere in the library. Found in another sub-folder of the same model folder, the render uses
+  that copy as it is. Found under a different model folder, it is still offered for upload (the cloud loads a model
+  from its own folder only) and the check says where the other copy is.
+- **Missing models upload by themselves.** A model the workflow needs that is on this computer but not in the cloud
+  library is uploaded into the same folders as on this computer, then the render starts. Models larger than the
+  automatic upload limit still ask first. Switch it off under Advanced > "Upload missing models automatically".
+
 ## 0.5.0 — 2026-11-21
 
 - **One name, inside and out.** Every internal name is HaloFuse now: the Python package (`halofuse_bridge`), the

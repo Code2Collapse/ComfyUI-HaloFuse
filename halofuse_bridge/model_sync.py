@@ -182,6 +182,84 @@ def _remote_path(assets_path: str, folder: str, name: str) -> str | None:
     return "/".join(parts)
 
 
+# ------------------------------------------------------------------
+# Library search (owner 2026-11-23: "even if paths are wrong, it should take models wherever placed")
+# ------------------------------------------------------------------
+# A model that is not at <library>/<folder>/<name> is looked up by file name (and size, when this computer has a
+# copy) anywhere in the library. Found under the same model folder (another sub-folder), the job's workflow is
+# rewritten to that path (apply_relocations, called by jobs._normalize_model_paths on every submit path), so the
+# cloud loads the copy that is already there. Found under a different model folder, the runtime cannot load it from
+# there (ComfyUI looks a loader's file up in its own folder only): it stays "uploadable", with found_elsewhere set.
+_LIB_INDEX: dict[tuple, tuple[float, dict]] = {}
+_LIB_INDEX_TTL = 600.0
+_LIB_MAX_DIRS = 4000
+_LIB_MAX_DEPTH = 8
+_LIB_BUDGET_S = 30.0
+_RELOCATED: dict[str, str] = {}          # model value in the workflow -> path inside the same folder in the library
+_RELOC_LOCK = threading.Lock()
+
+
+def _library_index(be, space, root: str) -> dict:
+    """{file name (lower case): [(path relative to root, size)]} for the library below *root*, cached 10 minutes.
+    Bounded (directories, depth, time): a partial index only means fewer matches, never a wrong one."""
+    key = (space or "", root)
+    now = time.monotonic()
+    cached = _LIB_INDEX.get(key)
+    if cached and now - cached[0] < _LIB_INDEX_TTL:
+        return cached[1]
+    index: dict[str, list] = {}
+    queue = [(root, 0)]
+    dirs = 0
+    started = time.monotonic()
+    while queue and dirs < _LIB_MAX_DIRS and time.monotonic() - started < _LIB_BUDGET_S:
+        remote_dir, depth = queue.pop(0)
+        dirs += 1
+        try:
+            entries = be.library_list(remote_dir, space)
+        except Exception:  # noqa: BLE001 - a listing failure narrows the search, it never fails the check
+            _log.warning("library listing failed below one folder; the search continues without it")
+            continue
+        for e in entries:
+            rel = e.remote_path[len(root) + 1:] if root and e.remote_path.startswith(root + "/") else e.remote_path
+            if e.is_dir:
+                if depth + 1 <= _LIB_MAX_DEPTH:
+                    queue.append((e.remote_path, depth + 1))
+            elif rel.lower().endswith(jobs._MODEL_EXTS):
+                index.setdefault(rel.rsplit("/", 1)[-1].lower(), []).append((rel, e.size))
+    _LIB_INDEX[key] = (now, index)
+    return index
+
+
+def _find_in_library(index: dict, folder: str, name: str, local_size: int | None):
+    """(same_folder_rel, other_rel): the best match for *name* in the same model folder, else anywhere."""
+    base = str(name).replace("\\", "/").rsplit("/", 1)[-1].lower()
+    hits = [(rel, size) for rel, size in index.get(base, [])
+            if local_size is None or size is None or size == local_size]
+    if local_size is None and len(hits) > 1:
+        hits = [h for h in hits if h[0].split("/", 1)[0] == folder] or hits[:1]
+    same = next((rel for rel, _ in hits if rel.split("/", 1)[0] == folder), None)
+    other = None if same else next((rel for rel, _ in hits), None)
+    return same, other
+
+
+def apply_relocations(prompt: dict) -> int:
+    """Rewrite model inputs that the library holds in another sub-folder of the same model folder."""
+    with _RELOC_LOCK:
+        moves = dict(_RELOCATED)
+    if not moves or not isinstance(prompt, dict):
+        return 0
+    changed = 0
+    for node in prompt.values():
+        inputs = node.get("inputs") if isinstance(node, dict) else None
+        if not isinstance(inputs, dict):
+            continue
+        for k, v in inputs.items():
+            if isinstance(v, str) and v in moves:
+                inputs[k] = moves[v]
+                changed += 1
+    return changed
+
+
 def _user_error(exc: BaseException) -> str:
     """Branded text for the registry / browser; the raw detail stays in the private log (X3)."""
     if isinstance(exc, BackendError):
@@ -266,6 +344,20 @@ def classify_models(refs: list, settings: dict, be) -> dict:
             continue
         entry = be.library_stat(remote_path, space)
         remote_size = entry.size if entry else None
+        if entry is None or (local_size is not None and remote_size != local_size):
+            root = "/".join(remote_path.split("/")[: -(len(str(ref.folder).split("/")) + len(str(ref.name).split("/")))])
+            same, other = _find_in_library(_library_index(be, space, root), ref.folder, ref.name, local_size)
+            if same is not None:
+                new_name = same.split("/", 1)[1]
+                with _RELOC_LOCK:
+                    _RELOCATED[ref.name] = new_name
+                item["found_at"] = f"{ref.folder}/{new_name}"
+                item["relocated"] = True
+                item["size"] = local_size
+                result["present"].append(item)
+                continue
+            if other is not None:
+                item["found_elsewhere"] = other
         if entry is not None and (local_size is None or remote_size == local_size):
             item["size"] = remote_size if remote_size is not None else local_size
             result["present"].append(item)

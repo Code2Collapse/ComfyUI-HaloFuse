@@ -221,8 +221,11 @@ class FakeBackend:
         self._record("library_list", remote_dir)
         validate_remote_path(remote_dir, allow_empty=True)
         prefix = remote_dir + "/" if remote_dir else ""
-        return [LibraryEntry(remote_path=p, size=len(d)) for p, d in sorted(self.library.items())
-                if p.startswith(prefix) and "/" not in p[len(prefix):]]
+        files = [LibraryEntry(remote_path=p, size=len(d)) for p, d in sorted(self.library.items())
+                 if p.startswith(prefix) and "/" not in p[len(prefix):]]
+        subdirs = sorted({prefix + p[len(prefix):].split("/", 1)[0] for p in self.library
+                          if p.startswith(prefix) and "/" in p[len(prefix):]})
+        return files + [LibraryEntry(remote_path=d, size=None, is_dir=True) for d in subdirs]
 
     def library_upload(self, local_path: Path, remote_path: str, space=None, on_progress=None,
                        max_bytes=None) -> None:

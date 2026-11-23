@@ -46,6 +46,8 @@ export const HF_CSS = `
   border-radius: 6px; padding: 5px 8px; font: inherit; min-width: 0; }
 .hf-field { display: grid; gap: 3px; margin: 0 0 10px; }
 .hf-field > span { color: var(--hf-muted); font-size: 12px; }
+.hf-field.hf-check { grid-template-columns: auto 1fr; align-items: start; column-gap: 8px; }
+.hf-field.hf-check > input { margin: 2px 0 0; }
 .hf-hint { color: var(--hf-muted); font-size: 12px; margin: -4px 0 10px; }
 .hf-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .hf-row > .hf-grow { flex: 1 1 auto; min-width: 0; }

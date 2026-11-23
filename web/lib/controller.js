@@ -225,6 +225,13 @@ export class Controller {
     const m = check.models || {};
     if (m.missing?.length) { this.say(`${m.missing.length} model(s) were not found locally or in the cloud library. Nothing was started.`, "danger"); return false; }
     if (m.uploading?.length) { this.say("A model upload is still running. Render again when it has finished.", "warning"); return false; }
+    if (m.uploadable?.length && !m.over_limit?.length && this.state.settings?.auto_upload_models !== false) {
+      // Owner 2026-11-23: upload what the cloud library lacks (same folder layout as this computer), then render.
+      this._set({ consent: { uploadable: m.uploadable, overLimit: [], proceed } });
+      this.say(`Uploading ${m.uploadable.length} model(s) to the cloud library, then rendering…`, "active");
+      this.consentUpload(true);
+      return false;
+    }
     if (m.uploadable?.length || m.over_limit?.length) {
       this._set({ consent: { uploadable: m.uploadable || [], overLimit: m.over_limit || [], proceed } });
       this.say("Some models need your decision before rendering.", "warning");

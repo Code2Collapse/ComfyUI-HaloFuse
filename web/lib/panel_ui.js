@@ -68,18 +68,20 @@ export class Panel {
       H("option", { value: "required", text: "Required (wait for a cached machine)" }),
       H("option", { value: "preferred", text: "Preferred (start sooner)" }));
     const guard = H("input", { className: "hf-input", type: "number", id: `hf-guard-${uid}`, min: "1", step: "1" });
+    const autoUp = H("input", { type: "checkbox", id: `hf-autoup-${uid}` });
     const libHint = H("div", { className: "hf-hint" });
     lib.addEventListener("input", () => {
       const v = lib.value.trim();
       libHint.textContent = v && !v.startsWith("/") ? "The path must start with “/”." : "";
       libHint.className = `hf-hint${v && !v.startsWith("/") ? " hf-tone-warning" : ""}`;
     });
-    this.adv = { lib, affinity, guard };
+    this.adv = { lib, affinity, guard, autoUp };
     const saveAdv = H("button", { className: "hf-btn", type: "button", text: "Save settings", onclick: () => {
       const v = lib.value.trim();
       if (v && !v.startsWith("/")) { this.ctl.say("The cloud model library path must start with “/”.", "warning"); return; }
       const g = parseInt(guard.value, 10);
-      this.ctl.saveAdvanced({ assets_library_path: v, image_affinity: affinity.value, upload_guard_gb: g > 0 ? g : 50 });
+      this.ctl.saveAdvanced({ assets_library_path: v, image_affinity: affinity.value, upload_guard_gb: g > 0 ? g : 50,
+                              auto_upload_models: autoUp.checked });
     } });
 
     const field = (label, input, hint) => H("label", { className: "hf-field", htmlFor: input.id }, H("span", { text: label }), input, hint || null);
@@ -101,7 +103,10 @@ export class Panel {
         H("summary", { text: "Cloud model library" }), this.library.el),
       H("details", { className: "hf-section" }, H("summary", { text: "Advanced" }),
         field("Cloud model library path", lib, libHint), field("Machine placement", affinity),
-        field("Largest automatic model upload (GB)", guard), saveAdv));
+        field("Largest automatic model upload (GB)", guard),
+        H("label", { className: "hf-field hf-check", htmlFor: autoUp.id }, autoUp,
+          H("span", { text: "Upload missing models automatically (same folders as on this computer)" })),
+        saveAdv));
 
     this._unsubs = [this.ctl.subscribe(() => this.update()), this.session.subscribe((w) => { if (w !== "log") this.update(); })];
     this._advLoaded = false;
@@ -125,6 +130,7 @@ export class Panel {
       this.adv.lib.value = st.settings.assets_library_path || "";
       this.adv.affinity.value = st.settings.image_affinity === "preferred" ? "preferred" : "required";
       this.adv.guard.value = st.settings.upload_guard_gb || 50;
+      this.adv.autoUp.checked = st.settings.auto_upload_models !== false;
     }
     // GPU list
     const want = st.skus.map((s) => s.instance_type).join("|");

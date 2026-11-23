@@ -52,6 +52,9 @@ def _normalize_model_paths(prompt: dict) -> None:
         for key, value in inputs.items():
             if isinstance(value, str) and "\\" in value and value.lower().endswith(_MODEL_EXTS):
                 inputs[key] = value.replace("\\", "/")
+    # A model the library holds in another sub-folder of the same model folder (model_sync library search).
+    from . import model_sync
+    model_sync.apply_relocations(prompt)
 
 
 def _batch_count(settings: dict) -> int:
