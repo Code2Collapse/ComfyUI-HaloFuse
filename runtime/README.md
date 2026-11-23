@@ -49,15 +49,23 @@ Environment: `STARTUP_TIMEOUT_SECONDS` (default 300), `JOB_TIMEOUT_SECONDS` (def
 (render repeats, 1–100), `ALLOW_PARTIAL_OUTPUTS`, `PREFETCH_MODELS` / `PREFETCH_THREADS` (copy the referenced models
 from `/assets` to local disk first), `COMFY_PORT` (default 8188), and for 0.4.0: `HF_PRESET` (launch preset),
 `COMFY_EXTRA_ARGS` / `EXTRA_ENV` (checked against `runner/launch_allowlist.json`; anything else is rejected before
-ComfyUI starts, and the argument list never goes through a shell), `HF_RESTART_POLICY` (`off`, `once` (default),
-`twice`), `HF_OOM_LADDER` (out-of-memory recovery steps; `off` disables), `HF_PREVIEW` (live previews, experimental).
+ComfyUI starts, and the argument list never goes through a shell), `HF_RESTART_POLICY` (`each` (default: one
+restart per manifest entry), `once`, `twice`, `off`), `HF_UNRESPONSIVE_SECONDS` (default 300: a live ComfyUI that
+stops answering for this long is stopped and restarted; `0` disables), `HF_OOM_LADDER` (out-of-memory recovery steps;
+`off` disables), `HF_PREVIEW` (live previews, experimental), `HF_HEALTH_FILE` (runner heartbeat read by the Docker
+HEALTHCHECK) and `HF_ALLOW_CPU=1` (adds `--cpu` only when no NVIDIA GPU is visible; used by the image smoke test).
 
 ## What the 0.4.0 runner adds
 
 - **Supervision.** Every failure is classified (for example `host_ram_exhausted`, `vram_oom`, `native_crash`).
-  When ComfyUI dies mid-run (for example killed for lack of memory) it is restarted once by default, with
-  memory-safe options when memory was the cause, so one failed workflow in a queue chunk no longer stops the rest.
+  When ComfyUI dies mid-run (for example killed for lack of memory) or stops answering, it is restarted - with
+  memory-safe options when memory was the cause - and the job continues with the next workflow. By default every
+  manifest entry may use one restart; three deaths in a row with no successful workflow between them end the job
+  (exit 6), so a crash loop cannot run up a bill. ComfyUI runs in its own process group: stopping it stops its
+  child processes too, so nothing keeps memory into the restarted ComfyUI or keeps the container alive.
   `HF_RESTART_POLICY=off` keeps the previous behaviour.
+- **Model prefetch only when it helps.** Models are copied from the model mount to local disk only when the mount is
+  remote and the destination is a real disk (not a RAM-backed `/tmp`); a stopped job never waits for a copy.
 - **Clean stops.** On SIGTERM the runner interrupts ComfyUI, keeps the partial outputs, prints a final `cancelled`
   summary and exits within 10 seconds.
 - **Run events and telemetry.** Progress, node timing, GPU and memory samples and previews are emitted as bounded
@@ -78,7 +86,11 @@ The custom-node set comes from the catalog in [catalog/](catalog/README.md): one
 version, content hash, licence and status, and named profiles built as separate images (`PROFILE` build argument).
 `python scripts/hf_catalog.py summary` lists the profiles. To add packs without editing JSON, list them in
 [`catalog/extra_nodes.txt`](catalog/extra_nodes.txt) (`owner/repo` or `owner/repo@ref` per line): each is pinned to
-an exact commit at build time and is optional - one that fails to install is moved aside and the build continues. The `default` profile is exactly the 31 packs of the image
+an exact commit at build time and is optional - one that fails to install is moved aside and the build continues.
+Lines naming a pack the catalog keeps out of cloud images (UI-only packs, ComfyUI-Manager, research repositories) are
+rejected with the catalog's reason (`python scripts/install_nodes.py check-extras` checks the file offline; CI runs
+it). Each extra's licence is recorded in the install report and anything other than a permissive licence is
+flagged: listing a pack there is the owner's decision. The `default` profile is exactly the 31 packs of the image
 the extension uses today, so saved workflows keep working; any install failure fails that build. In the other
 profiles a pack that fails to install is moved aside and reported, and the build continues. ComfyUI-Manager is never
 installed (a batch container must not install or update code by itself).
@@ -88,8 +100,11 @@ commercial use; in `default` that includes RES4LYF (its LICENSE forbids running 
 without permission), DepthCrafter-Nodes (research only) and the LTX-2 community licence. Flags are reported, not
 applied, in `default`; the newer profiles leave out non-commercial, custom-licence and unlicensed packs.
 
-*Not verified yet:* image build time, size and cold start (`scripts/measure.py` records them on a real build), and an
-import test of every pack in each profile.
+Every CI build runs the `smoke` stage: the real entrypoint (tini + runner) boots ComfyUI on the CPU without network
+and renders a model-free 3-workflow manifest (one entry fails on purpose). The build fails when ComfyUI does not
+start, the runner hangs or exits with the wrong code, or a pack of a strict profile does not import; the report
+(`smoke_report.json`, per-pack import times included) is uploaded with the build. GPU cold start on the cloud node is
+not measured by it.
 
 ## Base image pin
 
@@ -104,6 +119,10 @@ From this folder:
 ```
 docker build -t halofuse-runtime:local .
 ```
+
+Optional attention layer: `--build-arg ATTENTION=sage` adds SageAttention 1.0.6 (the only prebuilt wheel for this
+base: Triton-based, hash-pinned) and enables the `sage` launch preset; speed-up on GPUs is not verified.
+FlashAttention has no wheel for this torch/CUDA build.
 
 The CI workflow builds `linux/amd64`. The registry that HaloFuse images are published to is configured by the HaloFuse
 administrator; nothing is pushed by this repository's tooling. After publishing, the extension's image pin must be
