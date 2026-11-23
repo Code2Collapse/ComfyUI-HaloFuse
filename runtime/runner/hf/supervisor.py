@@ -78,14 +78,15 @@ class ComfyProcess:
                     text = text[:-1]
                 if text.endswith("\r"):
                     text = text[:-1]
-                self._tail.append(text)
+                plain = hf_events.strip_ansi(text)
+                self._tail.append(plain)  # crash classification + error detail without colour codes
                 self.em.line(hf_events.escape_child_line(text), stream=stream)
                 if self.on_line is not None:
                     try:
                         self.on_line(text)
                     except Exception:  # noqa: BLE001 - a consumer error never stops the relay
                         pass
-                if not marked and text.startswith(NODE_IMPORT_MARK):
+                if not marked and NODE_IMPORT_MARK in plain:  # "[INFO] Import times ..." in ComfyUI 0.43
                     marked = True
                     if self.on_node_import:
                         try:

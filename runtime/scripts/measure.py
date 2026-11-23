@@ -26,8 +26,16 @@ METRICS = {  # name -> unit
     "comfyui_init": "s", "custom_node_imports": "s", "api_ready": "s", "model_load": "s", "first_render": "s",
 }
 TS = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})\s(.*)$")
-IMPORT = re.compile(r"^\s*([\d.]+) seconds( \(IMPORT FAILED\))?: (.+?)\s*$")
+IMPORT = re.compile(r"^\s*(?:\[[A-Z]+\]\s*)?([\d.]+) seconds( \(IMPORT FAILED\))?: (.+?)\s*$")
 EXECUTED = re.compile(r"Prompt executed in ([\d.]+) seconds")
+# ComfyUI 0.43 colours its log lines even into a pipe (ESC[32m[INFO]ESC[0m ...): strip CSI / 2-byte ESC sequences
+# before matching anything in ComfyUI output.
+ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])")
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_RE.sub("", text)
+
 
 
 def empty_record(profile=None, image_ref=None, host_label=None) -> dict:
@@ -59,7 +67,7 @@ def parse_log(lines) -> dict:
     t0 = t_runner = t_launch = t_ready = t_first_load = t_last_loaded = None
     imports, first_render, in_imports = [], None, False
     for raw in lines:
-        ts, line = _ts(raw.rstrip("\n"))
+        ts, line = _ts(strip_ansi(raw.rstrip("\n")))
         if ts and t0 is None:
             t0 = ts
         if "Import times for custom nodes" in line:
@@ -163,6 +171,7 @@ def main(argv=None) -> int:
             except ValueError:
                 raise SystemExit(f"--metric {item!r}: value must be a number")
         merge(rec, values, "")
+    out.parent.mkdir(parents=True, exist_ok=True)  # CI: out/ may not exist when the build step failed
     out.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
     measured = [k for k, v in rec["metrics"].items() if v["status"] == "MEASURED"]
     print(f"{out}: measured {len(measured)}/9 ({', '.join(measured) or 'none'})")
