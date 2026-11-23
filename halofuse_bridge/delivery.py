@@ -422,6 +422,21 @@ class _Run:
         self._error(rel, code)
         return False
 
+    @staticmethod
+    def _replace(src: Path, dest: Path, attempts: int = 8) -> None:
+        """os.replace with a short retry: on Windows a file another reader has open (the live log stream, the console
+        reading render.log) refuses a replace for a moment - one delivery in 8 failed on the testbed (2026-11-24)."""
+        delay = 0.05
+        for i in range(attempts):
+            try:
+                os.replace(src, dest)
+                return
+            except PermissionError:
+                if i == attempts - 1:
+                    raise
+                time.sleep(delay)
+                delay = min(delay * 2, 1.0)
+
     def _place(self, part: Path, dest: Path, category: str) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         if category == "log" and dest.name == "render.log":
@@ -433,10 +448,10 @@ class _Run:
                 for line in src:
                     body = line.rstrip("\r\n")
                     out.write(redact(body) + line[len(body):])
-            os.replace(tmp, dest)
+            self._replace(tmp, dest)
             part.unlink(missing_ok=True)
         else:
-            os.replace(part, dest)
+            self._replace(part, dest)
 
     def _keep_streamed_copy(self, dest: Path) -> None:
         """WS2's live-streamed render.log becomes render.stream.log; the runner's complete file takes its name."""
@@ -452,7 +467,7 @@ class _Run:
                     out.write(src.read())
                 dest.unlink()
             else:
-                os.replace(dest, stream)
+                self._replace(dest, stream)
         except OSError:
             with open(dest, "rb") as src, open(stream, "ab") as out:
                 out.write(src.read())
