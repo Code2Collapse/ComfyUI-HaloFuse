@@ -11,7 +11,7 @@ import { WarmSection } from "./warm_ui.js";
 import { PREVIEW_METHODS, PREVIEW_MODES } from "./controller.js";
 import { previewPath } from "./api.js";
 import { LIVE_TEXT, createImageCache } from "./live_preview.js";
-import { cancelActions, cancelInfo, costText, deliveryText, isTerminal, progressText, statusInfo } from "./job_view.js";
+import { cancelActions, cancelInfo, capacityAskText, capacityNotice, costText, deliveryText, isTerminal, progressText, statusInfo } from "./job_view.js";
 import { fmtBytes, fmtLocal, fmtUsd } from "./format.js";
 import { outputKind } from "./console_panes.js";
 import { AUTO_PREVIEW_MODES, renderNodeSections } from "./node_sections.js";
@@ -279,6 +279,14 @@ export class Panel {
           H("button", { className: "hf-btn hf-primary", type: "button", text: `Use the ${r.label}`,
             onclick: () => this.ctl.switchRuntimeAndCheck(r.runtime) })));
       }
+      // L9.338: the selected GPU type is likely too small: one click switches to one with enough memory and re-checks
+      const cap = capacityNotice(p);
+      if (cap) {
+        list.append(H("div", { className: `hf-item hf-tone-${cap.verdict === "blocked" ? "danger" : "warning"}` },
+          H("span", { className: "hf-grow", style: { whiteSpace: "normal" }, text: cap.text }),
+          H("button", { className: "hf-btn hf-primary", type: "button", text: cap.buttonText,
+            onclick: () => this.ctl.switchGpuAndCheck(cap.instanceType) })));
+      }
       // a class the runtime lacks but a Comfy Registry pack provides: one click adds it to My custom nodes
       for (const a of p.add_packs || []) {
         list.append(H("div", { className: "hf-item" },
@@ -348,6 +356,16 @@ export class Panel {
         cur ? H("div", { className: "hf-hint", text: `${cur.name} from ${cur.label}` }) : null,
         H("div", { className: `hf-bar${total ? "" : " hf-indeterminate"}` }, H("div", { style: { width: `${total ? Math.floor((got / total) * 100) : 0}%` } })),
         H("div", {}, H("button", { className: "hf-btn hf-danger", type: "button", text: "Cancel download", onclick: () => this.ctl.cancelFetch() }))));
+      return;
+    }
+    if (st.capacityAsk) {
+      const t = capacityAskText(st.capacityAsk);
+      const btns = H("div", { className: "hf-row" });
+      if (t.switchText) btns.append(H("button", { className: "hf-btn hf-primary", type: "button", text: t.switchText, onclick: () => this.ctl.capacitySwitch() }));
+      btns.append(H("button", { className: `hf-btn${t.switchText ? "" : " hf-primary"}`, type: "button", text: t.anywayText, onclick: () => this.ctl.capacityAnyway() }),
+        H("button", { className: "hf-btn", type: "button", text: "Cancel", onclick: () => this.ctl.capacityCancel() }));
+      this.consentBox.append(H("div", { className: "hf-consent hf-tone-warning", attrs: { role: "group", "aria-label": "Machine memory" } },
+        H("strong", { text: t.title }), H("div", { className: "hf-hint", style: { whiteSpace: "normal" }, text: t.detail }), btns));
       return;
     }
     if (st.fetchConsent) {

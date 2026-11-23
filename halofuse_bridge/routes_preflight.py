@@ -242,7 +242,29 @@ def _preflight(body: dict) -> dict:
             for reason in (cap.get("selected") or {}).get("reasons", []):
                 report["blocking"].append(wa.Problem("capacity_blocked", f"{instance_type}: {reason}").to_dict())
             report["ok"] = False
+        _offer_capacity_switch(report, cap)
     return report
+
+
+def _gb_text(value) -> str:
+    return f"{value:g} GB" if isinstance(value, (int, float)) else "unknown"
+
+
+def _offer_capacity_switch(report: dict, cap: dict) -> None:
+    """L9.338 memory guard before paying: a machine that is likely too small (or blocked) gets a plain-English warning
+    and report["capacity_switch"], which the panel shows as a one-click switch (owner: no dead ends). Nothing is
+    blocked by this: the artist may still render on the selected machine."""
+    switch = cap.get("switch")
+    selected = cap.get("selected") or {}
+    if selected.get("verdict") == "likely_insufficient":
+        fix = (f" Switch to {switch['instance_type']} ({switch['gpu_type']}, {_gb_text(switch['gpu_memory_gb'])} GPU "
+               f"memory, {_gb_text(switch['memory_gb'])} RAM) with the button below, or render anyway."
+               if switch else " No listed GPU type has enough RAM by this estimate; render anyway or use smaller models.")
+        report["warnings"].append(wa.Problem(
+            "capacity_memory", f"{selected.get('instance_type')} is likely too small for this workflow: "
+                               f"{(selected.get('reasons') or ['not enough memory'])[0]}.{fix}").to_dict())
+    if switch:
+        report["capacity_switch"] = switch
 
 
 def _capacity_only(body: dict) -> dict:

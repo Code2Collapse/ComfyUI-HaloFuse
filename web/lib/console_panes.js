@@ -4,7 +4,7 @@
 
 import {
   cancelInfo, costText, deliveryText, isTerminal, nodeRows, phaseLabel, phaseRows, progressText, statusInfo,
-  telemetryRows,
+  telemetryRows, timeSplitRows,
 } from "./job_view.js";
 import { fmtBytes, fmtDuration, fmtLocal } from "./format.js";
 
@@ -185,6 +185,17 @@ export function renderSummary(H, { job, run, outputs, viewUrl, previewUrl, onRet
   add("Outputs", deliveryText(job.delivery));
   if (m.final) add("Runner result", `${m.final.status}${m.final.error ? ` (${m.final.error})` : ""}, ${m.final.outputs ?? 0} output file(s)`);
   wrap.append(kv);
+  // L9.338: where the time went (queue, machine and image, start, model copies, first node, execution)
+  const split = timeSplitRows({ phases: m.phases, timeline: run?.timeline, createdAt: job.created_at,
+    now: isTerminal(job) && Number.isFinite(job.ended_at) ? job.ended_at : Date.now() / 1000 });
+  if (split.length) {
+    wrap.append(H("div", { className: "hf-h", text: "Time split" }));
+    const tkv = H("dl", { className: "hf-kv", attrs: { "aria-label": "Time split" } });
+    for (const r of split) {
+      tkv.append(H("dt", { text: r.label }), H("dd", { text: `${fmtDuration(r.seconds)}${r.note ? ` (${r.note})` : ""}` }));
+    }
+    wrap.append(tkv);
+  }
   if (job.delivery?.state === "failed" || job.delivery?.state === "partial") {
     wrap.append(H("div", { className: "hf-row", style: { marginTop: "8px" } },
       H("button", { className: "hf-btn", type: "button", text: "Retry output download", onclick: onRetryDelivery })));
