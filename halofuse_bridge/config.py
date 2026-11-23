@@ -55,6 +55,12 @@ DEFAULTS = {
     # uploaded without asking (same folder layout as the local models folder), then the render starts. Models
     # larger than upload_guard_gb still ask. False = ask every time (the earlier behaviour).
     "auto_upload_models": True,
+    # Owner 2026-11-23: a model that is neither on this computer nor in the cloud library is downloaded from a public
+    # source (the workflow's links, the ComfyUI-Manager model list, Hugging Face by exact file name) into ComfyUI's
+    # model folder, then uploaded. Models larger than download_ask_above_gb (0 = never ask), of unknown size or from a
+    # personal upload ask first. The C2C "Never download models" switch always wins (model_fetch.downloads_blocked).
+    "auto_download_models": True,
+    "download_ask_above_gb": 20,
     # Job lifecycle and spend limits (WS2, REQUESTS R-WS2-01). Money values are estimates; None = no cap.
     "max_runtime_seconds": 21600,
     "cancel_confirm_timeout_seconds": 90,
@@ -83,6 +89,7 @@ DEFAULTS = {
 PUBLIC_KEYS = [
     "instance_type", "assets_library_path", "assets_library_space",
     "model_base_dir", "image_affinity", "batch_count", "upload_guard_gb", "auto_upload_models",
+    "auto_download_models", "download_ask_above_gb",
     "max_runtime_seconds", "max_job_cost_usd", "daily_spend_cap_usd",
     "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode", "preview_method",
     "runtime_image", "user_nodes",
@@ -292,8 +299,10 @@ def _valid_pref(key: str, value) -> bool:
         return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 1000
     if key == "upload_guard_gb":
         return _number(value) and value >= 0
-    if key == "auto_upload_models":
+    if key in ("auto_upload_models", "auto_download_models"):
         return isinstance(value, bool)
+    if key == "download_ask_above_gb":
+        return _number(value) and 0 <= value <= 100000
     if key == "max_runtime_seconds":
         return isinstance(value, int) and not isinstance(value, bool) and 60 <= value <= 7 * 86400
     if key in _NULLABLE_KEYS:
@@ -410,9 +419,11 @@ def public_settings() -> dict:
         status = credentials.default_store().status()
         out["password_set"] = bool(status.get("password_set"))
         out["credentials_configured"] = bool(status.get("credentials_configured"))
+        out["hf_token_set"] = bool(credentials.default_store().hf_token_status().get("hf_token_set"))
     except Exception:  # noqa: BLE001 - status is advisory; never break the settings route
         out["password_set"] = False
         out["credentials_configured"] = False
+        out["hf_token_set"] = False
     return out
 
 

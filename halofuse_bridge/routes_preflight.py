@@ -17,7 +17,7 @@ from pathlib import Path
 
 from aiohttp import web
 
-from . import capacity, draft, lifecycle, model_library, model_sync, provider, user_nodes
+from . import capacity, draft, lifecycle, model_fetch, model_library, model_sync, provider, user_nodes
 from . import workflow_analysis as wa
 from .job_store import HaloFuseError
 from .routes_account import request_guard
@@ -26,6 +26,8 @@ _log = logging.getLogger(__name__)
 
 MAX_WORKFLOWS = 50
 _UPLOAD_ID_RE = re.compile(r"^[0-9a-f]{12}$")
+# H2Vault (a separate pack): a locked vault is one of these nodes; its inner graph and models are encrypted in it.
+VAULT_CLASSES = ("H2Vault_ProtectedSubgraph", "H2Vault_ProtectedSubgraphOutput")
 
 
 async def _run(fn):
@@ -104,11 +106,37 @@ def _settings() -> dict:
 
 # ---- work functions (run in the executor) ------------------------------------------------------------------------
 
-def _models_check(settings: dict):
+def _models_check(settings: dict, links=None):
+    """links None: classification only. A list (the Workflow Check): models missing everywhere are looked up at their
+    public download sources (model_fetch), the workflow's own links first."""
     def check(refs):
         with provider.open_backend(settings) as be:
-            return model_sync.classify_models(refs, settings, be)
+            if links is None:
+                return model_sync.classify_models(refs, settings, be)
+            return model_sync.classify_models(refs, settings, be, find_sources=True, links=links)
     return check
+
+
+def _model_links(body: dict, workflows: list[dict]) -> list[dict]:
+    """The editor graph's node properties.models (sent by the panel as model_links) plus URL widgets of the API graphs."""
+    links = model_fetch.clean_links(body.get("model_links"))
+    for wf in workflows:
+        links += model_fetch.links_from_prompt(wf)
+    return links
+
+
+def _vault_notes(workflows: list[dict]) -> list[dict]:
+    """H2Vault vaults provision their own models (download links kept inside the vault): their inner models are never
+    searched, logged or shown here - one note per vault node, by node id only."""
+    notes = []
+    for wf in workflows:
+        for node_id, node in wa._nodes(wf):
+            ct = node["class_type"]
+            if ct in VAULT_CLASSES:
+                notes.append(wa.Problem("vault_models", f"Node {node_id} (H2Vault vault): its models are handled by "
+                                                        "the vault, which downloads them itself. Nothing to do here.",
+                                        node_id, ct).to_dict())
+    return notes
 
 
 def _sizes_from_models(models: dict) -> dict:
@@ -198,8 +226,10 @@ def _preflight(body: dict) -> dict:
     input_dir = _input_dir()
     decoder_refs, decoder_warnings = preview_decoder_refs(body.get("preview_method"))
     report = wa.preflight(workflows, snapshot=snapshot, input_dir=input_dir,
-                          models_check=_models_check(_settings()), extra_refs=decoder_refs)
+                          models_check=_models_check(_settings(), _model_links(body, workflows)),
+                          extra_refs=decoder_refs)
     report["warnings"].extend(decoder_warnings)
+    report["notes"].extend(_vault_notes(workflows))
     # the artist's own custom nodes count as available (a note); missing classes get an "add this pack" offer
     user_nodes.apply_to_report(report, workflows, _settings())
     _offer_other_runtimes(report, snapshot)
@@ -344,6 +374,79 @@ async def post_models_upload_cancel(request):
         return _from_exc(exc)
 
 
+async def post_models_fetch(request):
+    """Download models from their public source into this computer's model folders (the Workflow Check found the
+    source, or the artist pasted a link / picked a candidate). Body: {files: [{folder, name, url?, choice?}]}."""
+    try:
+        body = await _body(request)
+        files = body.get("files")
+        if not isinstance(files, list) or not files or not all(isinstance(f, dict) for f in files):
+            raise HaloFuseError("bad_request", "Choose the models to download.", 400)
+        try:
+            prepared = await _run(lambda: model_fetch.prepare_fetch(files, _settings()))
+        except model_fetch.FetchError as exc:
+            raise HaloFuseError("bad_request", str(exc)[:600], 400) from None
+        fetch_id = model_fetch.start_fetch(prepared)
+        return web.json_response({"fetch_id": fetch_id, **model_fetch.get_fetch_state(fetch_id)}, status=202)
+    except Exception as exc:  # noqa: BLE001
+        return _from_exc(exc)
+
+
+def _fetch_id(request) -> str:
+    fetch_id = request.match_info["fetch_id"]
+    if not _UPLOAD_ID_RE.match(fetch_id) or model_fetch.get_fetch_state(fetch_id) is None:
+        raise HaloFuseError("fetch_not_found", "This model download was not found.", 404)
+    return fetch_id
+
+
+async def get_models_fetch(request):
+    try:
+        fetch_id = _fetch_id(request)
+        return web.json_response({"fetch_id": fetch_id, **model_fetch.get_fetch_state(fetch_id)})
+    except Exception as exc:  # noqa: BLE001
+        return _from_exc(exc)
+
+
+async def get_models_fetches(request):
+    return web.json_response({"fetches": model_fetch.list_fetches()})
+
+
+async def post_models_fetch_cancel(request):
+    try:
+        fetch_id = _fetch_id(request)
+        model_fetch.cancel_fetch(fetch_id)
+        return web.json_response({"ok": True, "fetch_id": fetch_id}, status=202)
+    except Exception as exc:  # noqa: BLE001
+        return _from_exc(exc)
+
+
+async def post_hf_token(request):
+    """Save the optional Hugging Face token (gated repositories) in this computer's keychain. Never echoed."""
+    from . import credentials
+
+    try:
+        body = await _body(request)
+        try:
+            status = await _run(lambda: credentials.default_store().save_hf_token(body.get("token")))
+        except credentials.CredentialError as exc:
+            if exc.code == "invalid_input":
+                raise HaloFuseError("bad_request", "That is not a Hugging Face access token (it starts with hf_).",
+                                    400) from None
+            raise HaloFuseError(exc.code, exc.user_message, exc.status) from None
+        return web.json_response(status)
+    except Exception as exc:  # noqa: BLE001
+        return _from_exc(exc)
+
+
+async def delete_hf_token(request):
+    from . import credentials
+
+    try:
+        return web.json_response(await _run(lambda: credentials.default_store().clear_hf_token()))
+    except Exception as exc:  # noqa: BLE001
+        return _from_exc(exc)
+
+
 async def get_library(request):
     try:
         return web.json_response(await _run(_library))
@@ -380,6 +483,12 @@ _ROUTES = (
     ("GET", "/models/upload/{upload_id}", get_models_upload),
     ("GET", "/models/uploads", get_models_uploads),
     ("POST", "/models/upload/{upload_id}/cancel", post_models_upload_cancel),
+    ("POST", "/models/fetch", post_models_fetch),
+    ("GET", "/models/fetch/{fetch_id}", get_models_fetch),
+    ("GET", "/models/fetches", get_models_fetches),
+    ("POST", "/models/fetch/{fetch_id}/cancel", post_models_fetch_cancel),
+    ("POST", "/models/hf_token", post_hf_token),
+    ("DELETE", "/models/hf_token", delete_hf_token),
     ("GET", "/library", get_library),
     ("GET", "/library/aliases", get_aliases),
     ("POST", "/library/aliases", post_aliases),

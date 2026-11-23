@@ -199,6 +199,9 @@ They survive extension updates and reinstalls.
 | Cloud model library path | `/models` | your library folder (section 4) | Advanced |
 | Image affinity | Required | wait for a cloud machine that already holds the runtime image (faster start) or start sooner | Advanced |
 | Upload guard (GB) | 50 | largest single model HaloFuse uploads for you | Advanced |
+| Download missing models automatically | on | a model missing here and in the cloud library is downloaded from a public source, then uploaded (section 8) | Advanced |
+| Ask before downloading models larger than (GB) | 20 | larger models ask first; 0 = never ask | Advanced |
+| Hugging Face token | none | only for gated Hugging Face models; kept in this computer's keychain (or `HF_TOKEN`) | Advanced |
 | Cloud runtime | Original image | *Original image*: the node packs the cloud has always had. *HaloFuse image*: those plus the newer node packs (newer KJNodes, DepthAnythingV2 and many more); first renders on it are not yet verified. The Workflow Check checks nodes against the runtime chosen here. | Advanced |
 | Maximum runtime per job | 6 hours | a longer render is stopped and marked "timed out" | settings file; panel control in development |
 | Maximum cost per job, daily cost cap | off | stop or block renders above an **estimated** cost | settings file; panel control in development |
@@ -395,7 +398,9 @@ What the check can find:
 - **Missing in the library, present locally.** A consent list shows each model's name, folder and size: upload, then
   render; upload only (the render is cancelled and the upload continues in the background); or cancel.
 - **Same name, different size.** Flagged as out of date; you can upload over the cloud copy or render with it.
-- **Missing everywhere.** HaloFuse names the model and stops.
+- **Missing everywhere.** HaloFuse looks for a public download (see below). Found: the model is downloaded to this
+  computer, uploaded, and the render starts. Not found: HaloFuse names the model, says what it searched and offers
+  *Paste a download link*; when several different files have that name, it lists them for you to pick.
 - **Already uploading.** The render waits for the transfer.
 
 Background uploads keep running when the panel is closed or the browser tab reloads (the transfer runs in the
@@ -403,6 +408,20 @@ ComfyUI server). **Cancel upload** stops one. Uploads go to `{cloud model librar
 keeping local subfolders: `FLUX2\flux2-dev.safetensors` in your local `diffusion_models` folder goes to
 `/comfy-models/diffusion_models/FLUX2/flux2-dev.safetensors`. Files above the upload guard (default 50 GB) are not
 uploaded by HaloFuse; uploads are not resumable, so stage very large files with your administrator's storage tools.
+
+**Getting missing models (available, owner 2026-11-23).** For a model that is neither on this computer nor in the cloud
+model library, the check looks for a public download in this order: the workflow's own links (official ComfyUI
+templates carry them), the ComfyUI-Manager model list, then Hugging Face by **exact** file name (the ComfyUI and Kijai
+organisations first, then the public search). Only the file name is sent. Civitai is not searched; a pasted Civitai
+download link works, as does a Hugging Face file link or any https link that ends in the model's file name. The file
+goes into ComfyUI's model folder with the workflow's sub-folders (`wan/vae.safetensors` in a VAE loader lands in
+`models/vae/wan/vae.safetensors`), through a `.halofuse-part` file that resumes after an interruption; free disk space
+is checked first, and size and SHA-256 are checked when the source states them. The check shows each model's state:
+in the cloud library, uploading, downloading from its source, or no source found. You are asked first when automatic
+download is off, the model is larger than the limit, its size is unknown, or it was found only in a personal upload on
+Hugging Face. The C2C setting *Never download models* (or `C2C_NO_DOWNLOADS=1`) turns all downloads off. Gated
+Hugging Face models (licence to accept) need a Hugging Face token. Models inside an H2Vault vault are left to the
+vault, which provisions them itself.
 
 ## 9. Results and logs on your disk
 

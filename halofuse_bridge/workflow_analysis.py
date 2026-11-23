@@ -887,7 +887,7 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
     warnings: list[Problem] = []
     notes: list[Problem] = []
     models: dict[str, list] = {"missing": [], "uploadable": [], "over_limit": [], "uploading": [], "present": [],
-                               "unverified": [], "auto_download": []}
+                               "unverified": [], "auto_download": [], "fetchable": [], "downloading": []}
     checked = {"nodes": 0, "models": 0, "inputs": 0}
     if snapshot is None:
         warnings.append(Problem("no_snapshot", "No runtime profile snapshot is installed, so node availability in "
@@ -1086,7 +1086,15 @@ def _apply_models_check(refs: list, models_check: "ModelsCheck", models: dict, b
         models.setdefault(key, [])
         models[key].extend(items)
     for item in result.get("missing", []):
-        blocking.append(Problem("missing_model", missing_model_message(item["name"], item["folder"]),
+        # with source lookup (model_fetch) the item's own message names the sources searched and the fix
+        blocking.append(Problem("missing_model", item.get("message") or missing_model_message(item["name"],
+                                                                                              item["folder"]),
+                                item.get("node_id"), item.get("class_type"), item.get("field")))
+    for item in result.get("fetchable", []):
+        warnings.append(Problem("model_will_download", item.get("message") or f"{item['name']} is downloaded first",
+                                item.get("node_id"), item.get("class_type"), item.get("field")))
+    for item in result.get("downloading", []):
+        warnings.append(Problem("model_downloading", item.get("message") or f"{item['name']} is being downloaded",
                                 item.get("node_id"), item.get("class_type"), item.get("field")))
     for item in result.get("invalid", []):
         blocking.append(Problem("model_path_blocked", f"'{_short(item['name'], 80)}' is not a valid model library "

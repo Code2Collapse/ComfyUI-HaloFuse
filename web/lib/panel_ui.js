@@ -71,6 +71,11 @@ export class Panel {
       H("option", { value: "preferred", text: "Preferred (start sooner)" }));
     const guard = H("input", { className: "hf-input", type: "number", id: `hf-guard-${uid}`, min: "1", step: "1" });
     const autoUp = H("input", { type: "checkbox", id: `hf-autoup-${uid}` });
+    const autoDown = H("input", { type: "checkbox", id: `hf-autodown-${uid}` });
+    const askAbove = H("input", { className: "hf-input", type: "number", id: `hf-askabove-${uid}`, min: "0", step: "1" });
+    const hfToken = H("input", { className: "hf-input", type: "password", id: `hf-hftoken-${uid}`, autocomplete: "off",
+      placeholder: "hf_…", attrs: { spellcheck: "false" } });
+    const hfTokenHint = H("div", { className: "hf-hint" });
     const runtime = H("select", { className: "hf-select", id: `hf-runtime-${uid}` },
       H("option", { value: "legacy", text: "Original image (default)" }),
       H("option", { value: "halofuse", text: "HaloFuse image (adds the newer node packs; first renders not yet verified)" }));
@@ -81,13 +86,15 @@ export class Panel {
       libHint.textContent = v && !v.startsWith("/") ? "The path must start with “/”." : "";
       libHint.className = `hf-hint${v && !v.startsWith("/") ? " hf-tone-warning" : ""}`;
     });
-    this.adv = { lib, affinity, guard, autoUp, runtime, runtimeHint };
+    this.adv = { lib, affinity, guard, autoUp, autoDown, askAbove, hfTokenHint, runtime, runtimeHint };
     const saveAdv = H("button", { className: "hf-btn", type: "button", text: "Save settings", onclick: () => {
       const v = lib.value.trim();
       if (v && !v.startsWith("/")) { this.ctl.say("The cloud model library path must start with “/”.", "warning"); return; }
       const g = parseInt(guard.value, 10);
+      const a = Number(askAbove.value);
       const prefs = { assets_library_path: v, image_affinity: affinity.value, upload_guard_gb: g > 0 ? g : 50,
-                      auto_upload_models: autoUp.checked };
+                      auto_upload_models: autoUp.checked, auto_download_models: autoDown.checked,
+                      download_ask_above_gb: Number.isFinite(a) && a >= 0 ? a : 20 };
       if (!runtime.disabled) prefs.runtime_image = runtime.value;
       this.ctl.saveAdvanced(prefs);
     } });
@@ -116,7 +123,14 @@ export class Panel {
         field("Cloud runtime", runtime, runtimeHint),
         H("label", { className: "hf-field hf-check", htmlFor: autoUp.id }, autoUp,
           H("span", { text: "Upload missing models automatically (same folders as on this computer)" })),
-        saveAdv));
+        H("label", { className: "hf-field hf-check", htmlFor: autoDown.id }, autoDown,
+          H("span", { text: "Download missing models automatically (from the workflow’s links, the ComfyUI-Manager model list or Hugging Face), then upload them" })),
+        field("Ask before downloading models larger than (GB, 0 = never ask)", askAbove),
+        saveAdv,
+        field("Hugging Face token (only for gated models; kept in this computer’s keychain)", hfToken, hfTokenHint),
+        H("div", { className: "hf-row" },
+          H("button", { className: "hf-btn", type: "button", text: "Save token", onclick: () => { this.ctl.saveHfToken(hfToken.value); hfToken.value = ""; } }),
+          H("button", { className: "hf-btn", type: "button", text: "Remove token", onclick: () => this.ctl.clearHfToken() }))));
 
     this._unsubs = [this.ctl.subscribe(() => this.update()), this.session.subscribe((w) => { if (w !== "log") this.update(); })];
     this._advLoaded = false;
@@ -142,6 +156,8 @@ export class Panel {
       this.adv.affinity.value = st.settings.image_affinity === "preferred" ? "preferred" : "required";
       this.adv.guard.value = st.settings.upload_guard_gb || 50;
       this.adv.autoUp.checked = st.settings.auto_upload_models !== false;
+      this.adv.autoDown.checked = st.settings.auto_download_models !== false;
+      this.adv.askAbove.value = st.settings.download_ask_above_gb ?? 20;
       this.adv.runtime.value = st.settings.runtime_image === "halofuse" ? "halofuse" : "legacy";
       this.adv.runtime.disabled = st.settings.runtime_image_locked === true;
       const halo = this.adv.runtime.querySelector('option[value="halofuse"]');
@@ -152,6 +168,7 @@ export class Panel {
         : ready ? "The Workflow Check checks nodes against the runtime chosen here."
           : "The HaloFuse image is not published yet; renders use the original image.";
     }
+    this.adv.hfTokenHint.textContent = st.settings?.hf_token_set ? "A token is saved." : "No token saved.";
     // GPU list
     const want = st.skus.map((s) => s.instance_type).join("|");
     if (this.skuSel.dataset.list !== want) {
@@ -210,6 +227,11 @@ export class Panel {
   }
 
   _renderCheck(st) {
+    // rebuilt only when the check result, the draft or the mode changes: a progress tick must not wipe a link being
+    // pasted into a "Paste a download link" field
+    const key = [st.preflight, st.draft, st.previewMode];
+    if (this._checkKey && key.every((v, i) => v === this._checkKey[i])) return;
+    this._checkKey = key;
     const H = this.H;
     const box = this.checkBox;
     clear(box);
@@ -234,6 +256,8 @@ export class Panel {
           H("button", { className: "hf-btn", type: "button", text: `Add ${a.name} to my custom nodes`,
             onclick: () => this.userNodes.addLine(a.line) })));
       }
+      const models = this._modelRows(p.models || {});
+      if (models) list.append(models);
       const c = p.checked || {};
       box.append(H("div", { className: "hf-hint", style: { margin: "4px 0" }, text: `Checked ${c.nodes ?? "?"} nodes, ${c.models ?? "?"} models, ${c.inputs ?? "?"} input files${p.profile ? ` against the “${p.profile}” runtime` : ""}.` }), list);
     }
@@ -244,9 +268,76 @@ export class Panel {
     }
   }
 
+  /** Owner 2026-11-23: the Workflow Check shows each model's state (in the cloud library / uploading / downloading
+   *  from <source> / no source found) and, for a missing one, the fix: pick a listed file or paste a download link. */
+  _modelRows(m) {
+    const H = this.H;
+    const rows = [];
+    const row = (x, state, tone) => rows.push(H("div", { className: `hf-item hf-tone-${tone}` },
+      H("span", { className: "hf-grow", title: `${x.folder || ""}/${x.name}`, text: `${x.folder ? `${x.folder}/` : ""}${x.name}` }),
+      H("span", { text: state })));
+    const size = (x) => (x.size ? ` (${fmtBytes(x.size)})` : "");
+    for (const x of m.present || []) row(x, "in the cloud library", "neutral");
+    for (const x of m.uploading || []) row(x, "uploading", "active");
+    for (const x of m.uploadable || []) row(x, "on this computer: uploaded first", "neutral");
+    for (const x of m.over_limit || []) row(x, "over the upload limit: asks first", "warning");
+    for (const x of m.downloading || []) row(x, `downloading from ${x.source?.label || "its source"}`, "active");
+    for (const x of m.fetchable || []) row(x, `downloads from ${x.source?.label || "its source"}${size(x)}${x.ask ? ", asks first" : ""}`, x.ask ? "warning" : "neutral");
+    const MISSING = { none: "no download source found", ambiguous: "several files with this name: pick one",
+      gated: "needs a Hugging Face login", unavailable: "sources could not be searched", blocked: "downloads are turned off" };
+    for (const x of m.missing || []) {
+      row(x, MISSING[x.source_status] || "not found", "danger");
+      (x.candidates || []).forEach((c, i) => rows.push(H("div", { className: "hf-item" },
+        H("span", { className: "hf-grow", style: { whiteSpace: "normal" }, text: `${i + 1}. ${c.label}${c.size ? ` (${fmtBytes(c.size)})` : ""}${c.verified ? ", SHA-256 known" : ""}` }),
+        H("button", { className: "hf-btn", type: "button", text: "Use this file", onclick: () => this.ctl.fetchOne(x, { choice: i }) }))));
+      if (x.source_status === "blocked") continue;
+      const input = H("input", { className: "hf-input", type: "url", placeholder: "Paste a download link (Hugging Face, Civitai or direct)…",
+        attrs: { "aria-label": `Download link for ${x.name}` } });
+      rows.push(H("div", { className: "hf-row" }, H("div", { className: "hf-grow" }, input),
+        H("button", { className: "hf-btn", type: "button", text: "Download", onclick: () => this.ctl.fetchOne(x, { url: input.value }) })));
+    }
+    for (const x of m.auto_download || []) row(x, "the node downloads it in the cloud", "neutral");
+    if ((m.fetchable || []).length) {
+      rows.push(H("div", { className: "hf-row" }, H("button", { className: "hf-btn", type: "button",
+        text: `Download ${m.fetchable.length} missing model(s) now`, onclick: () => this.ctl.downloadFetchable(m.fetchable) })));
+    }
+    if (!rows.length) return null;
+    return H("div", { attrs: { role: "group", "aria-label": "Models" } }, H("div", { className: "hf-hint", style: { margin: "6px 0 2px" }, text: "Models" }), ...rows);
+  }
+
   _renderConsent(st) {
     const H = this.H;
     clear(this.consentBox);
+    if (st.fetch) {
+      const files = st.fetch.files || [];
+      const total = files.reduce((s, f) => s + (f.size || 0), 0);
+      const got = files.reduce((s, f) => s + (f.status === "done" ? (f.size || 0) : (f.received || 0)), 0);
+      const cur = files.find((f) => f.status === "downloading") || files.find((f) => f.status === "queued");
+      this.consentBox.append(H("div", { className: "hf-consent" },
+        H("div", { text: `Downloading models: ${fmtBytes(got)} of ${total ? fmtBytes(total) : "unknown size"}` }),
+        cur ? H("div", { className: "hf-hint", text: `${cur.name} from ${cur.label}` }) : null,
+        H("div", { className: `hf-bar${total ? "" : " hf-indeterminate"}` }, H("div", { style: { width: `${total ? Math.floor((got / total) * 100) : 0}%` } })),
+        H("div", {}, H("button", { className: "hf-btn hf-danger", type: "button", text: "Cancel download", onclick: () => this.ctl.cancelFetch() }))));
+      return;
+    }
+    if (st.fetchConsent) {
+      const c = st.fetchConsent;
+      const total = c.items.reduce((s, m) => s + (m.size || 0), 0);
+      const list = H("div", { className: "hf-list" });
+      for (const m of c.items) {
+        list.append(H("div", { className: `hf-item${m.ask ? " hf-tone-warning" : ""}` },
+          H("span", { className: "hf-grow", style: { whiteSpace: "normal" }, title: m.message || "", text: `${m.folder}/${m.name} from ${m.source?.label || "its source"}` }),
+          H("span", { text: m.size ? fmtBytes(m.size) : "size unknown" })));
+        if (m.ask && m.message) list.append(H("div", { className: "hf-hint", style: { whiteSpace: "normal" }, text: m.message }));
+      }
+      const btns = H("div", { className: "hf-row" });
+      if (c.again) btns.append(H("button", { className: "hf-btn hf-primary", type: "button", text: `Download ${c.items.length}${total ? ` (${fmtBytes(total)})` : ""}, then render`, onclick: () => this.ctl.consentFetch(true) }));
+      btns.append(H("button", { className: `hf-btn${c.again ? "" : " hf-primary"}`, type: "button", text: "Download only", onclick: () => this.ctl.consentFetch(false) }),
+        H("button", { className: "hf-btn", type: "button", text: "Cancel", onclick: () => this.ctl.fetchCancel() }));
+      this.consentBox.append(H("div", { className: "hf-consent", attrs: { role: "group", "aria-label": "Models to download" } },
+        H("strong", { text: "These models are missing here and in the cloud library: download them?" }), list, btns));
+      return;
+    }
     if (st.upload) {
       const files = st.upload.files || [];
       const total = files.reduce((s, f) => s + (f.size || 0), 0);

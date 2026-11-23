@@ -138,6 +138,13 @@ export function createApi(fetchImpl) {
     getModelUpload: (id) => get(`/halofuse/models/upload/${enc(id)}`),
     listModelUploads: () => get("/halofuse/models/uploads"),
     cancelModelUpload: (id) => post(`/halofuse/models/upload/${enc(id)}/cancel`),
+    /** Download missing models from their public source: [{folder, name, url?, choice?}] (owner 2026-11-23). */
+    startModelFetch: (files) => post("/halofuse/models/fetch", { files }),
+    getModelFetch: (id) => get(`/halofuse/models/fetch/${enc(id)}`),
+    listModelFetches: () => get("/halofuse/models/fetches"),
+    cancelModelFetch: (id) => post(`/halofuse/models/fetch/${enc(id)}/cancel`),
+    saveHfToken: (token) => post("/halofuse/models/hf_token", { token }),
+    clearHfToken: () => call("DELETE", "/halofuse/models/hf_token"),
     listPreviews: (id, since = 0, limit = 200) => get(`${J(id)}/previews${query({ since, limit })}`),
     createQueue: (body) => post("/halofuse/queues", body),
     getQueue: (id) => get(Q(id)),

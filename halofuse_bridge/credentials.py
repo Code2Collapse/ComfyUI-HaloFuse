@@ -13,6 +13,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -27,6 +28,8 @@ _log = logging.getLogger("halofuse_bridge.credentials")
 
 SERVICE = "HaloFuse"
 USERNAME = "account"
+HF_TOKEN_USER = "huggingface_token"
+HF_TOKEN_RE = re.compile(r"^hf_[A-Za-z0-9]{20,120}$")
 SETTINGS_NAME = "halofuse_settings.json"
 FALLBACK_NAME = "credentials.json"
 DEPLOYMENT_NAME = "deployment.json"
@@ -441,6 +444,53 @@ class CredentialStore:
             self._scrub_sources(main_keys=("email", "password"), other_keys=("email", "password"), mark=False)
             self._invalidate()
             return self.status()
+
+    # ---- optional Hugging Face token (gated model repositories, model_fetch; owner 2026-11-23) --------------
+    # Kept in the system keychain only - never in a file, a log or a response; HF_TOKEN in the environment wins.
+
+    def hf_token(self) -> str | None:
+        token = str(self._environ().get("HF_TOKEN") or "").strip()
+        if not token:
+            backend = self._secure_backend()
+            try:
+                token = (backend.get_password(self._service, HF_TOKEN_USER) or "") if backend is not None else ""
+            except Exception:  # noqa: BLE001 - unreadable keychain = no token
+                token = ""
+        if token:
+            from .provider import redact
+
+            redact.register_secret(token, "token")
+        return token or None
+
+    def hf_token_status(self) -> dict:
+        source = "environment" if str(self._environ().get("HF_TOKEN") or "").strip() else \
+            "keychain" if self.hf_token() else "none"
+        return {"hf_token_set": source != "none", "hf_token_source": source}
+
+    def save_hf_token(self, token) -> dict:
+        if not isinstance(token, str) or not HF_TOKEN_RE.match(token.strip()):
+            raise CredentialError("invalid_input")
+        token = token.strip()
+        backend = self._secure_backend()
+        if backend is None:
+            raise CredentialError("no_secure_store")
+        try:
+            backend.set_password(self._service, HF_TOKEN_USER, token)
+            back = backend.get_password(self._service, HF_TOKEN_USER)
+        except Exception:  # noqa: BLE001
+            raise CredentialError("no_secure_store") from None
+        if back != token:
+            raise CredentialError("no_secure_store")
+        return self.hf_token_status()
+
+    def clear_hf_token(self) -> dict:
+        backend = self._secure_backend()
+        if backend is not None:
+            try:
+                backend.delete_password(self._service, HF_TOKEN_USER)
+            except Exception:  # noqa: BLE001 - "already clear" is success
+                pass
+        return self.hf_token_status()
 
     # ---- migration (CREDENTIALS_DESIGN s4) --------------------------------------------------------
 

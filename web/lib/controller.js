@@ -4,6 +4,7 @@
 
 import { advanceSeeds, seedSummary } from "./seeds.js";
 import { isTerminal } from "./job_view.js";
+import { modelLinks } from "./model_links.js";
 
 export const PREVIEW_MODES = [
   ["final", "Final result", "Shows the outputs here when the render is done."],
@@ -36,7 +37,7 @@ export class Controller {
     this.state = {
       settings: null, skus: [], skuError: null, instanceType: "", rate: null, rateLoading: false,
       previewMode: "final", previewMethod: "latent2rgb", previewMethods: null, renderRepeats: 1, busy: false, message: null,
-      preflight: null, consent: null, draft: null, upload: null,
+      preflight: null, consent: null, draft: null, upload: null, fetch: null, fetchConsent: null,
       queueDraft: [], recent: [], recentError: null,
     };
     this._subs = new Set();
@@ -140,8 +141,8 @@ export class Controller {
     if (this.state.settings?.runtime_image !== runtime) return;   // refused (e.g. locked by the administrator)
     this._set({ busy: true });
     try {
-      const { workflow } = await this._capture();
-      const check = await this._preflight([workflow]);
+      const { workflow, links } = await this._capture();
+      const check = await this._preflight([workflow], links);
       this.say(check?.ok ? "Workflow check passed on the new runtime. Nothing was started."
         : "Checked again on the new runtime. Nothing was started.", check?.ok ? "success" : "warning");
     } catch (err) { this.say(err.message, "danger"); } finally { this._set({ busy: false }); }
@@ -208,24 +209,25 @@ export class Controller {
   async _capture() {
     const prompt = await this.comfy.graphToPrompt();
     const summary = seedSummary(advanceSeeds(this.comfy.graphNodes()));
-    return { workflow: prompt.output, summary };
+    // model download links the editor graph carries (official templates): the bridge uses them first
+    return { workflow: prompt.output, summary, links: modelLinks(prompt.workflow) };
   }
 
   async render() {
     if (this.state.busy) return;
     if (!this.state.instanceType && this.state.previewMode !== "check") { this.say("Pick a GPU first.", "warning"); return; }
-    this._set({ busy: true, preflight: null, consent: null, draft: null });
+    this._set({ busy: true, preflight: null, consent: null, fetchConsent: null, draft: null });
     try {
-      const { workflow, summary } = await this._capture();
+      const { workflow, summary, links } = await this._capture();
       if (summary) this.say(summary, "neutral");
       const mode = this.state.previewMode;
-      const check = await this._preflight([workflow]);
+      const check = await this._preflight([workflow], links);
       if (mode === "check") {
         this.say(check ? (check.ok ? "Workflow check passed. Nothing was started." : "Workflow check found problems. Nothing was started.")
           : "Workflow check is not available on this bridge version.", check?.ok ? "success" : "warning");
         return;
       }
-      if (!this._gate(check, () => this._submit(workflow))) return;
+      if (!this._gate(check, () => this._submit(workflow), () => this.render())) return;
       await this._submit(workflow);
     } catch (err) {
       this._failed(err);
@@ -243,10 +245,11 @@ export class Controller {
   }
 
   /** Returns the preflight result, or null when the route does not exist yet. */
-  async _preflight(workflows) {
+  async _preflight(workflows, links) {
     this.say("Checking the workflow…", "active");
     try {
       const body = { workflows, instance_type: this.state.instanceType || undefined };
+      if (links?.length) body.model_links = links;
       if (this.state.previewMode === "live") body.preview_method = this.effectivePreviewMethod;
       const r = await this.api.preflight(body);
       this._set({ preflight: r });
@@ -257,13 +260,28 @@ export class Controller {
     }
   }
 
-  /** Block on errors; ask consent for uploads. Returns true when submit may continue now. */
-  _gate(check, proceed) {
+  /** Block on errors; download missing models, then ask consent for uploads. Returns true when submit may continue
+   *  now. `again` re-runs the whole action (check, upload, render) once the downloads have landed on this computer. */
+  _gate(check, proceed, again) {
     if (!check) return true;
     if (check.blocking?.length) { this.say(`${check.blocking.length} problem(s) must be fixed first. Nothing was started.`, "danger"); return false; }
     const m = check.models || {};
     if (m.missing?.length) { this.say(`${m.missing.length} model(s) were not found locally or in the cloud library. Nothing was started.`, "danger"); return false; }
     if (m.uploading?.length) { this.say("A model upload is still running. Render again when it has finished.", "warning"); return false; }
+    if (m.downloading?.length) { this.say("A model download is still running. Render again when it has finished.", "warning"); return false; }
+    if (m.fetchable?.length) {
+      if (this._afterFetch) {   // downloaded, yet still not here: never loop
+        this.say("The downloaded models were not found afterwards. Check again; the console has the details.", "danger");
+        return false;
+      }
+      // Owner 2026-11-23: missing models are downloaded from their source, then uploaded, then the render starts.
+      const ask = m.fetchable.some((f) => f.ask) || this.state.settings?.auto_download_models === false;
+      this._set({ fetchConsent: { items: m.fetchable, again: again || null } });
+      if (ask) { this.say("Some models need your decision before they are downloaded.", "warning"); return false; }
+      this.say(`Downloading ${m.fetchable.length} missing model(s), then uploading and rendering…`, "active");
+      this.consentFetch(true);
+      return false;
+    }
     if (m.uploadable?.length && !m.over_limit?.length && this.state.settings?.auto_upload_models !== false) {
       // Owner 2026-11-23: upload what the cloud library lacks (same folder layout as this computer), then render.
       this._set({ consent: { uploadable: m.uploadable, overLimit: [], proceed } });
@@ -343,6 +361,93 @@ export class Controller {
     };
     this.say("Uploading models to the cloud library…", "active");
     tick();
+  }
+
+  // ---------- missing models: download from their public source ----------
+
+  async consentFetch(thenAgain) {
+    const c = this.state.fetchConsent;
+    if (!c) return;
+    this._set({ fetchConsent: null, busy: true });
+    try {
+      const res = await this.api.startModelFetch(c.items.map((m) => ({ folder: m.folder, name: m.name })));
+      this._watchFetch(res.fetch_id, thenAgain ? c.again : null);
+    } catch (err) { this.say(err.message, "danger"); this._set({ busy: false }); }
+  }
+
+  /** From the Workflow Check (nothing is rendered): download the models it found sources for, then check again. */
+  downloadFetchable(items) {
+    if (this.state.busy || !items?.length) return;
+    this._set({ fetchConsent: { items, again: () => this.recheck() } });
+    this.consentFetch(true);
+  }
+
+  fetchCancel() {
+    this._set({ fetchConsent: null });
+    this.say("Cancelled. Nothing was downloaded or started.", "neutral");
+  }
+
+  /** One model from the Workflow Check: a pasted download link (`url`) or one of the listed candidates (`choice`). */
+  async fetchOne(item, { url, choice } = {}) {
+    if (this.state.busy) return;
+    const file = { folder: item.folder, name: item.name };
+    if (url !== undefined) file.url = String(url || "").trim();
+    if (choice !== undefined) file.choice = choice;
+    if (file.url === "") { this.say("Paste a download link first.", "warning"); return; }
+    this._set({ busy: true });
+    try {
+      const res = await this.api.startModelFetch([file]);
+      this._watchFetch(res.fetch_id, () => this.recheck());
+    } catch (err) { this.say(err.message, "danger"); this._set({ busy: false }); }
+  }
+
+  /** Check the current graph again (nothing is started). */
+  async recheck() {
+    this._set({ busy: true });
+    try {
+      const { workflow, links } = await this._capture();
+      const check = await this._preflight([workflow], links);
+      this.say(check?.ok ? "Checked again: no problems left." : "Checked again.", check?.ok ? "success" : "warning");
+    } catch (err) { this.say(err.message, "danger"); } finally { this._set({ busy: false }); }
+  }
+
+  _watchFetch(id, then) {
+    const tick = async () => {
+      let st;
+      try { st = await this.api.getModelFetch(id); } catch { this.timers.setTimeout(tick, 4000); return; }
+      this._set({ fetch: st });
+      if (st.status === "done") {
+        this._set({ fetch: null, busy: false });
+        this.say("Models downloaded.", "success");
+        if (then) {
+          this._afterFetch = true;
+          try { await then(); } catch (err) { this._failed(err); } finally { this._afterFetch = false; }
+        }
+      } else if (st.status === "failed" || st.status === "cancelled") {
+        this._set({ fetch: null, busy: false });
+        this.say(st.status === "failed" ? `Model download failed: ${st.error || "see the console"}` : "Model download cancelled; it resumes next time.", "danger");
+      } else this.timers.setTimeout(tick, 1500);
+    };
+    this.say("Downloading models to this computer…", "active");
+    tick();
+  }
+
+  async cancelFetch() {
+    const id = this.state.fetch?.fetch_id;
+    if (id) { try { await this.api.cancelModelFetch(id); } catch { /* reported by the poll */ } }
+  }
+
+  async saveHfToken(token) {
+    try {
+      await this.api.saveHfToken(String(token || "").trim());
+      await this.loadSettings();
+      this.say("Hugging Face token saved in this computer's keychain.", "success");
+    } catch (err) { this.say(err.message, "danger"); }
+  }
+
+  async clearHfToken() {
+    try { await this.api.clearHfToken(); await this.loadSettings(); this.say("Hugging Face token removed.", "neutral"); }
+    catch (err) { this.say(err.message, "danger"); }
   }
 
   async cancelUpload() {

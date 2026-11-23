@@ -331,7 +331,7 @@ def check_models(workflows: list[dict], settings: dict | None = None, *, node_de
 
 def _empty_result() -> dict:
     return {"present": [], "uploadable": [], "over_limit": [], "missing": [], "uploading": [], "invalid": [],
-            "unverified": [], "auto_download": []}
+            "unverified": [], "auto_download": [], "fetchable": [], "downloading": []}
 
 
 def over_limit_message(size: int, guard: int) -> str:
@@ -345,8 +345,12 @@ def over_limit_message(size: int, guard: int) -> str:
             "fp8 file).")
 
 
-def classify_models(refs: list, settings: dict, be) -> dict:
+def classify_models(refs: list, settings: dict, be, *, find_sources: bool = False, links=()) -> dict:
     """Classify discovered model references against the library through backend *be* (C-1 library_stat).
+
+    With *find_sources* (the Workflow Check), a model that is neither here nor in the library is looked up at its
+    public download sources (model_fetch.resolve_missing, with the workflow's *links*): it moves to "fetchable" (it is
+    downloaded here, then uploaded) or "downloading", or stays "missing" with a message naming the fix.
 
     Returns {"present", "uploadable", "over_limit", "missing", "uploading", "invalid", "unverified"} — lists of
     dicts the UI renders directly. Present = name exists at the expected remote path with a matching size (name
@@ -421,6 +425,10 @@ def classify_models(refs: list, settings: dict, be) -> dict:
             # Report the cloud size too, so the panel can show both and offer to render with the existing cloud copy.
             item["remote_size"] = remote_size
             result["uploadable"].append(item)
+    if find_sources and result["missing"]:
+        from . import model_fetch
+
+        model_fetch.resolve_missing(result, settings, links)
     return result
 
 

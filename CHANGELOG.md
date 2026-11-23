@@ -2,6 +2,18 @@
 
 ## Unreleased — 2026-11-23
 
+- **Missing models are fetched automatically.** A model that is neither on this computer nor in the cloud model library
+  no longer just blocks the render: the Workflow Check looks for a public download, in this order - the workflow's own
+  links (official templates carry them), the ComfyUI-Manager model list, then Hugging Face by exact file name (known
+  organisations first; when different files share the name, they are listed for you to pick from, never guessed).
+  Civitai is not searched; a pasted Civitai link works. The file is downloaded into ComfyUI's model folder (same
+  sub-folders as in the workflow; resumes after an interruption; free disk space, size and SHA-256 checked), uploaded
+  to the cloud model library, and the render starts. Each model shows its state in the check (in the cloud library /
+  uploading / downloading from <source> / no source found), and a missing one offers *Paste a download link*. New
+  settings under Advanced: *Download missing models automatically* (on) and *Ask before downloading models larger
+  than* (20 GB); models of unknown size or found only in a personal upload also ask first. The C2C *Never download
+  models* setting (or `C2C_NO_DOWNLOADS=1`) turns all of this off. Gated Hugging Face models need an optional token,
+  kept in this computer's keychain. Models inside an H2Vault vault are left to the vault.
 - **My custom nodes.** A new panel section takes extra custom node packs for your own jobs, one per line
   (`owner/repo`, `owner/repo@tag`, a GitHub address or a Comfy Registry id). *Check and save* pins each one to an exact
   version and shows its licence; the list is installed at the start of every job on a HaloFuse image whose runner

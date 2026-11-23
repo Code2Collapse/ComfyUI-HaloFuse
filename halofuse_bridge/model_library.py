@@ -117,6 +117,17 @@ def hash_and_cache(path: Path, *, cache_path: Path | None = None, cancel=None) -
     return value
 
 
+def remember_hash(path: Path, sha256: str, *, cache_path: Path | None = None) -> None:
+    """Cache a SHA-256 computed elsewhere (a verified model download), so the upload does not hash the file again."""
+    st = Path(path).stat()
+    cache_path = cache_path or _settings_file(HASH_CACHE_FILE)
+    with _file_lock:
+        cache = _read_json(cache_path, {})
+        cache = cache if isinstance(cache, dict) else {}
+        cache[str(path)] = {"size": st.st_size, "mtime_ns": st.st_mtime_ns, "sha256": sha256}
+        _write_json(cache_path, cache)
+
+
 def record_upload(remote_path: str, size: int, sha256: str, *, manifest_path: Path | None = None) -> None:
     manifest_path = manifest_path or _settings_file(MANIFEST_FILE)
     with _file_lock:
