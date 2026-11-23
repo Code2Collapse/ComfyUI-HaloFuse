@@ -142,6 +142,34 @@ def _validate_extra_requirements(extras) -> list[str]:
     return errs
 
 
+def _validate_submodules(subs) -> list[str]:
+    """`install.submodules`: git submodules an archive install does not contain (GitHub archives and registry zips
+    leave the gitlink empty). Each is fetched at an exact commit into the pack folder (install_nodes.py).
+    {path, repo, commit, reason, content_sha256?}."""
+    if not isinstance(subs, list):
+        return ["install.submodules must be a list"]
+    errs = []
+    for i, sm in enumerate(subs):
+        where = f"install.submodules[{i}]"
+        if not isinstance(sm, dict):
+            errs.append(f"{where} must be an object")
+            continue
+        path = str(sm.get("path") or "")
+        parts = path.split("/")
+        if (not path or path.startswith("/") or "\\" in path or re.match(r"^[A-Za-z]:", path)
+                or any(part in ("", ".", "..") for part in parts)):
+            errs.append(f"{where}: path must be a relative POSIX path inside the pack (no '.', '..' or empty parts)")
+        if not REPO_RE.match(str(sm.get("repo") or "")):
+            errs.append(f"{where}: repo must be owner/name")
+        if not COMMIT_RE.match(str(sm.get("commit") or "")):
+            errs.append(f"{where}: commit must be 40 hex")
+        if sm.get("content_sha256") is not None and not SHA256_RE.match(str(sm["content_sha256"])):
+            errs.append(f"{where}: content_sha256 must be 64 hex or absent")
+        if len(str(sm.get("reason") or "").strip()) < 10:
+            errs.append(f"{where}: a reason (why the archive lacks it) is required")
+    return errs
+
+
 class CatalogError(ValueError):
     """The catalog or profile file is invalid. The message lists every problem."""
 
@@ -228,6 +256,11 @@ def validate_entry(entry: dict) -> list[str]:
             err(msg)
     if isinstance(inst, dict) and "extra_requirements" in inst:
         for msg in _validate_extra_requirements(inst["extra_requirements"]):
+            err(msg)
+    if isinstance(inst, dict) and "submodules" in inst:
+        if method not in ("registry", "git-archive"):
+            err("install.submodules needs install.method registry or git-archive")
+        for msg in _validate_submodules(inst["submodules"]):
             err(msg)
 
     for key in ("requirements", "system_deps", "model_download"):
@@ -346,6 +379,18 @@ def validate(catalog: dict, profiles: dict) -> None:
         for ref in d.get("include_members_of") or []:
             if ref == name or (defs.get(ref) or {}).get("members") is None:
                 errs.append(f"profile {name}: include_members_of {ref!r} must name another profile with members")
+        if "try_unknown" in d:
+            tries = d["try_unknown"]
+            if not isinstance(tries, list) or not all(isinstance(r, str) for r in tries):
+                errs.append(f"profile {name}: try_unknown must be a list of owner/repo strings")
+            else:
+                if d.get("members") is not None:
+                    errs.append(f"profile {name}: try_unknown is not allowed on a members profile")
+                if d.get("target") != "cloud":
+                    errs.append(f"profile {name}: try_unknown needs target cloud")
+                for r in tries:
+                    if r not in by_repo:
+                        errs.append(f"profile {name}: try_unknown {r!r} is not in the catalog")
     policy = profiles.get("licence_policy") or {}
     for cls in LICENCE_CLASSES:
         if policy.get(cls) not in POLICY_ACTIONS:
@@ -381,6 +426,8 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
         (catalog pins, that profile's licence exemption, flagged), so an
         image that replaces another never loses one of its packs.
       * otherwise members are the entries listing the profile in `profiles`.
+      * `try_unknown` (trial profiles) admits the listed entries whose compatibility is "unknown" for a build
+        test (flagged); compatibility false still excludes; licence and conflicts apply as usual.
       * cloud profiles keep only cloud, compatible entries; the licence policy
         then includes, flags or excludes; conflicts exclude the later entry.
       * local profiles (frontend-extensions) list local entries; never imaged.
@@ -411,6 +458,7 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
         candidates = [e for e in catalog["entries"] if name in e["profiles"]]
 
     taken = {}
+    tries = set(d.get("try_unknown") or [])
     # `include_members_of`: the packs an earlier image already ships stay in this one (at the catalog's current
     # pins), under the same licence exemption as that profile, so switching images never loses a node.
     for ref in d.get("include_members_of") or []:
@@ -441,7 +489,8 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
         if e["install"]["method"] == "base-image":
             continue  # ComfyUI core comes with the base image
         comp = e["compatibility"]["compatible"]
-        if comp is not True:
+        trial = comp == "unknown" and e["repo"] in tries
+        if comp is not True and not trial:
             res.excluded.append((e, f"compatibility {comp}: {e['compatibility'].get('notes', '')}".strip()))
             continue
         action = _licence_action(e, policy)
@@ -455,6 +504,8 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
             continue
         res.installed.append(e)
         taken[e["repo"]] = e
+        if trial:
+            res.flagged.append((e, "trial: compatibility unknown, installed for a build test"))
         if action == "include-flagged":
             res.flagged.append((e, f"licence class {e['license']['class']} ({e['license'].get('spdx')})"))
     return res

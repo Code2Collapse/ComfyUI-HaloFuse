@@ -331,6 +331,29 @@ def _load(catalog_dir) -> tuple[dict, dict]:
     return catalog, profiles
 
 
+def _add_submodules(staged: Path, subs: list, cache, opener) -> list:
+    """Fetch catalog `install.submodules` into a staged pack (after its own content hash: the pack pin stays the
+    upstream tree). Each submodule is a GitHub archive at an exact commit, optionally hash-checked."""
+    out = []
+    for sm in subs:
+        target = staged.joinpath(*PurePosixPath(sm["path"]).parts)
+        if target.exists():
+            if not target.is_dir() or any(target.iterdir()):
+                raise InstallError(f"submodule path {sm['path']} already has files")
+            target.rmdir()
+        fake = {"repo": sm["repo"], "url": f"https://github.com/{sm['repo']}", "install": {"method": "git-archive"},
+                "pin": {"commit": sm["commit"]}}
+        log(f"  submodule {sm['path']} <- {sm['repo']} @ {sm['commit']}")
+        extract_zip(_archive(fake, cache, opener), target)
+        digest = content_hash(target)
+        expected = sm.get("content_sha256")
+        if expected and digest != expected:
+            raise InstallError(f"submodule {sm['path']}: content hash mismatch (expected {expected[:12]}, got {digest[:12]})")
+        out.append({"path": sm["path"], "repo": sm["repo"], "commit": sm["commit"], "content_sha256": digest,
+                    "hash_verified": bool(expected)})
+    return out
+
+
 def fetch(catalog_dir, profile: str, dest: Path, cache: Path | None = None, opener=urlopen_bytes,
           require_hashes: bool = False) -> dict:
     catalog, profiles = _load(catalog_dir)
@@ -365,6 +388,9 @@ def fetch(catalog_dir, profile: str, dest: Path, cache: Path | None = None, open
                     raise InstallError(f"content hash mismatch (expected {expected[:12]}, got {digest[:12]})")
                 rec["content_sha256"] = digest
                 rec["hash_verified"] = bool(expected)
+                subs = entry["install"].get("submodules") or []
+                if subs:
+                    rec["submodules"] = _add_submodules(staged, subs, cache, opener)
                 shutil.move(str(staged), str(dest / folder))
         except Exception as exc:  # noqa: BLE001 - recorded per pack; strict profiles re-raise
             rec["status"] = "failed"
@@ -478,12 +504,18 @@ def install_deps(catalog_dir, profile: str, custom_nodes: Path, report: dict, pi
         if rec["status"] != "fetched":
             continue
         req = custom_nodes / rec["folder"] / "requirements.txt"
+        entry = None if rec.get("extra") else by_repo.get(rec["repo"])
         if not req.is_file():
-            rec["status"] = "installed"
-            continue
+            # a pack without requirements.txt (its install.py, which archive installs never run, names the packages):
+            # catalog `extra_requirements` still apply in non-strict profiles, from an empty upstream list
+            if res.strict or not ((entry or {}).get("install") or {}).get("extra_requirements"):
+                rec["status"] = "installed"
+                continue
+            req = work / rec["folder"] / "requirements.upstream-none.txt"
+            req.parent.mkdir(parents=True, exist_ok=True)
+            req.write_text("", encoding="utf-8")
         frozen = torch_pins if res.strict else sorted(set(_freeze(pip)) | set(torch_pins))
         constraints.write_text("\n".join(frozen) + "\n")
-        entry = None if rec.get("extra") else by_repo.get(rec["repo"])
         req = _requirements_for(rec, req, entry, res.strict, work)
         argv = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "--no-input",
                 "--progress-bar", "off", "-r", str(req), "-c", str(constraints)]

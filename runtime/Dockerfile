@@ -81,7 +81,11 @@ COPY --from=fetch /build/install_report.json /etc/halofuse/install_report.json
 
 # Node dependencies. torch/torchvision/torchaudio stay at the base build. Strict profiles (default) fail on any
 # error; other profiles isolate a failing pack (moved to custom_nodes_disabled/, marked in the install report).
+# The base image ships gcc/g++, cmake, ninja and python3.13-devel, so source-only requirements compile here.
+# CMAKE_ARGS only affects CMake-built sdists (llama-cpp-python): a portable x86-64 build (AVX2/FMA/F16C) instead of
+# -march=native of the CI machine, which could crash on a cloud host with a different CPU.
 RUN --mount=type=cache,id=halofuse-pip,target=/root/.cache/pip \
+    CMAKE_ARGS="-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON" \
     python3.13 /opt/halofuse/scripts/install_nodes.py deps \
       --catalog-dir /opt/halofuse/catalog --profile "$PROFILE" \
       --custom-nodes "$COMFYUI_DIR/custom_nodes" --report /etc/halofuse/install_report.json
@@ -196,7 +200,9 @@ PY
 RUN --mount=type=cache,id=halofuse-dnf,target=/var/cache/dnf,sharing=locked \
     if [ "$PROFILE" = "default" ]; then echo "extra system packages: none (default profile)"; \
     else dnf install -y --setopt=install_weak_deps=False portaudio && rpm -q portaudio \
-      && python3.13 -c "import ctypes.util, sys; sys.exit(0 if ctypes.util.find_library('portaudio') else 'portaudio not found by ctypes')"; fi
+      && python3.13 -c "import ctypes.util, sys; sys.exit(0 if ctypes.util.find_library('portaudio') else 'portaudio not found by ctypes')" \
+      && { { dnf install -y --setopt=install_weak_deps=False sox && rpm -q sox && command -v sox; } \
+           || echo "TRIAL sox: not installable from the enabled repositories"; }; fi
 
 # Optional attention backend (D2). Only one prebuilt wheel fits this base (torch 2.13 / CUDA 13 / Python 3.13):
 # SageAttention 1.0.6, a pure-Python Triton implementation (Apache-2.0 upstream), hash-pinned. SageAttention 2.x

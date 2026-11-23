@@ -3987,7 +3987,16 @@
    "install": {
     "method": "registry",
     "registry_id": "comfyui_ultimatesdupscale",
-    "folder": "comfyui_ultimatesdupscale"
+    "folder": "comfyui_ultimatesdupscale",
+    "submodules": [
+     {
+      "path": "repositories/ultimate_sd_upscale",
+      "repo": "Coyote-A/ultimate-upscale-for-automatic1111",
+      "commit": "2322caa480535b1011a1f9c18126d85ea444f146",
+      "content_sha256": "27fe267e71342e3dd7200dffbc0238e35d37336f4e9a8e285a6a690b8d543d5f",
+      "reason": "the pack's .gitmodules submodule (gitlink unchanged since 2024-05-07, 233f8b8); the registry zip leaves repositories/ultimate_sd_upscale empty and __init__.py would otherwise download master at every start"
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -4986,7 +4995,15 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI-RMBG",
-    "archive": "https://github.com/1038lab/ComfyUI-RMBG/archive/<commit>.zip"
+    "archive": "https://github.com/1038lab/ComfyUI-RMBG/archive/<commit>.zip",
+    "requirement_overrides": [
+     {
+      "name": "protobuf",
+      "upstream": "protobuf>=3.20.2,<6.0.0",
+      "use": "protobuf>=3.20.2",
+      "reason": "the image already runs protobuf 7 for onnx and transformers; the <6 cap would refuse the whole pack"
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -5322,7 +5339,13 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI-Frame-Interpolation",
-    "archive": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation/archive/<commit>.zip"
+    "archive": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation/archive/<commit>.zip",
+    "extra_requirements": [
+     {
+      "requirement": "cupy-cuda13x",
+      "reason": "config.yaml selects ops_backend cupy and vfi_models/ops/cupy_ops imports cupy; install.py installs cupy (archive installs never run it); cupy-cuda13x matches the image's CUDA 13"
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -5562,7 +5585,15 @@
    "install": {
     "method": "git-archive",
     "folder": "VibeVoice-ComfyUI",
-    "archive": "https://github.com/Enemyx-net/VibeVoice-ComfyUI/archive/<commit>.zip"
+    "archive": "https://github.com/Enemyx-net/VibeVoice-ComfyUI/archive/<commit>.zip",
+    "requirement_overrides": [
+     {
+      "name": "transformers",
+      "upstream": "transformers>=4.51.3,<5.0.0",
+      "use": "transformers>=4.51.3",
+      "reason": "trial: the image runs transformers 5.16; the <5 cap would refuse the whole pack (runtime under 5.x NOT VERIFIED)"
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -6204,7 +6235,13 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI_pruna",
-    "archive": "https://github.com/PrunaAI/ComfyUI_pruna/archive/<commit>.zip"
+    "archive": "https://github.com/PrunaAI/ComfyUI_pruna/archive/<commit>.zip",
+    "extra_requirements": [
+     {
+      "requirement": "pruna",
+      "reason": "the nodes import pruna (cache_nodes.py, compile_node.py); install.py installs it and archive installs never run it"
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -6276,7 +6313,21 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI-PuLID-Flux2",
-    "archive": "https://github.com/iFayens/ComfyUI-PuLID-Flux2/archive/<commit>.zip"
+    "archive": "https://github.com/iFayens/ComfyUI-PuLID-Flux2/archive/<commit>.zip",
+    "requirement_overrides": [
+     {
+      "name": "numpy",
+      "upstream": "numpy<2.0.0",
+      "use": "numpy",
+      "reason": "the image runs numpy 2.4 and its insightface 1.0.1 / open_clip 3.3 are built for numpy 2; the cap targets old wheels"
+     },
+     {
+      "name": "ml_dtypes",
+      "upstream": "ml_dtypes==0.3.2",
+      "use": "ml_dtypes",
+      "reason": "the pin works around a missing ml_dtypes.float4_e2m1fn in old releases; the image's ml_dtypes 0.6.0 has it"
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -6743,7 +6794,15 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI-Qwen-TTS",
-    "archive": "https://github.com/flybirdxx/ComfyUI-Qwen-TTS/archive/<commit>.zip"
+    "archive": "https://github.com/flybirdxx/ComfyUI-Qwen-TTS/archive/<commit>.zip",
+    "requirement_overrides": [
+     {
+      "name": "onnxruntime-openvino",
+      "upstream": "onnxruntime-openvino",
+      "use": null,
+      "reason": "the pack only calls the generic onnxruntime API (qwen_tts/core/tokenizer_25hz/vq/speech_vq.py InferenceSession), which the image's onnxruntime-gpu provides; onnxruntime-openvino would overwrite the same onnxruntime module"
+     }
+    ]
    },
    "requirements": {
     "python": ">=3.9",
@@ -15394,7 +15453,15 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyI2I",
-    "archive": "https://github.com/ManglerFTW/ComfyI2I/archive/<commit>.zip"
+    "archive": "https://github.com/ManglerFTW/ComfyI2I/archive/<commit>.zip",
+    "requirement_overrides": [
+     {
+      "name": "tensorflow",
+      "upstream": "tensorflow",
+      "use": null,
+      "reason": "no .py file of the pack imports tensorflow (grep at the pinned commit); the line only adds a ~600 MB framework"
+     }
+    ]
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",

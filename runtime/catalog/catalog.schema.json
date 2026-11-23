@@ -46,6 +46,16 @@
               "type": "array",
               "items": {"type": "object", "required": ["requirement", "reason"],
                         "properties": {"requirement": {"type": "string"}, "reason": {"type": "string", "minLength": 10}}}
+            },
+            "submodules": {
+              "description": "Git submodules an archive install lacks: fetched at an exact commit into the pack folder, after the pack's own content hash.",
+              "type": "array",
+              "items": {"type": "object", "required": ["path", "repo", "commit", "reason"],
+                        "properties": {"path": {"type": "string"},
+                                       "repo": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+                                       "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+                                       "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                                       "reason": {"type": "string", "minLength": 10}}}
             }
           }
         },
