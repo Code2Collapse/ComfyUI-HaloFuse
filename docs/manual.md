@@ -111,6 +111,20 @@ library. Windows `\` separators are converted for you. Enter the library folder 
 You can fill the library two ways: let HaloFuse upload models for you before a render (section 8), or use the
 storage tools your HaloFuse administrator provides (best for very large files).
 
+**See what is in it.** Open **Cloud model library** in the panel. HaloFuse lists the library once when you open the
+section (and again when you press **Refresh**), next to the models on this computer:
+
+| Status | Meaning |
+|---|---|
+| In the cloud · checksum verified | the cloud copy matches yours byte for byte (HaloFuse uploaded it and your file is unchanged) |
+| In the cloud · same size | a cloud copy with the same name and size; HaloFuse did not upload it, so only the size is compared |
+| Cloud only | in the library, not on this computer |
+| Only on this computer | a render that uses it will offer to upload it first (section 8) |
+| Differs from your copy | same name, different size: a render would use the cloud copy, not yours |
+
+Use **Find a model** and the filter to narrow the list. Models stored more than once in the library are counted at the
+bottom with the space they take. The list is read-only: deleting library files is not offered.
+
 ## 5. The panel
 
 **Available.** Open the **HaloFuse** tab in ComfyUI's left sidebar.

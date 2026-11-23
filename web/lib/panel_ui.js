@@ -5,6 +5,7 @@
 
 import { bindH, clear } from "./dom.js";
 import { AccountSection } from "./account_ui.js";
+import { LibrarySection } from "./library_ui.js";
 import { PREVIEW_MODES } from "./controller.js";
 import { cancelActions, cancelInfo, costText, deliveryText, isTerminal, progressText, statusInfo } from "./job_view.js";
 import { fmtBytes, fmtLocal, fmtUsd } from "./format.js";
@@ -24,6 +25,7 @@ export class Panel {
     this.version = H("span", { className: "hf-version" });
     this.account = new AccountSection({ doc: this.doc, win: this.win, api: this.api,
       onStatus: (s) => { if (s.credentials_configured && !this.ctl.state.skus.length) this.ctl.loadSkus(); } });
+    this.library = new LibrarySection({ doc: this.doc, api: this.api });
 
     this.skuSel = H("select", { className: "hf-select", id: `hf-sku-${uid}`, onchange: () => this.ctl.setInstanceType(this.skuSel.value) });
     this.rate = H("div", { className: "hf-hint", attrs: { "aria-live": "polite" } });
@@ -76,6 +78,8 @@ export class Panel {
         H("div", { className: "hf-row", style: { marginTop: "8px" } }, H("div", { className: "hf-grow" }, this.recoverInput),
           H("button", { className: "hf-btn", type: "button", text: "Recover outputs", title: "Download an earlier job's outputs and logs into the HaloFuse output folder",
             onclick: () => this.ctl.recover(this.recoverInput.value) }))),
+      H("details", { className: "hf-section", ontoggle: (e) => { if (e.target.open) this.library.ensureLoaded(); } },
+        H("summary", { text: "Cloud model library" }), this.library.el),
       H("details", { className: "hf-section" }, H("summary", { text: "Advanced" }),
         field("Cloud model library path", lib, libHint), field("Machine placement", affinity),
         field("Largest automatic model upload (GB)", guard), saveAdv));
