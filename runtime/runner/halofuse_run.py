@@ -80,6 +80,7 @@ if str(_HERE) not in sys.path:
 
 from hf import classify as hf_classify  # noqa: E402
 from hf import events as hf_events  # noqa: E402
+from hf import housekeeping as hf_housekeeping  # noqa: E402
 from hf import latents as hf_latents  # noqa: E402
 from hf import launch as hf_launch  # noqa: E402
 from hf import outputs as hf_outputs  # noqa: E402
@@ -183,6 +184,7 @@ _DELIVERED = {}
 _PREFETCH_STOP = threading.Event()  # set on exit: a running model copy stops between chunks
 _PREFETCH_THREADS = []  # copy workers, joined briefly on exit so a stopped copy can remove its .part file
 _USER_NODES = None   # hf.user_nodes.UserNodes when the job brought a custom node list
+_HOUSEKEEPER = None  # hf.housekeeping.Housekeeper: cleaning between manifest entries (HF_CLEAN_BETWEEN / _UNLOAD_)
 
 
 class _StartupFailedWithUserNodes(Exception):
@@ -1227,6 +1229,8 @@ def run_manifest(proc, entries):
     any_failed = False
     for idx, (workflow, batch_count, targets) in enumerate(entries, start=1):
         _CTX.check_cancel()
+        if idx > 1 and _HOUSEKEEPER is not None:  # the previous entry's outputs are collected: clean before this one
+            _HOUSEKEEPER.between(idx - 1, total, [e[0] for e in entries[:idx - 1]], [e[0] for e in entries[idx - 1:]])
         _CTX.current_wf = idx
         log(f"workflow {idx}/{total} started")
         _CTX.item(idx, "started")
@@ -1381,6 +1385,19 @@ def _single_targets():
     return _validate_targets(value, "HF_PARTIAL_TARGETS")
 
 
+def _start_housekeeping(announce):
+    """hf/housekeeping.py: cleaning between manifest entries, and pip's cache after the artist's packs install."""
+    global _HOUSEKEEPER
+    _HOUSEKEEPER = hf_housekeeping.Housekeeper(
+        temp_dir=COMFY_TEMP_DIR / "temp", staged_dir=STAGED_INPUT_DIR,
+        post_free=lambda payload: http_json("/free", payload=payload, timeout=10),
+        sample=lambda: _SAMPLER.sample() if _SAMPLER is not None else None,
+        log=log, mark=lambda **fields: _CTX.phase("housekeeping", "mark", **fields))
+    _HOUSEKEEPER.before_user_nodes()
+    if announce:
+        _HOUSEKEEPER.announce()
+
+
 def _start_telemetry():
     global _SAMPLER, _TELEMETRY
     disk = {"output": OUTPUT_DIR}
@@ -1445,7 +1462,9 @@ def _run():
     _CTX.phase("stage_inputs", "start")
     stage_input_directory()
     _CTX.phase("stage_inputs", "end")
+    _start_housekeeping(manifest is not None)
     install_user_nodes()
+    _HOUSEKEEPER.after_user_nodes()
     _RELAY = hf_previews.LiveRelay(
         em, output_dir=OUTPUT_DIR, temp_root=COMFY_TEMP_DIR / "temp",
         previews_enabled=(os.environ.get("HF_PREVIEW") or "off").strip().lower() == "live",
