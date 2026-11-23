@@ -117,6 +117,7 @@ class LiveRelay:
         self._worker = None
         self._output_dropped = 0
         self._seen_outputs = set()
+        self._cached = {}           # prompt_id -> node ids core served from its cache (execution_cached)
 
     # -- registration --------------------------------------------------------------------------------------
     def expect_prompt(self, workflow, **context):
@@ -141,6 +142,20 @@ class LiveRelay:
         node_def = (self._workflow(prompt_id) or {}).get(str(node)) if node is not None else None
         return node_def.get("class_type") if isinstance(node_def, dict) else None
 
+    def _fold(self, prompt_id, node):
+        """A node id as the workflow knows it. A node expansion runs ephemeral inner nodes named
+        `<root>.<call>.<graph>.<inner>` (GraphBuilder prefix; an H2Vault vault is one): they are reported as their
+        workflow node `<root>`, so an inner id, class or title never reaches an event (H2Vault zero-information
+        rule; with H2Vault's own message filter installed the ids already arrive folded)."""
+        if node is None:
+            return None
+        node = str(node)
+        workflow = self._workflow(prompt_id) or {}
+        if node in workflow or "." not in node:
+            return node
+        root = node.split(".", 1)[0]
+        return root if root in workflow else node
+
     def _ctx(self, prompt_id):
         if prompt_id in self._context:
             return dict(self._context[prompt_id])
@@ -154,17 +169,22 @@ class LiveRelay:
             return
         prompt_id = data.get("prompt_id")
         if kind == "executing":
-            self._on_executing(prompt_id, data.get("node"))
+            self._on_executing(prompt_id, self._fold(prompt_id, data.get("node")))
         elif kind == "execution_cached":
-            nodes = [str(n) for n in data.get("nodes") or []]
+            # inner ids of an expansion are never listed (folding them would mark the whole vault cached)
+            nodes = [str(n) for n in data.get("nodes") or [] if "." not in str(n)]
+            with self._lock:
+                self._cached.setdefault(prompt_id, set()).update(nodes)
             if nodes:
                 self.em.emit("node", prompt_id=prompt_id, **self._ctx(prompt_id), node=None, class_type=None,
                              state="cached", stage="other", nodes=nodes)
         elif kind == "progress":
             self._on_progress(prompt_id, data)
         elif kind == "executed":
-            node = data.get("node")
+            node = self._fold(prompt_id, data.get("node"))
             output = data.get("output")
+            if node is not None:
+                self._emit_ui(prompt_id, node, output)
             if isinstance(output, dict) and node is not None:
                 self.collect_temp_outputs(prompt_id, {str(node): output})
                 self._queue_output_thumbs(prompt_id, str(node), output)
@@ -194,7 +214,7 @@ class LiveRelay:
             value, maximum = int(data.get("value")), int(data.get("max"))
         except (TypeError, ValueError):
             return
-        node = None if data.get("node") is None else str(data.get("node"))
+        node = self._fold(prompt_id, data.get("node"))
         now = self.clock()
         key = (prompt_id, node)
         with self._lock:
@@ -252,8 +272,8 @@ class LiveRelay:
             return
         dropped = self.throttle.take_dropped()
         with self._lock:
-            node = meta.get("node_id") or meta.get("display_node_id") or self.current["node"]
             prompt_id = meta.get("prompt_id") or self.current["prompt_id"]
+            node = self._fold(prompt_id, meta.get("node_id") or meta.get("display_node_id") or self.current["node"])
             step = self._steps.get((prompt_id, None if node is None else str(node)))
         ext = _EXT.get(mime, "jpg")
         name = f"latest_{node or 'latent'}.{ext}"
@@ -286,6 +306,43 @@ class LiveRelay:
         self._fallback_sent = True
         missing = m.group(1).replace("\\", "/").rsplit("/", 1)[-1]
         self.em.emit("phase", phase="preview_fallback", state="mark", detail=missing[:120])
+
+    # -- per-node output summary (C-3 `ui`) ----------------------------------------------------------------------
+    def _emit_ui(self, prompt_id, node, output) -> None:
+        """One small event per `executed` message, live mode or not: which output keys the node produced, its file
+        items (names only: never VHS's `fullpath` or side `workflow` file), up to 3 short `texts`, and whether core
+        served it from its cache (core 0.39-0.46 re-send `executed` for cached output nodes). Ids outside the
+        workflow are dropped. H2Vault's merged `h2v_previews` travel with their public labels only."""
+        workflow = self._workflow(prompt_id) or {}
+        if workflow and node not in workflow:
+            return
+        keys, items, texts = {}, [], []
+        for key, value in (output.items() if isinstance(output, dict) else ()):
+            entries = value if isinstance(value, (list, tuple)) else [value]
+            keys[str(key)[:64]] = len(entries)
+            for entry in entries:
+                if key == "h2v_previews" and isinstance(entry, dict):
+                    if entry.get("kind") == "text" and isinstance(entry.get("text"), str):
+                        texts.append(entry["text"])
+                        continue
+                    item = _file_item("h2v_previews", entry.get("file"))
+                    if item is not None:
+                        item = {"key": "h2v_previews", "label": str(entry.get("label") or "")[:40],
+                                "kind": str(entry.get("kind") or "file")[:16],
+                                **{k: v for k, v in item.items() if k != "key"}}
+                elif isinstance(entry, str) and key in ("text", "string"):
+                    texts.append(entry)
+                    continue
+                else:
+                    item = _file_item(str(key)[:64], entry)
+                if item is not None and len(items) < _UI_MAX_ITEMS:
+                    items.append(item)
+        with self._lock:
+            cached = node in self._cached.get(prompt_id, ())
+        fields = {"node": node, "cached": cached, "keys": keys, "items": items}
+        if texts:
+            fields["texts"] = [t[:_UI_MAX_TEXT] for t in texts[:_UI_MAX_TEXTS]]
+        self.em.emit("ui", prompt_id=prompt_id, **self._ctx(prompt_id), **fields)
 
     # -- temp outputs -----------------------------------------------------------------------------------------
     def collect_temp_outputs(self, prompt_id, history_outputs):
@@ -407,6 +464,25 @@ class LiveRelay:
             fields["frames"] = 4
         self.em.emit("preview", prompt_id=prompt_id, **self._ctx(prompt_id),
                      **{k: v for k, v in fields.items() if v is not None})
+
+
+_UI_MAX_ITEMS = 32
+_UI_MAX_TEXTS = 3
+_UI_MAX_TEXT = 500
+_UI_FILE_FIELDS = ("filename", "subfolder", "type", "format")
+
+
+def _file_item(key, entry):
+    """{key, filename, subfolder, type, format} from one ComfyUI output entry, or None when it names no file."""
+    if not isinstance(entry, dict) or not isinstance(entry.get("filename"), str) or not entry["filename"]:
+        return None
+    item = {"key": key}
+    for field in _UI_FILE_FIELDS:
+        value = entry.get(field)
+        if isinstance(value, str):
+            item[field] = value[:255]
+    item.setdefault("subfolder", "")
+    return item
 
 
 def _mime_of(path):
