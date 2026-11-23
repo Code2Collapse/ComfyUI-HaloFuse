@@ -619,6 +619,51 @@ def _is_link_value(value) -> bool:
     return isinstance(value, list) and len(value) == 2 and isinstance(value[1], int)
 
 
+# V3 dynamic inputs (comfy_api io.Autogrow / DynamicCombo / DynamicSlot / DynamicGroup): the prompt stores their
+# values under dotted names ("values.a", "values.b"), never under the declared name, and core expands them with
+# get_finalized_class_inputs before it validates. Core Math Expression (ComfyMathExpression) is one.
+DYNAMIC_INPUT_KINDS = frozenset({"COMFY_AUTOGROW_V3", "COMFY_DYNAMICCOMBO_V3", "COMFY_DYNAMICSLOT_V3",
+                                 "COMFY_DYNAMICGROUP_V3"})
+
+
+def _input_present(name: str, inputs: dict) -> bool:
+    """A declared input is set when its own key or any of its dotted (V3 dynamic) sub-keys is in the prompt."""
+    if name in inputs:
+        return True
+    prefix = name + "."
+    return any(isinstance(k, str) and k.startswith(prefix) for k in inputs)
+
+
+def _needed_nodes(workflow: dict, defs: "NodeDefs") -> set[str] | None:
+    """The node ids core will validate and run: every output node plus everything that feeds one (core's
+    validate_prompt checks only outputs and their inputs, recursively). A node whose definition is unknown counts
+    as a possible output, so nothing is skipped on a guess. None when the workflow has no known output node (the
+    caller then checks every node)."""
+    nodes = dict(_nodes(workflow))
+    roots = set()
+    known_output = False
+    for node_id, node in nodes.items():
+        d = defs.node_def(node["class_type"])
+        if d is None:
+            roots.add(node_id)
+        elif d.get("output_node"):
+            roots.add(node_id)
+            known_output = True
+    if not known_output:
+        return None
+    needed: set[str] = set()
+    stack = list(roots)
+    while stack:
+        node_id = stack.pop()
+        if node_id in needed or node_id not in nodes:
+            continue
+        needed.add(node_id)
+        for value in nodes[node_id]["inputs"].values():
+            if _is_link_value(value):
+                stack.append(str(value[0]))
+    return needed
+
+
 def _default_snapshot() -> Snapshot | None:
     try:
         return load_snapshot()
@@ -692,6 +737,12 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
         node_ids = {str(k) for k in wf}
         unknown: list[tuple[str, str]] = []
         has_output = False
+        needed = _needed_nodes(wf, defs)
+        if needed is not None and len(needed) < len(node_ids):
+            skipped = len([1 for _ in _nodes(wf)]) - len(needed)
+            if skipped > 0:
+                warnings.append(Problem("unused_nodes", f"{skipped} node(s) feed no output (Save / Preview), so they "
+                                                        "will not run and were not checked"))
         for node_id, node in _nodes(wf):
             checked["nodes"] += 1
             class_type, inputs = node["class_type"], node["inputs"]
@@ -711,9 +762,16 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
             node_def = defs.node_def(class_type)
             if node_def and node_def.get("output_node"):
                 has_output = True
+            for name in _local_path_widgets(class_type, inputs, defs):
+                # every node, needed or not: submit stages the whole workflow's inputs (jobs._plan_inputs)
+                blocking.append(Problem("local_path_input", "this is a path on this computer, which the cloud cannot "
+                                                            "read; use the upload variant of the loader",
+                                        node_id, class_type, name))
+            if needed is not None and node_id not in needed:
+                continue                # core never validates or runs it (see _needed_nodes)
             specs = defs.specs(class_type)
             for name, spec in specs.items():
-                if spec.required and name not in inputs:
+                if spec.required and spec.kind not in DYNAMIC_INPUT_KINDS and not _input_present(name, inputs):
                     blocking.append(Problem("missing_input", "required input is not set", node_id, class_type, name))
             for name, value in inputs.items():
                 if _is_link_value(value) and str(value[0]) not in node_ids:
@@ -722,10 +780,6 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
             cloud_def = defs.cloud_def(class_type)
             if cloud_def is not None:
                 _check_values(node_id, class_type, inputs, parse_input_specs(cloud_def), blocking)
-            for name in _local_path_widgets(class_type, inputs, defs):
-                blocking.append(Problem("local_path_input", "this is a path on this computer, which the cloud cannot "
-                                                            "read; use the upload variant of the loader",
-                                        node_id, class_type, name))
         if unknown:
             listed = ", ".join(f"{ct} (node {nid})" for nid, ct in unknown[:20])
             for nid, ct in unknown:
