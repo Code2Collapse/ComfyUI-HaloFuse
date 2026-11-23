@@ -5,11 +5,14 @@ import { bindH, copyText } from "./dom.js";
 import { FloatingWindow } from "./console_window.js";
 import { LogView } from "./console_logs.js";
 import { renderProblems, renderProgress, renderSummary, renderTelemetry } from "./console_panes.js";
-import { cancelInfo, progressText, statusInfo } from "./job_view.js";
+import { cancelInfo, isTerminal, progressText, statusInfo } from "./job_view.js";
+import { createImageCache, renderLive } from "./live_preview.js";
 
 const TABS = [
-  ["logs", "Logs"], ["progress", "Progress"], ["telemetry", "Telemetry"], ["problems", "Problems"], ["summary", "Summary"],
+  ["live", "Live"], ["logs", "Logs"], ["progress", "Progress"], ["telemetry", "Telemetry"], ["problems", "Problems"],
+  ["summary", "Summary"],
 ];
+const ANNOUNCE_MIN_MS = 5000; // the step text is read out at most every 5 s
 const PANE_MIN_INTERVAL_MS = 500;
 
 export class HaloFuseConsole {
@@ -52,6 +55,11 @@ export class HaloFuseConsole {
       hasJob: () => !!this.session.id,
     });
     this.panels.logs.append(this.logView.el);
+    // Live view state (PREVIEW_DESIGN 4.1); images are reused across renders so a frame never re-downloads
+    this._imgs = createImageCache(this.doc, (name) => o.previewUrl(this.session.id, name));
+    this._live = { selected: null, mode: "overlay", message: null, autoPending: false, userPicked: false };
+    this._announce = H("p", { className: "hf-sr-only", attrs: { "aria-live": "polite" } });
+    this._announcedAt = 0;
     this.window.el.classList.toggle("hf-no-ts", this.window.prefs().timestamps === false);
     this.window.body.append(tablist, ...Object.values(this.panels));
 
@@ -74,8 +82,9 @@ export class HaloFuseConsole {
   close() { this.window.close(); }
   toggle() { if (this.window.isOpen) this.window.close(); else this.open(); }
 
-  selectTab(id, focus = true) {
+  selectTab(id, focus = true, byUser = focus) {
     if (!this.panels[id]) id = "logs";
+    if (byUser) this._live.userPicked = true;
     this.tab = id;
     for (const [tid, btn] of Object.entries(this.tabButtons)) {
       const on = tid === id;
@@ -113,13 +122,65 @@ export class HaloFuseConsole {
     this.selectTab(ids[i]);
   }
 
+  _liveCtx(run) {
+    const s = this.session;
+    const job = s.job;
+    const view = s.live.view({ nowS: Date.now() / 1000, job, progress: run.progress || job?.progress,
+      marks: run.marks, droppedLines: run.droppedLines });
+    return {
+      view, model: s.live, job, isQueue: s.kind === "queue", stopping: s.stopping,
+      imgFor: (name, role) => this._imgs.get(name, role),
+      message: this._live.message,
+      selectedMask: this._live.selected, overlayMode: this._live.mode,
+      onStop: () => this._liveAction(() => s.stop("now"), "Stop requested. Waiting for the cloud to confirm."),
+      onReseed: () => this._liveAction(async () => {
+        const res = await s.stopAndReseed();
+        const n = res?.changes?.length || 0;
+        return `${res?.stopped ? "Stopped the old render. " : ""}New render started with ${n} new seed${n === 1 ? "" : "s"}.`;
+      }),
+      onHold: (seq) => { s.live.hold(seq); this._renderPane(true); },
+      onSelectMask: (seq) => { this._live.selected = seq; this._renderPane(true); },
+      onOverlayMode: (mode) => { this._live.mode = mode; this._renderPane(true); },
+    };
+  }
+
+  async _liveAction(fn, okText) {
+    this._live.message = null;
+    try {
+      const out = await fn();
+      this._live.message = typeof out === "string" ? out : okText;
+    } catch (err) {
+      this._live.message = err?.message || String(err);
+    }
+    this._renderPane(true);
+  }
+
+  _announceStep(view) {
+    const now = Date.now();
+    if (now - this._announcedAt < ANNOUNCE_MIN_MS) return;
+    const text = [view.stepText, view.nodeText].filter(Boolean).join(", ");
+    if (text && text !== this._announce.textContent) {
+      this._announce.textContent = text;
+      this._announcedAt = now;
+    }
+  }
+
   _onWindow() {
     this.session.setWatching(this.window.isOpen);
     if (this.window.isOpen) this._renderPane(true);
   }
 
   _onSession(what) {
-    if (what === "attach") this.logView.reset();
+    if (what === "attach") {
+      this.logView.reset();
+      this._imgs.clear();
+      this._live = { selected: null, mode: this._live.mode, message: null, autoPending: true, userPicked: false };
+    }
+    if (this._live.autoPending && this.session.job) {
+      // the Live view comes first while a render runs, unless the user picked another tab for this job
+      this._live.autoPending = false;
+      if (!isTerminal(this.session.job) && !this._live.userPicked && this.session.kind === "job") this.selectTab("live", false, false);
+    }
     this._refreshChrome();
     this._renderPane(what === "attach");
   }
@@ -167,6 +228,11 @@ export class HaloFuseConsole {
     if (this.tab === "progress") el = renderProgress(H, { ...ctx, onFocusNode: (id) => this.o.onFocusNode(id) });
     else if (this.tab === "telemetry") el = renderTelemetry(H, ctx);
     else if (this.tab === "problems") el = renderProblems(H, { ...ctx, warnings: s.warnings, onJump: (seq) => this.jumpTo(seq) });
+    else if (this.tab === "live") {
+      const live = this._liveCtx(run);
+      el = renderLive(H, live);
+      this._announceStep(live.view);
+    }
     else {
       el = renderSummary(H, {
         ...ctx, outputs: s.outputs, viewUrl: this.o.viewUrl,
@@ -177,8 +243,13 @@ export class HaloFuseConsole {
     }
     const panel = this.panels[this.tab];
     const prevScroll = panel.firstChild?.scrollTop || 0;
-    panel.replaceChildren(el);
+    // keep keyboard focus on the same control across a re-render (buttons carry data-hf-key)
+    const active = this.doc.activeElement;
+    const key = active && panel.contains(active) ? active.getAttribute?.("data-hf-key") : null;
+    if (this.tab === "live") panel.replaceChildren(el, this._announce);
+    else panel.replaceChildren(el);
     el.scrollTop = prevScroll;
+    if (key) panel.querySelector(`[data-hf-key="${key}"]`)?.focus({ preventScroll: true });
   }
 
   async _fullText() {

@@ -4,11 +4,13 @@
 
 import { LogStore } from "./log_model.js";
 import { RunState } from "./run_state.js";
+import { LiveModel } from "./live_preview.js";
 import { createPager, createPoller } from "./follower.js";
 import { isTerminal } from "./job_view.js";
 
 const FINAL_DELIVERY = new Set(["complete", "partial", "failed", "not_started"]);
 const MAX_WARNINGS = 2000;
+const PREVIEW_PAGE = 200;
 
 export class JobSession {
   /** @param {{api: object, timers?: object}} o */
@@ -17,6 +19,7 @@ export class JobSession {
     this.timers = timers;
     this.store = new LogStore();
     this.run = new RunState();
+    this.live = new LiveModel(); // live preview records (C-4 6a), followed while the job runs
     this.warnings = [];
     this.warningCount = 0;
     this.corruptSkipped = 0;
@@ -31,6 +34,10 @@ export class JobSession {
     this._interval = 1000;
     this._poller = null;
     this._pager = null;
+    this._previews = null;
+    this._previewSince = 0;
+    this._previewsFinal = false;
+    this.stopping = false;
   }
 
   subscribe(fn) { this._subs.add(fn); return () => this._subs.delete(fn); }
@@ -49,6 +56,10 @@ export class JobSession {
     this.error = null;
     this.store.reset();
     this.run.reset();
+    this.live.reset();
+    this._previewSince = 0;
+    this._previewsFinal = false;
+    this.stopping = false;
     this.warnings = [];
     this.warningCount = 0;
     this.corruptSkipped = 0;
@@ -74,16 +85,29 @@ export class JobSession {
       onPage: (page) => this._onPage(page),
       onError: (err) => { this.error = err; this._emit("error"); },
     });
+    if (!isQueue) {
+      this._previews = createPoller({
+        timers: this.timers,
+        intervalMs: this._interval,
+        load: () => api.listPreviews(id, this._previewSince, PREVIEW_PAGE),
+        onValue: (page) => this._onPreviews(page),
+        // an older bridge (404) has no live previews: stop quietly; other errors back off inside the poller
+        onError: (err) => { if (err?.status === 404) this._previews?.stop(); },
+      });
+    }
     this._poller.start();
     this._pager.start(0);
+    this._previews?.start();
     this._emit("attach");
   }
 
   detach() {
     this._poller?.stop();
     this._pager?.stop();
+    this._previews?.stop();
     this._poller = null;
     this._pager = null;
+    this._previews = null;
     const had = this.id;
     this.id = null;
     this.kind = null;
@@ -94,9 +118,44 @@ export class JobSession {
   setWatching(on) {
     this._interval = on ? 1000 : 5000;
     this._poller?.setInterval(this._interval);
+    this._previews?.setInterval(this._interval);
   }
 
-  poke() { this._poller?.poke(); this._pager?.poke(); }
+  poke() { this._poller?.poke(); this._pager?.poke(); this._previews?.poke(); }
+
+  _onPreviews(page) {
+    const items = Array.isArray(page?.previews) ? page.previews : [];
+    if (Number.isInteger(page?.next) && page.next > this._previewSince) this._previewSince = page.next;
+    if (this.live.ingest(items)) this._emit("previews");
+    if (items.length >= PREVIEW_PAGE) this._previews?.poke();
+    else if (this._previewsFinal) this._previews?.stop(); // one last fetch after the job ended, then done
+  }
+
+  /** Stop the followed job now (the real cancel, C-4 section 2). Returns the API response. */
+  async stop(mode = "now") {
+    if (!this.id) return null;
+    const res = this.kind === "queue" ? await this.api.cancelQueue(this.id, mode) : await this.api.cancelJob(this.id, mode);
+    if (res?.job || res?.queue) { this.job = res.job || res.queue; this._emit("job"); }
+    this.poke();
+    return res;
+  }
+
+  /** Stop and try a new seed (C-4 6a): the bridge refuses (422 reseed_not_possible) without stopping anything when
+   *  no seed can change safely. On success the session follows the new render. Returns the API response. */
+  async stopAndReseed() {
+    if (!this.id || this.kind !== "job" || this.stopping) return null;
+    this.stopping = true;
+    this._emit("job");
+    try {
+      const res = await this.api.resubmit(this.id, { reseed: true, stop_current: true });
+      const next = res?.job?.job_id;
+      if (next) this.attach(next, "job");
+      return res;
+    } finally {
+      this.stopping = false;
+      this._emit("job");
+    }
+  }
 
   _onPage(page) {
     if (page?.skipped_corrupt) this.corruptSkipped += page.skipped_corrupt;
@@ -134,6 +193,10 @@ export class JobSession {
         this.outputs = Array.isArray(res?.outputs) ? res.outputs : [];
         this._emit("outputs");
       } catch { /* delivery route optional until WS3 lands; the record still shows the status */ }
+    }
+    if (isTerminal(rec) && !this._previewsFinal) {
+      this._previewsFinal = true;
+      this._previews?.poke();
     }
     if (isTerminal(rec) && (!d || FINAL_DELIVERY.has(d.state))) {
       // finished: keep a slow poll so a manual delivery retry is still noticed

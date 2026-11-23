@@ -1000,6 +1000,7 @@ def job_summary(rec: dict, store: JobStore | None = None) -> dict:
         "error": ({"code": rec["error"].get("code"), "message": rec["error"].get("message")}
                   if isinstance(rec.get("error"), dict) else None),
         "log_total": total,
+        "preview_mode": rec.get("preview_mode"), "preview_method": rec.get("preview_method"),
     }
 
 

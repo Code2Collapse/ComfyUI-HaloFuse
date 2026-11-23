@@ -155,8 +155,12 @@ export class RunState {
     const mime = typeof d.mime === "string" ? d.mime.toLowerCase() : "";
     const data = typeof d.data === "string" ? d.data : "";
     const ok = SAFE_MIME.has(mime) && data.length > 0 && data.length <= MAX_INLINE && B64.test(data);
-    this._previews.push({ seq: e.seq, ts: e.ts, kind: d.kind || "latent", node_id: str(d.node ?? e.node_id), mime: mime || null,
-      dataUrl: ok ? `data:${mime};base64,${data}` : null, path: str(d.path), bytes: num(d.bytes), dropped: num(d.dropped) ?? 0 });
+    // C-4 6a: the bridge stores the frame as a file and the log entry carries its record (data.preview.name);
+    // inline data survives only in logs written by an older bridge, and is kept for those alone
+    const rec = d.preview && typeof d.preview === "object" ? d.preview : null;
+    this._previews.push({ seq: e.seq, ts: e.ts, kind: d.kind || "latent", node_id: str(d.node ?? e.node_id), mime: rec?.mime || mime || null,
+      name: rec && typeof rec.name === "string" ? rec.name : null, mask: d.mask === true,
+      dataUrl: !rec && ok ? `data:${mime};base64,${data}` : null, path: str(d.path), bytes: num(d.bytes), dropped: num(d.dropped) ?? 0 });
     if (this._previews.length > MAX_PREVIEWS) this._previews.splice(0, this._previews.length - MAX_PREVIEWS);
   }
 

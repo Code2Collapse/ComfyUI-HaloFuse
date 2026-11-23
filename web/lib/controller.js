@@ -10,7 +10,13 @@ export const PREVIEW_MODES = [
   ["none", "No preview", "Renders without previews in this panel. Outputs are still saved to the output folder."],
   ["check", "Workflow check", "Checks nodes, models, input files and values against the cloud runtime. No GPU is started and nothing is billed."],
   ["draft", "Quick draft", "Renders a reduced copy (smaller size, fewer steps or frames). Your graph is not changed; the draft workflow can be inspected."],
-  ["live", "Live preview (experimental)", "Asks the cloud runner for latent previews while it renders. Not yet verified end to end; the final outputs are unaffected."],
+  ["live", "Live preview (experimental)", "Shows the render while it runs (step previews, masks, results) so you can stop it early. Needs the new HaloFuse runtime image; not yet verified end to end. Final outputs are unaffected."],
+];
+// Step preview method of a live render (the "model preview override", C-4 6a): ComfyUI --preview-method.
+export const PREVIEW_METHODS = [
+  ["none", "Off", "No step previews; masks, intermediate images and results still arrive."],
+  ["latent2rgb", "Fast", "A blurry colour approximation of every step. No extra files needed."],
+  ["taesd", "Detailed", "Close to the final image. May slow sampling slightly. Decoder files are uploaded to your cloud model library."],
 ];
 export const DRAFT_OPTIONS = Object.freeze({ max_side: 768, steps: 10, batch_size: 1, frames: 17 });
 
@@ -29,7 +35,7 @@ export class Controller {
     this.timers = timers || { setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h) => clearTimeout(h) };
     this.state = {
       settings: null, skus: [], skuError: null, instanceType: "", rate: null, rateLoading: false,
-      previewMode: "final", renderRepeats: 1, busy: false, message: null,
+      previewMode: "final", previewMethod: "latent2rgb", previewMethods: null, renderRepeats: 1, busy: false, message: null,
       preflight: null, consent: null, draft: null, upload: null,
       queueDraft: [], recent: [], recentError: null,
     };
@@ -46,7 +52,7 @@ export class Controller {
 
   async init() {
     await this.loadSettings();
-    await Promise.all([this.loadSkus(), this.reattach(), this.loadRecent()]);
+    await Promise.all([this.loadSkus(), this.reattach(), this.loadRecent(), this.loadPreviewMethods()]);
   }
 
   async loadSettings() {
@@ -54,7 +60,8 @@ export class Controller {
       const s = await this.api.getSettings();
       this._set({ settings: s, instanceType: s.instance_type || this.state.instanceType,
         renderRepeats: Number(s.batch_count) > 0 ? Number(s.batch_count) : 1,
-        previewMode: PREVIEW_MODES.some(([k]) => k === s.preview_mode) ? s.preview_mode : this.state.previewMode });
+        previewMode: PREVIEW_MODES.some(([k]) => k === s.preview_mode) ? s.preview_mode : this.state.previewMode,
+        previewMethod: PREVIEW_METHODS.some(([k]) => k === s.preview_method) ? s.preview_method : this.state.previewMethod });
     } catch (err) { this.say(`Could not load HaloFuse settings: ${err.message}`, "danger"); }
   }
 
@@ -95,6 +102,24 @@ export class Controller {
     if (!PREVIEW_MODES.some(([k]) => k === mode)) return;
     this._set({ previewMode: mode, preflight: null, draft: null });
     try { await this.api.saveSettings({ preview_mode: mode }); } catch { /* R-WS6-01: in memory until the key exists */ }
+  }
+
+  /** Which step preview methods this computer can offer (Detailed needs local decoder files). */
+  async loadPreviewMethods() {
+    try { this._set({ previewMethods: await this.api.previewMethods() }); } catch { this._set({ previewMethods: null }); }
+  }
+
+  async setPreviewMethod(method) {
+    if (!PREVIEW_METHODS.some(([k]) => k === method)) return;
+    this._set({ previewMethod: method, preflight: null });
+    try { await this.api.saveSettings({ preview_method: method }); } catch { /* kept for this session */ }
+  }
+
+  /** The method a live render will use; Detailed falls back to Fast when this computer has no decoder files. */
+  get effectivePreviewMethod() {
+    const m = this.state.previewMethod;
+    const info = this.state.previewMethods?.methods?.find((x) => x.id === m);
+    return m === "taesd" && info && info.available === false ? "latent2rgb" : m;
   }
 
   async saveAdvanced(prefs) {
@@ -182,7 +207,9 @@ export class Controller {
   async _preflight(workflows) {
     this.say("Checking the workflow…", "active");
     try {
-      const r = await this.api.preflight({ workflows, instance_type: this.state.instanceType || undefined });
+      const body = { workflows, instance_type: this.state.instanceType || undefined };
+      if (this.state.previewMode === "live") body.preview_method = this.effectivePreviewMethod;
+      const r = await this.api.preflight(body);
       this._set({ preflight: r });
       return r;
     } catch (err) {
@@ -216,11 +243,13 @@ export class Controller {
       wf = d.draft_workflow;
     }
     this.say("Submitting…", "active");
-    const res = await this.api.submitJob({
+    const body = {
       workflow: wf, instance_type: this.state.instanceType, render_repeats: this.state.renderRepeats,
       batch_count: this.state.renderRepeats, preview_mode: mode, label: mode === "draft" ? "Quick draft" : "Render",
       client_ref: uid(),
-    });
+    };
+    if (mode === "live") body.preview_method = this.effectivePreviewMethod;
+    const res = await this.api.submitJob(body);
     const job = res.job || { job_id: res.jobId };
     this.session.attach(job.job_id, "job");
     this.say("Submitted. Follow it here or in the console.", "active");
@@ -286,6 +315,23 @@ export class Controller {
       this.say(mode === "now" ? "Stop requested. Waiting for the cloud to confirm." : "Will stop after the current item.", "warning");
       s.poke();
     } catch (err) { this.say(err.message, "danger"); }
+  }
+
+  /** "Looks wrong": stop the running render and start it again with new seeds, same GPU and preview settings. */
+  async stopAndReseed() {
+    const s = this.session;
+    if (!s.id || s.kind !== "job" || s.stopping) return;
+    this.say("Stopping and preparing new seeds…", "warning");
+    try {
+      const res = await s.stopAndReseed();
+      const changes = res?.changes || [];
+      const shown = changes.slice(0, 3).map((c) => `Node ${c.node_id}${c.class_type ? ` (${c.class_type})` : ""} ${c.input} ${c.from} → ${c.to}`);
+      const more = changes.length > 3 ? ` and ${changes.length - 3} more` : "";
+      this.say(`${res?.stopped ? "Stopped the old render. " : ""}New render started with new seeds: ${shown.join(", ")}${more}`, "active");
+      this.loadRecent();
+    } catch (err) {
+      this.say(err.message || String(err), err.code === "reseed_not_possible" ? "warning" : "danger");
+    }
   }
 
   // ---------- queue ----------

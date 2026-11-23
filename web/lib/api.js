@@ -119,6 +119,8 @@ export function createApi(fetchImpl) {
     getLog: (id, since = 0, limit = 5000) => get(`${J(id)}/log${query({ since, limit })}`),
     getLogText: (id) => get(`${J(id)}/log.txt`, { text: true }),
     cancelJob: async (id, mode) => post(`${J(id)}/cancel`, checkMode(mode)),
+    resubmit: (id, body = { reseed: true, stop_current: true }) => post(`${J(id)}/resubmit`, body),
+    previewMethods: () => get("/halofuse/preview_methods"),
     getDelivery: (id) => get(`${J(id)}/delivery`),
     retryDelivery: (id) => post(`${J(id)}/delivery/retry`),
     recentJobs: (limit = 50) => get(`/halofuse/recent_jobs${query({ limit })}`),

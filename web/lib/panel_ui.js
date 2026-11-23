@@ -5,10 +5,16 @@
 
 import { bindH, clear } from "./dom.js";
 import { AccountSection } from "./account_ui.js";
-import { PREVIEW_MODES } from "./controller.js";
+import { PREVIEW_METHODS, PREVIEW_MODES } from "./controller.js";
+import { previewPath } from "./api.js";
+import { LIVE_TEXT, createImageCache } from "./live_preview.js";
 import { cancelActions, cancelInfo, costText, deliveryText, isTerminal, progressText, statusInfo } from "./job_view.js";
 import { fmtBytes, fmtLocal, fmtUsd } from "./format.js";
 import { outputKind } from "./console_panes.js";
+
+function H_field(H, label, input) {
+  return H("label", { className: "hf-field", htmlFor: input.id }, H("span", { text: label }), input);
+}
 
 export class Panel {
   /**
@@ -29,6 +35,19 @@ export class Panel {
     this.modeSel = H("select", { className: "hf-select", id: "hf-preview-mode", onchange: () => this.ctl.setPreviewMode(this.modeSel.value) },
       ...PREVIEW_MODES.map(([k, label]) => H("option", { value: k, text: label })));
     this.modeHint = H("div", { className: "hf-hint" });
+    // live preview step method (the "model preview override", C-4 6a); shown only for Live preview
+    this.methodSel = H("select", { className: "hf-select", id: "hf-preview-method", onchange: () => this.ctl.setPreviewMethod(this.methodSel.value) },
+      ...PREVIEW_METHODS.map(([k, label]) => H("option", { value: k, text: label })));
+    this.methodHint = H("div", { className: "hf-hint" });
+    this.methodBox = H("div", { hidden: true });
+    // preview files are bridge URLs; halofuse.js may pass previewUrl, else it is derived from the /view URL base
+    const previewUrl = o.previewUrl || ((jobId, name) => {
+      const v = this.viewUrl({ filename: "", subfolder: "", type: "output" });
+      const i = v.indexOf("/view?");
+      return `${i >= 0 ? v.slice(0, i) : ""}${previewPath(jobId, name)}`;
+    });
+    this._imgs = createImageCache(this.doc, (name) => previewUrl(this.session.id, name), 8);
+    this._imgsFor = null;
     this.repeats = H("input", { className: "hf-input", type: "number", id: "hf-repeats", min: "1", max: "100", step: "1",
       onchange: () => this.ctl.setRenderRepeats(this.repeats.value) });
     this.renderBtn = H("button", { className: "hf-btn hf-primary", type: "button", style: { flex: "1" }, onclick: () => this.ctl.render() });
@@ -64,7 +83,7 @@ export class Panel {
     this.el = H("div", { className: "hf-root", attrs: { "aria-label": "HaloFuse" } },
       H("div", { className: "hf-head" }, H("h2", {}, H("span", { className: "hf-mark", attrs: { "aria-hidden": "true" } }), "HaloFuse"), this.version),
       field("GPU", this.skuSel), this.rate,
-      field("Preview", this.modeSel), this.modeHint,
+      field("Preview", this.modeSel), this.modeHint, this.methodBox,
       field("Render repeats", this.repeats),
       H("div", { className: "hf-row", style: { margin: "4px 0 6px" } }, this.renderBtn, this.consoleBtn),
       this.message, this.checkBox, this.consentBox, this.jobBox,
@@ -119,6 +138,7 @@ export class Panel {
       : st.rate != null ? `${fmtUsd(st.rate)} per hour (provider estimate)` : st.instanceType ? "Price not available for this GPU." : "";
     this.modeSel.value = st.previewMode;
     this.modeHint.textContent = PREVIEW_MODES.find(([k]) => k === st.previewMode)?.[2] || "";
+    this._renderMethod(st);
     if (this.doc.activeElement !== this.repeats) this.repeats.value = String(st.renderRepeats);
 
     const active = this.ctl.active;
@@ -134,6 +154,27 @@ export class Panel {
     this._renderJob();
     this._renderQueue(st);
     this._renderRecent(st);
+  }
+
+  _renderMethod(st) {
+    const live = st.previewMode === "live";
+    this.methodBox.hidden = !live;
+    if (!live) return;
+    if (!this.methodBox.firstChild) {
+      this.methodBox.append(H_field(this.H, "Step preview", this.methodSel), this.methodHint);
+    }
+    const detailed = st.previewMethods?.methods?.find((m) => m.id === "taesd");
+    const unavailable = !detailed || detailed.available === false;
+    const opt = [...this.methodSel.options].find((o) => o.value === "taesd");
+    opt.disabled = unavailable;
+    opt.textContent = unavailable ? "Detailed (unavailable)" : "Detailed";
+    this.methodSel.value = st.previewMethod;
+    const desc = PREVIEW_METHODS.find(([k]) => k === st.previewMethod)?.[2] || "";
+    const reason = unavailable && st.previewMethod === "taesd"
+      ? `${detailed?.reason || "Detailed preview is not available on this computer."} This render will use Fast.` : "";
+    const why = unavailable && st.previewMethod !== "taesd" && detailed?.reason ? `Detailed is unavailable: ${detailed.reason}` : "";
+    this.methodHint.className = `hf-hint${reason ? " hf-tone-warning" : ""}`;
+    this.methodHint.textContent = [reason || desc, why, LIVE_TEXT.experimental].filter(Boolean).join(" ");
   }
 
   _renderCheck(st) {
@@ -222,13 +263,29 @@ export class Panel {
       job ? H("div", { className: "hf-meta", text: [costText(job.cost), deliveryText(job.delivery)].filter(Boolean).join(" · ") }) : null,
       job?.diagnosis ? H("div", { className: "hf-meta hf-tone-danger", text: `${job.diagnosis.title || job.diagnosis.code}: ${job.diagnosis.next_action || job.diagnosis.cause || ""}` }) : null,
       s.error && !job ? H("div", { className: "hf-meta hf-tone-danger", text: s.error.message }) : null);
-    const latest = run.previews.slice().reverse().find((p) => p.dataUrl);
+    if (this._imgsFor !== s.id) { this._imgs.clear(); this._imgsFor = s.id; }
+    const lv = !isQueue && job ? s.live.view({ nowS: Date.now() / 1000, job, progress: prog }) : null;
+    const latest = run.previews.slice().reverse().find((p) => p.dataUrl); // logs written by an older bridge
     const out = (s.outputs || []).find((o) => outputKind(o.filename || o.rel_path, o.kind) === "image");
-    if (this.ctl.state.previewMode !== "none" && (latest || out)) {
-      card.append(H("img", { className: "hf-thumb", src: latest ? latest.dataUrl : this.viewUrl(out), alt: latest ? "Latest preview" : "Latest output" }));
+    if (lv?.frame && !(isTerminal(job) && out)) {
+      const img = this._imgs.get(lv.frame.name, "card");
+      img.className = "hf-thumb";
+      img.alt = lv.stepText ? `Live preview, ${lv.stepText.toLowerCase()}` : "Latest preview";
+      const fig = H("figure", { className: `hf-thumbwrap${lv.stale ? " hf-live-stale" : ""}` }, img);
+      if (lv.fraction != null && !isTerminal(job)) {
+        const step = H("div", { className: "hf-live-step" }, H("div", { className: "hf-live-step-fill" }),
+          H("span", { text: lv.stepText.replace(/^Step (\d+) of (\d+)$/, "$1/$2") }));
+        step.firstChild.style.width = `${Math.round(lv.fraction * 100)}%`;
+        fig.append(step);
+      }
+      card.append(fig);
+    } else if (this.ctl.state.previewMode !== "none" && (latest || out)) {
+      card.append(H("img", { className: "hf-thumb", src: latest && !out ? latest.dataUrl : this.viewUrl(out), alt: latest && !out ? "Latest preview" : "Latest output" }));
     }
     const btns = H("div", { className: "hf-row" });
-    if (acts.now) btns.append(H("button", { className: "hf-btn hf-danger hf-solid", type: "button", text: "Stop now", title: "Cancel the cloud job now; partial outputs are kept", onclick: () => this.ctl.stop("now") }));
+    const stopping = s.stopping || job?.cancel?.state === "cancel_requested" || job?.cancel?.state === "cancel_accepted";
+    if (acts.now) btns.append(H("button", { className: "hf-btn hf-danger hf-solid", type: "button", text: stopping ? "Stopping…" : "Stop now", disabled: stopping, title: "Cancel the cloud job now; partial outputs are kept", onclick: () => this.ctl.stop("now") }));
+    if (acts.now && !isQueue) btns.append(H("button", { className: "hf-btn hf-danger", type: "button", text: "Stop and try a new seed", disabled: stopping, title: "Stop this render and start it again with new seeds (same GPU and settings)", onclick: () => this.ctl.stopAndReseed() }));
     if (acts.afterCurrent) btns.append(H("button", { className: "hf-btn hf-danger", type: "button", text: "Stop after current", title: "Let the current item finish, then stop", onclick: () => this.ctl.stop("after_current") }));
     btns.append(H("button", { className: "hf-btn", type: "button", text: "Console", onclick: () => this.openConsole() }));
     if (job && isTerminal(job)) btns.append(H("button", { className: "hf-btn hf-ghost", type: "button", text: "Dismiss", onclick: () => s.detach() }));
