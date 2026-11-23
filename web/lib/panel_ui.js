@@ -253,7 +253,10 @@ export class Panel {
       ? `${detailed?.reason || "Detailed preview is not available on this computer."} This render will use Fast.` : "";
     const why = unavailable && st.previewMethod !== "taesd" ? "Detailed needs preview decoder files in models/vae_approx." : "";
     this.methodHint.className = `hf-hint${reason ? " hf-tone-warning" : ""}`;
-    this.methodHint.textContent = [reason || desc, why, LIVE_TEXT.experimental].filter(Boolean).join(" ");
+    // the runtime note only when the chosen cloud runtime really lacks live preview (bridge settings payload)
+    const lacking = st.settings?.live_preview_supported === false
+      ? (typeof st.settings.live_preview_note === "string" && st.settings.live_preview_note) || LIVE_TEXT.experimental : "";
+    this.methodHint.textContent = [reason || desc, why, lacking].filter(Boolean).join(" ");
   }
 
   _renderCheck(st) {
