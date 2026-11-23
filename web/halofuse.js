@@ -110,7 +110,14 @@ function sidebarTabSpec(inst) {
     tooltip: "HaloFuse cloud rendering",
     icon: "pi pi-bolt",
     type: "custom",
-    render: (container) => inst.panel.mount(container),
+    // The frontend's tab container has no height of its own (measured, fe 1.53): .hf-root then grew to its content
+    // and, being an overscroll-contained scroller with nothing to scroll, swallowed the wheel - the panel could not
+    // scroll at all. Filling the sidebar makes .hf-root the scroller.
+    render: (container) => {
+      container.style.height = "100%";
+      container.style.minHeight = "0";
+      inst.panel.mount(container);
+    },
     destroy: () => inst.panel.unmount(),
   };
 }
