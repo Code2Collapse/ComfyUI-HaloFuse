@@ -8,9 +8,15 @@ Two contracts exist, each a matching triple (image, command, manifest file name)
                  ghcr.io/code2collapse/halofuse-runtime (public). Runner entry ``/runner/halofuse_run.py``, manifest
                  ``halofuse_job.json`` (its runner also accepts the old manifest name).
 
-Selection (never from the browser): the environment variable ``HALOFUSE_RUNTIME`` (``halofuse`` / ``legacy``), else
-the file-only setting ``runtime_image`` in halofuse_settings.json, else the default. The image is pinned to an
-immutable build tag, so a bridge never runs an image it was not written for.
+Selection: the environment variable ``HALOFUSE_RUNTIME`` (``halofuse`` / ``legacy``), else the setting
+``runtime_image`` in halofuse_settings.json (the panel's Advanced "Cloud runtime" choice writes it, by contract NAME
+only: an image reference never comes from the browser), else the default. The image is pinned to an immutable build
+tag, so a bridge never runs an image it was not written for.
+
+Each contract also names the node snapshot (``halofuse_bridge/snapshots/<profile>.json``) that describes the node
+set of its image; the Workflow Check checks against the snapshot of the selected runtime. The original image's node
+set is the catalog's ``default`` profile (production parity). ``scripts/update_snapshot.py`` moves the HaloFuse
+image and its snapshot together after CI built and pushed a new image.
 """
 from __future__ import annotations
 
@@ -23,19 +29,35 @@ class Contract(NamedTuple):
     image: str
     command: tuple
     manifest_name: str
+    snapshot_profile: str = "default"   # node snapshot of this image (halofuse_bridge/snapshots/<profile>.json)
 
+
+# The HaloFuse image and the snapshot of its node set move TOGETHER (scripts/update_snapshot.py rewrites these two
+# lines after CI pushed an image; the tag prefix is the catalog profile the image was built from).
+# CI build of commit dbd07af (HaloFuse 0.5.0); manifest digest
+# sha256:9e2d98c4a5235bfb1ba68d91750b1222f65f5cf2412fac4f6ac276f3f9e2c695 (checked anonymously pullable 2026-11-23)
+HALOFUSE_IMAGE = "ghcr.io/code2collapse/halofuse-runtime:default-sha-dbd07af093a81a79ee83da552662f67476b17144"
+HALOFUSE_SNAPSHOT_PROFILE = "default"
 
 CONTRACTS = {
     "legacy": Contract("legacy", "ghcr.io/nithin-ml/spark-fuse-comfyui:sha-70e0ff4b38b431b2c77e90f2936f93d04516ccc9",
-                       ("python3.13", "/runner/spark_fuse_run.py"), "spark_fuse_job.json"),
-    # CI build of commit dbd07af (HaloFuse 0.5.0); manifest digest
-    # sha256:9e2d98c4a5235bfb1ba68d91750b1222f65f5cf2412fac4f6ac276f3f9e2c695 (checked anonymously pullable 2026-11-23)
-    "halofuse": Contract("halofuse",
-                         "ghcr.io/code2collapse/halofuse-runtime:default-sha-dbd07af093a81a79ee83da552662f67476b17144",
-                         ("python3.13", "/runner/halofuse_run.py"), "halofuse_job.json"),
+                       ("python3.13", "/runner/spark_fuse_run.py"), "spark_fuse_job.json", "default"),
+    "halofuse": Contract("halofuse", HALOFUSE_IMAGE, ("python3.13", "/runner/halofuse_run.py"), "halofuse_job.json",
+                         HALOFUSE_SNAPSHOT_PROFILE),
 }
 # Flip to "halofuse" once one real render on the HaloFuse image has passed (probe session with the owner).
 DEFAULT = "legacy"
+
+
+def env_override(env=None) -> str | None:
+    """The contract name forced by the environment (then the panel choice has no effect), else None."""
+    env = os.environ if env is None else env
+    return select(env=env).name if str(env.get("HALOFUSE_RUNTIME") or "").strip() else None
+
+
+def halofuse_ready() -> bool:
+    """True once the HaloFuse contract runs an image built from its own profile (not the original node set)."""
+    return CONTRACTS["halofuse"].snapshot_profile != CONTRACTS["legacy"].snapshot_profile
 
 
 def select(env=None, settings=None) -> Contract:

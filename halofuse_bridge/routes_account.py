@@ -22,6 +22,7 @@ from aiohttp import web
 
 from . import __version__, brand, config, credentials, provider
 from .credentials import CredentialError, Credentials
+from .provider import image_contract
 from .provider.backend import BackendError, validate_instance_type
 
 _log = logging.getLogger("halofuse_bridge.routes_account")
@@ -137,6 +138,10 @@ def _settings_payload() -> dict:
     out["service_configured"] = provider.resolve_endpoint() is not None
     out["connector_installed"] = provider.connector_installed()
     out["settings_file_ok"] = config.settings_file_ok()
+    # the deployment environment can force the cloud runtime; the panel then shows its choice as fixed
+    out["runtime_image_locked"] = image_contract.env_override() is not None
+    # the HaloFuse image is offered once its contract points at an image with its own (larger) node set
+    out["runtime_halofuse_ready"] = image_contract.halofuse_ready()
     return out
 
 

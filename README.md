@@ -133,3 +133,5 @@ in [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
 - The sidebar panel scrolls.
 - Models are found anywhere in the cloud library by name and size, and missing models upload by themselves (same
   folders as on this computer; switch off under Advanced). Details: CHANGELOG.md.
+- Advanced > Cloud runtime: Original image (default) or HaloFuse image (the newer node packs); the Workflow Check
+  follows the choice.

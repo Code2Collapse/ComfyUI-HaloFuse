@@ -69,19 +69,25 @@ export class Panel {
       H("option", { value: "preferred", text: "Preferred (start sooner)" }));
     const guard = H("input", { className: "hf-input", type: "number", id: `hf-guard-${uid}`, min: "1", step: "1" });
     const autoUp = H("input", { type: "checkbox", id: `hf-autoup-${uid}` });
+    const runtime = H("select", { className: "hf-select", id: `hf-runtime-${uid}` },
+      H("option", { value: "legacy", text: "Original image (default)" }),
+      H("option", { value: "halofuse", text: "HaloFuse image (adds the newer node packs; first renders not yet verified)" }));
+    const runtimeHint = H("div", { className: "hf-hint" });
     const libHint = H("div", { className: "hf-hint" });
     lib.addEventListener("input", () => {
       const v = lib.value.trim();
       libHint.textContent = v && !v.startsWith("/") ? "The path must start with “/”." : "";
       libHint.className = `hf-hint${v && !v.startsWith("/") ? " hf-tone-warning" : ""}`;
     });
-    this.adv = { lib, affinity, guard, autoUp };
+    this.adv = { lib, affinity, guard, autoUp, runtime, runtimeHint };
     const saveAdv = H("button", { className: "hf-btn", type: "button", text: "Save settings", onclick: () => {
       const v = lib.value.trim();
       if (v && !v.startsWith("/")) { this.ctl.say("The cloud model library path must start with “/”.", "warning"); return; }
       const g = parseInt(guard.value, 10);
-      this.ctl.saveAdvanced({ assets_library_path: v, image_affinity: affinity.value, upload_guard_gb: g > 0 ? g : 50,
-                              auto_upload_models: autoUp.checked });
+      const prefs = { assets_library_path: v, image_affinity: affinity.value, upload_guard_gb: g > 0 ? g : 50,
+                      auto_upload_models: autoUp.checked };
+      if (!runtime.disabled) prefs.runtime_image = runtime.value;
+      this.ctl.saveAdvanced(prefs);
     } });
 
     const field = (label, input, hint) => H("label", { className: "hf-field", htmlFor: input.id }, H("span", { text: label }), input, hint || null);
@@ -104,6 +110,7 @@ export class Panel {
       H("details", { className: "hf-section" }, H("summary", { text: "Advanced" }),
         field("Cloud model library path", lib, libHint), field("Machine placement", affinity),
         field("Largest automatic model upload (GB)", guard),
+        field("Cloud runtime", runtime, runtimeHint),
         H("label", { className: "hf-field hf-check", htmlFor: autoUp.id }, autoUp,
           H("span", { text: "Upload missing models automatically (same folders as on this computer)" })),
         saveAdv));
@@ -131,6 +138,15 @@ export class Panel {
       this.adv.affinity.value = st.settings.image_affinity === "preferred" ? "preferred" : "required";
       this.adv.guard.value = st.settings.upload_guard_gb || 50;
       this.adv.autoUp.checked = st.settings.auto_upload_models !== false;
+      this.adv.runtime.value = st.settings.runtime_image === "halofuse" ? "halofuse" : "legacy";
+      this.adv.runtime.disabled = st.settings.runtime_image_locked === true;
+      const halo = this.adv.runtime.querySelector('option[value="halofuse"]');
+      const ready = st.settings.runtime_halofuse_ready === true;
+      if (halo) halo.disabled = !ready && st.settings.runtime_image !== "halofuse";
+      this.adv.runtimeHint.textContent = this.adv.runtime.disabled
+        ? "Set by this installation; it cannot be changed here."
+        : ready ? "The Workflow Check checks nodes against the runtime chosen here."
+          : "The HaloFuse image is not published yet; renders use the original image.";
     }
     // GPU list
     const want = st.skus.map((s) => s.instance_type).join("|");

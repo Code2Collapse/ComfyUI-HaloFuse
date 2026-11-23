@@ -73,7 +73,23 @@ def _input_dir() -> Path | None:
         return None
 
 
+def runtime_snapshot_profile(settings: dict | None = None) -> str:
+    """The node-snapshot profile of the cloud runtime the artist selected (Advanced > Cloud runtime): the Workflow
+    Check must check against the node set of the image the render will actually run on."""
+    from .provider import image_contract
+
+    if settings is None:
+        try:
+            settings = _settings()
+        except Exception:  # noqa: BLE001 - unreadable settings -> the default contract, as load_settings does
+            settings = {}
+    contract = image_contract.CONTRACTS.get(settings.get("runtime_image"), image_contract.select(settings={}))
+    return contract.snapshot_profile
+
+
 def _snapshot(profile):
+    if profile is None:
+        profile = runtime_snapshot_profile()
     try:
         return wa.load_snapshot(profile)
     except ValueError:
