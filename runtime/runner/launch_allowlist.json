@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "comment": "D3 launch allowlist consumed by runner/hf/launch.py. Every flag below was checked to exist in ComfyUI 0.30.1 (the image pin) and 0.39.0 comfy/cli_args.py on 2026-11-20. WS7 re-checks it against the pinned ComfyUI at build time (python3.13 runner/hf/launch.py runner/launch_allowlist.json $COMFYUI_DIR/comfy/cli_args.py).",
+  "comment": "D3 launch allowlist consumed by runner/hf/launch.py. Every flag below was checked to exist in ComfyUI 0.30.1 (the image pin) and 0.39.0 comfy/cli_args.py on 2026-11-20 (--disable-partner-nodes added 2026-11-23, checked in 0.39.0). WS7 re-checks it against the pinned ComfyUI at build time (python3.13 runner/hf/launch.py runner/launch_allowlist.json $COMFYUI_DIR/comfy/cli_args.py).",
   "verified_against": [
     "ComfyUI 0.30.1 comfy/cli_args.py (image pin)",
     "ComfyUI 0.39.0 comfy/cli_args.py"
@@ -41,7 +41,8 @@
     "--cpu-vae": {"value": "none"},
     "--force-fp16": {"value": "none"},
     "--force-channels-last": {"value": "none"},
-    "--disable-cuda-malloc": {"value": "none"}
+    "--disable-cuda-malloc": {"value": "none"},
+    "--disable-partner-nodes": {"value": "none"}
   },
   "denied": {
     "--listen": "set by the runner (loopback only)",
@@ -83,7 +84,8 @@
     "safe": {"label": "Safe", "description": "Stock ComfyUI settings.", "args": [], "env": {}, "ladder": null},
     "fast": {"label": "Fast", "description": "ComfyUI --fast optimizations (ComfyUI calls them untested and potentially quality deteriorating).", "args": ["--fast"], "env": {}, "ladder": null},
     "max_memory": {"label": "Max Memory", "description": "Aggressive offloading, no pinned host memory, 1 GB VRAM reserve, expandable CUDA segments; tiled decode allowed as a recovery step.", "args": ["--disable-smart-memory", "--disable-pinned-memory", "--reserve-vram", "1.0"], "env": {"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}, "ladder": ["resubmit_cached", "decode_tiled", "decode_from_latent"]},
-    "debug": {"label": "Debug", "description": "Verbose ComfyUI logging and synchronous CUDA errors (slower).", "args": ["--verbose", "DEBUG"], "env": {"CUDA_LAUNCH_BLOCKING": "1"}, "ladder": null}
+    "debug": {"label": "Debug", "description": "Verbose ComfyUI logging and synchronous CUDA errors (slower).", "args": ["--verbose", "DEBUG"], "env": {"CUDA_LAUNCH_BLOCKING": "1"}, "ladder": null},
+    "sage": {"label": "SageAttention (experimental)", "description": "ComfyUI --use-sage-attention. Needs an image built with ATTENTION=sage (SageAttention 1.0.6, Triton). GPU speed-up and output parity NOT VERIFIED.", "args": ["--use-sage-attention"], "env": {}, "ladder": null}
   },
   "default_ladder": ["resubmit_cached", "decode_from_latent"],
   "memory_safe_restart_args": ["--disable-pinned-memory", "--cache-none"]

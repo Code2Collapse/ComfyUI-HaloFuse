@@ -17,7 +17,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 LADDER_STEPS = ("resubmit_cached", "decode_tiled", "decode_from_latent")
-RESTART_POLICIES = {"off": 0, "once": 1, "twice": 2}
+RESTART_POLICIES = {"off": 0, "once": 1, "twice": 2, "each": None}  # each: one restart per manifest entry
+DEFAULT_RESTART_POLICY = "each"
+PREVIEW_METHODS = ("latent2rgb", "taesd", "none")  # HF_PREVIEW_METHOD (R-PREVIEW-01)
+DEFAULT_PREVIEW_SIZE = "384"
+DEFAULT_UNRESPONSIVE_SECONDS = 300.0
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:=,+/-]+$")
 _NUMBER_RE = re.compile(r"^-?\d+(\.\d+)?$")
 
@@ -29,6 +33,7 @@ class LaunchConfig:
     preset: str = "safe"
     ladder: list = field(default_factory=list)
     max_restarts: int = 1
+    restart_policy: str = DEFAULT_RESTART_POLICY
     errors: list = field(default_factory=list)
 
     @property
@@ -217,8 +222,14 @@ def resolve(env, allowlist, module_available=None) -> LaunchConfig:
         user_tokens = []
     args, errors = validate_args(list(preset.get("args", [])) + user_tokens, allowlist, module_available)
     cfg.errors += errors
-    if (env.get("HF_PREVIEW") or "off").strip().lower() == "live" and "--preview-method" not in args:
-        args += ["--preview-method", "auto"]
+    if (env.get("HF_PREVIEW") or "off").strip().lower() == "live":
+        method = (env.get("HF_PREVIEW_METHOD") or "latent2rgb").strip()
+        if method not in PREVIEW_METHODS:
+            cfg.errors.append(f"HF_PREVIEW_METHOD must be one of {', '.join(PREVIEW_METHODS)}")
+        elif "--preview-method" not in args:
+            args += ["--preview-method", method]
+        if "--preview-size" not in args:
+            args += ["--preview-size", DEFAULT_PREVIEW_SIZE]
     cfg.args = args
 
     extra_env, errors = validate_env(env.get("EXTRA_ENV"), allowlist)
@@ -243,12 +254,41 @@ def resolve(env, allowlist, module_available=None) -> LaunchConfig:
     else:
         cfg.ladder = list(allowlist.get("default_ladder", ["resubmit_cached", "decode_from_latent"]))
 
-    policy = (env.get("HF_RESTART_POLICY") or "once").strip().lower()
+    policy = (env.get("HF_RESTART_POLICY") or DEFAULT_RESTART_POLICY).strip().lower()
     if policy not in RESTART_POLICIES:
         cfg.errors.append(f"HF_RESTART_POLICY must be one of {', '.join(RESTART_POLICIES)}")
-        policy = "once"
-    cfg.max_restarts = RESTART_POLICIES[policy]
+        policy = DEFAULT_RESTART_POLICY
+    cfg.restart_policy = policy
+    cfg.max_restarts = RESTART_POLICIES[policy] if RESTART_POLICIES[policy] is not None else 1
     return cfg
+
+
+def restart_budget(cfg: LaunchConfig, entries: int) -> int:
+    """How many ComfyUI restarts this job may use. `each` = one per manifest entry (a job of N workflows can lose
+    ComfyUI N times and still run every remaining entry); the fixed policies keep their number."""
+    if cfg.restart_policy == "each":
+        return max(1, int(entries or 1))
+    return cfg.max_restarts
+
+
+def unresponsive_seconds(raw) -> float:
+    """HF_UNRESPONSIVE_SECONDS: how long a live ComfyUI may leave /history unanswered before the runner stops it.
+    0 / off disables the watchdog; anything unparsable or negative falls back to the default."""
+    text = str(raw).strip().lower() if raw is not None else ""
+    if text in ("0", "off"):
+        return 0.0
+    try:
+        value = float(text)
+    except ValueError:
+        return DEFAULT_UNRESPONSIVE_SECONDS
+    return value if value > 0 else DEFAULT_UNRESPONSIVE_SECONDS
+
+
+def cpu_fallback_args(env, gpu_present: bool) -> list:
+    """['--cpu'] only when HF_ALLOW_CPU is set AND no NVIDIA GPU is visible (the image smoke test, diagnostics).
+    A job with a GPU never runs on the CPU, and `--cpu` stays denied in COMFY_EXTRA_ARGS."""
+    allowed = str(env.get("HF_ALLOW_CPU") or "").strip().lower() in ("1", "true", "yes")
+    return ["--cpu"] if allowed and not gpu_present else []
 
 
 def memory_safe_restart_args(allowlist) -> list:

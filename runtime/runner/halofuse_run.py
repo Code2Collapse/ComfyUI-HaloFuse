@@ -50,8 +50,9 @@ Exit codes (manifest mode):
   2  bad input (manifest missing/malformed, /output not writable, the
      input directory cannot be staged, or the launch options were rejected)
   6  ComfyUI server failed to start, or died mid-run and could not be
-     restarted (HF_RESTART_POLICY; default: one restart, after which the
-     remaining workflows run — the dead entry is reported as failed)
+     restarted (HF_RESTART_POLICY; default "each": one restart per manifest
+     entry, the dead entry is reported as failed and the remaining workflows
+     run; a crash loop of 3 consecutive deaths stops the job)
 
   Codes 3 (submission rejected), 4 (JOB_TIMEOUT_SECONDS exceeded) and 5 (no
   files produced) are per-workflow conditions in manifest mode: that single
@@ -83,6 +84,7 @@ from hf import latents as hf_latents  # noqa: E402
 from hf import launch as hf_launch  # noqa: E402
 from hf import outputs as hf_outputs  # noqa: E402
 from hf import previews as hf_previews  # noqa: E402
+from hf import storage as hf_storage  # noqa: E402
 from hf import supervisor as hf_sup  # noqa: E402
 from hf import telemetry as hf_telemetry  # noqa: E402
 from hf.comfy_ws import ComfyWS  # noqa: E402
@@ -145,6 +147,15 @@ CGROUP_ROOT = Path("/sys/fs/cgroup")
 NODE_SNAPSHOT_PATH = Path(os.environ.get("HF_NODE_SNAPSHOT_PATH", "/etc/halofuse/node_snapshot.json"))
 CLIENT_ID = "halofuse-runner"
 INTERRUPT_GRACE_SECONDS = 5.0
+# Heartbeat for the Docker HEALTHCHECK (scripts/healthcheck.py reads it).
+HEALTH_FILE = Path(os.environ.get("HF_HEALTH_FILE", "/tmp/halofuse-health.json"))
+try:
+    HEARTBEAT_SECONDS = max(0.2, float(os.environ.get("HF_HEARTBEAT_SECONDS", "5")))
+except ValueError:
+    HEARTBEAT_SECONDS = 5.0
+# A live ComfyUI that leaves /history unanswered this long is stopped and restarted (0 disables).
+UNRESPONSIVE = hf_launch.unresponsive_seconds(os.environ.get("HF_UNRESPONSIVE_SECONDS"))
+MAX_CONSECUTIVE_DEATHS = 3
 _MEMORY_OOM_CODES = ("vram_oom", "vae_decode_oom", "host_ram_oom")
 _DEFAULT_ERRORS = {1: "execution_error", 2: "bad_input", 3: "validation_failed", 4: "timeout",
                    5: "no_output", 6: "startup_failed"}
@@ -161,6 +172,10 @@ _SAMPLER = None      # hf.telemetry.Sampler
 _OOM_BEFORE = None   # cgroup oom_kill count when the current ComfyUI process started
 _PROC_ARGS = []      # extra args of the current ComfyUI process
 _FINGERPRINTED = False
+_HEARTBEAT = None    # hf.supervisor.Heartbeat
+_PREVIEW_DISCARD_MARKED = False
+_PREFETCH_STOP = threading.Event()  # set on exit: a running model copy stops between chunks
+_PREFETCH_THREADS = []  # copy workers, joined briefly on exit so a stopped copy can remove its .part file
 
 
 class WorkflowFailure(Exception):
@@ -439,46 +454,79 @@ def _copy_one(rel, size):
     dest = LOCAL_MODEL_DIR / rel
     if dest.is_file() and dest.stat().st_size == size:
         return 0.0
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_name(dest.name + ".part")
-    started = time.time()
-    with open(src, "rb") as fin, open(tmp, "wb") as fout:
-        shutil.copyfileobj(fin, fout, length=64 * 1024 * 1024)
-    tmp.rename(dest)  # atomic: ComfyUI never sees a half-written model
-    return time.time() - started
+    # atomic (.part + rename): ComfyUI never sees a half-written model; None when the job is ending
+    return hf_storage.copy_file(src, dest, _PREFETCH_STOP)
+
+
+def _prefetch_decision(total):
+    """C4: copy only from a remote/FUSE mount to a real local disk (hf/storage.py)."""
+    try:
+        mounts = hf_storage.parse_mounts((PROC_ROOT / "mounts").read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        mounts = []
+    try:
+        info = hf_telemetry.parse_meminfo((PROC_ROOT / "meminfo").read_text(encoding="utf-8", errors="replace"))
+        mem = info.get("MemAvailable")  # kB
+        mem = int(mem) * 1024 if mem is not None else None
+    except (OSError, ValueError, TypeError):
+        mem = None
+    local_parent = LOCAL_MODEL_DIR.parent if LOCAL_MODEL_DIR.parent.exists() else Path("/tmp")
+    try:
+        free = shutil.disk_usage(local_parent).free
+    except OSError:
+        free = None
+    return hf_storage.prefetch_plan(total, src_fs=hf_storage.fs_type_of(MODEL_BASE_DIR, mounts),
+                                    dst_fs=hf_storage.fs_type_of(LOCAL_MODEL_DIR, mounts), disk_free=free,
+                                    mem_available=mem)
 
 
 def prefetch_models(workflows):
     """Copy the job's model files to local NVMe. Runs in a background thread
-    while ComfyUI starts; main() waits for it before submitting a workflow."""
+    while ComfyUI starts; main() waits for it before submitting a workflow.
+    Copies run in daemon threads and stop between chunks when the job ends,
+    so a cancelled or failed job never waits for a multi-GiB copy (the old
+    ThreadPoolExecutor workers were joined at interpreter exit)."""
     try:
         files = _referenced_model_files(workflows)
         if not files:
             log("prefetch: no model files to copy")
             return
         total = sum(files.values())
-        free = shutil.disk_usage(LOCAL_MODEL_DIR.parent if LOCAL_MODEL_DIR.parent.exists() else "/tmp").free
-        if total > free * 0.9:
-            log(f"prefetch: skipped, {total / 2**30:.1f} GiB needed but only "
-                f"{free / 2**30:.1f} GiB free on local disk")
+        ok, reason = _prefetch_decision(total)
+        if not ok:
+            log(f"prefetch: skipped, {reason}")
             return
         log(f"prefetch: copying {len(files)} model file(s), {total / 2**30:.1f} GiB, "
             f"to local NVMe ({LOCAL_MODEL_DIR})")
         started = time.time()
-        from concurrent.futures import ThreadPoolExecutor, as_completed
         # Largest first so the long copies start early.
-        order = sorted(files.items(), key=lambda kv: kv[1], reverse=True)
-        with ThreadPoolExecutor(max_workers=PREFETCH_THREADS) as pool:
-            futures = {pool.submit(_copy_one, rel, size): (rel, size) for rel, size in order}
-            for fut in as_completed(futures):
-                rel, size = futures[fut]
+        pending = sorted(files.items(), key=lambda kv: kv[1], reverse=True)
+        lock = threading.Lock()
+
+        def worker():
+            while not _PREFETCH_STOP.is_set():
+                with lock:
+                    if not pending:
+                        return
+                    rel, size = pending.pop(0)
                 try:
-                    secs = fut.result()
+                    secs = _copy_one(rel, size)
                     if secs:
                         log(f"prefetch: {rel} ({size / 2**30:.1f} GiB) in {secs:.0f}s "
                             f"({size / 2**20 / max(secs, 0.001):.0f} MiB/s)")
                 except Exception as err:  # noqa: BLE001 - fall back to /assets for this file
                     log(f"prefetch: {rel} failed ({err}); ComfyUI will read it from /assets")
+
+        threads = [threading.Thread(target=worker, name=f"hf-prefetch-{i}", daemon=True)
+                   for i in range(min(PREFETCH_THREADS, len(pending)))]
+        _PREFETCH_THREADS.extend(threads)
+        for t in threads:
+            t.start()
+        for t in threads:
+            while t.is_alive() and not _PREFETCH_STOP.is_set():
+                t.join(0.5)
+        if _PREFETCH_STOP.is_set():
+            return
         elapsed = time.time() - started
         log(f"prefetch: done in {elapsed:.0f}s "
             f"({total / 2**20 / max(elapsed, 0.001):.0f} MiB/s overall)")
@@ -554,6 +602,11 @@ def resolve_launch():
         detail = "; ".join(_LAUNCH.errors)
         die(2, f"launch options rejected: {detail}",
             {"code": "bad_launch_args", "message": hf_classify.message_for("bad_launch_args"), "detail": detail})
+    gpu_present = hf_sup.gpu_driver_info(NVIDIA_SMI)[0] is not None
+    cpu = hf_launch.cpu_fallback_args(os.environ, gpu_present)
+    if cpu:
+        _LAUNCH.args = list(_LAUNCH.args) + cpu  # deliberately outside the allowlist (--cpu stays denied there)
+        log("no NVIDIA GPU visible and HF_ALLOW_CPU=1: ComfyUI runs on the CPU (smoke test / diagnostics only)")
     if _LAUNCH.args or _LAUNCH.env or _LAUNCH.preset != "safe":
         log(f"launch preset: {_LAUNCH.preset}; extra args: {' '.join(_LAUNCH.args) or 'none'}; "
             f"extra env: {', '.join(sorted(_LAUNCH.env)) or 'none'}")
@@ -579,15 +632,37 @@ def start_comfyui(extra_args=None):
     _PROC_ARGS = args
     _OOM_BEFORE = _SAMPLER.oom_kill_count() if _SAMPLER is not None else None
     _CTX.phase("comfy_start", "start")
+    _mark_discarded_previews(args)
     # stdout/stderr are relayed line by line so ComfyUI's own logs still reach
     # the cloud log stream (same stream, same text) and render.log.
     return hf_sup.ComfyProcess(cmd, COMFYUI_DIR, env, _em(),
-                               on_node_import=lambda d: _CTX.phase("node_import", "mark", dur=round(d, 3))).start()
+                               on_node_import=lambda d: _CTX.phase("node_import", "mark", dur=round(d, 3)),
+                               on_line=_comfy_line).start()
+
+
+def _comfy_line(text):
+    """Every ComfyUI output line goes to the preview relay when it consumes them (R-PREVIEW-01)."""
+    consume = getattr(_RELAY, "on_comfy_line", None)
+    if consume is not None:
+        consume(text)
+
+
+def _mark_discarded_previews(args):
+    """R-PREVIEW-01: ComfyUI renders preview frames (--preview-method other than none) that nobody relays."""
+    global _PREVIEW_DISCARD_MARKED
+    if _PREVIEW_DISCARD_MARKED or "--preview-method" not in args:
+        return
+    i = args.index("--preview-method")
+    method = args[i + 1] if i + 1 < len(args) else ""
+    if method != "none" and (os.environ.get("HF_PREVIEW") or "off").strip().lower() != "live":
+        _PREVIEW_DISCARD_MARKED = True
+        _CTX.phase("preview_discarded", "mark", detail=f"--preview-method {method} while HF_PREVIEW is off")
 
 
 def _death(proc):
     """ComfyDied for a ComfyUI process that is gone, classified (cgroup oom_kill, signal, stderr tail)."""
     proc.join_output(2.0)
+    proc.reap_tree()  # no orphaned child keeps memory into the restarted ComfyUI
     delta = None
     if _SAMPLER is not None and _OOM_BEFORE is not None:
         now = _SAMPLER.oom_kill_count()
@@ -617,6 +692,7 @@ def wait_ready(proc):
             names = ", ".join(d.get("name", "?") for d in stats.get("devices", []))
             log(f"ComfyUI ready (devices: {names or 'unknown'})")
             _CTX.phase("comfy_start", "end")
+            _beat("ready")
             return stats
         except (urllib.error.URLError, OSError, json.JSONDecodeError):
             time.sleep(1)
@@ -751,6 +827,7 @@ def wait_done(proc, prompt_id):
     """
     start = time.monotonic()
     last_beat = start
+    last_answer = start
     _CTX.phase("execute", "start", prompt_id=prompt_id, **_wf_fields())
     try:
         while True:
@@ -769,9 +846,13 @@ def wait_done(proc, prompt_id):
             if proc.poll() is not None:
                 raise _death(proc)
             try:
-                history = http_json(f"/history/{prompt_id}", timeout=15)
+                history = http_json(f"/history/{prompt_id}", timeout=min(15, UNRESPONSIVE or 15))
+                last_answer = time.monotonic()
             except (urllib.error.URLError, OSError):
                 history = {}
+                silent = time.monotonic() - last_answer
+                if UNRESPONSIVE and silent > UNRESPONSIVE and proc.poll() is None:
+                    raise _unresponsive(proc, silent)
             entry = history.get(prompt_id)
             if entry:
                 status = entry.get("status") or {}
@@ -798,6 +879,30 @@ def wait_done(proc, prompt_id):
             time.sleep(POLL_INTERVAL)
     finally:
         _CTX.phase("execute", "end", prompt_id=prompt_id, **_wf_fields())
+
+
+def _unresponsive(proc, silent):
+    """Stop a live but silent ComfyUI; the caller handles it like a death (restart, next workflow)."""
+    log(f"ComfyUI stopped answering for {silent:.0f}s; stopping it")
+    proc.kill()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
+    proc.reap_tree()
+    cls = {"code": "process_exit", "message": hf_classify.message_for("process_exit"),
+           "detail": f"ComfyUI did not answer HTTP for {silent:.0f}s while running a workflow; the runner stopped it",
+           "signal": "SIGKILL"}
+    node = _RELAY.current["node"] if _RELAY is not None else None
+    class_type = _RELAY.current["class_type"] if _RELAY is not None else None
+    if node is not None:
+        cls = dict(cls, node=node, class_type=class_type)
+    return hf_sup.ComfyDied(proc.returncode, cls, node, class_type)
+
+
+def _beat(state):
+    if _HEARTBEAT is not None:
+        _HEARTBEAT.set_state(state)
 
 
 def _recovery(action, reason, attempt, result, detail=None, **extra):
@@ -869,16 +974,24 @@ def execute(workflow, targets=None):
 
 
 def _restart_after_death(died):
-    """F3: restart ComfyUI once (per HF_RESTART_POLICY) with memory-safe flags when the death was memory-related."""
-    if _CTX.restarts >= _LAUNCH.max_restarts:
+    """F3: restart ComfyUI (budget per HF_RESTART_POLICY, default one per manifest entry) with memory-safe flags when
+    the death was memory-related. A crash loop (MAX_CONSECUTIVE_DEATHS deaths with no succeeded entry between them)
+    is not restarted again."""
+    _CTX.consecutive_deaths += 1
+    if _CTX.restarts >= hf_launch.restart_budget(_LAUNCH, _CTX.manifest_total or 1):
+        return False
+    if _CTX.consecutive_deaths >= MAX_CONSECUTIVE_DEATHS:
+        log(f"ComfyUI died {MAX_CONSECUTIVE_DEATHS} consecutive times; not restarting again")
         return False
     code = died.classification.get("code")
     added = hf_launch.memory_safe_restart_args(_ALLOW) if hf_classify.is_memory_related(code) else []
     args = hf_launch.merge_args(list(_LAUNCH.args), added, _ALLOW) if added else list(_LAUNCH.args)
     _CTX.restarts += 1
+    budget = hf_launch.restart_budget(_LAUNCH, _CTX.manifest_total or 1)
     _recovery("restart_comfyui", code, _CTX.restarts, "started",
-              f"restart {_CTX.restarts} of {_LAUNCH.max_restarts}", args=added)
-    log(f"restarting ComfyUI after it died (restart {_CTX.restarts} of {_LAUNCH.max_restarts})")
+              f"restart {_CTX.restarts} of {budget}", args=added)
+    log(f"restarting ComfyUI after it died (restart {_CTX.restarts} of {budget})")
+    _beat("restarting")
     _CTX.proc = start_comfyui(args)
     try:
         _after_ready(wait_ready(_CTX.proc))
@@ -1025,7 +1138,7 @@ def run_manifest(proc, entries):
         if died is not None:
             reason = f"ComfyUI died mid-run (code {died.returncode})"
             _CTX.error(died.classification, **_wf_fields())
-            if _LAUNCH.max_restarts == 0:
+            if hf_launch.restart_budget(_LAUNCH, total) == 0:
                 # Frozen pre-HaloFuse behaviour: the job ends here (exit 6). Partial files still move (X6).
                 moved = _collect_new_outputs(before, f"wf_{idx:02d}")
                 _CTX.item(idx, "failed", len(moved), died.classification.get("code"), reason)
@@ -1041,7 +1154,7 @@ def run_manifest(proc, entries):
                 failure = exc
             except hf_sup.ComfyDied as again:
                 _CTX.error(again.classification, **_wf_fields())
-                restarted = _CTX.restarts < _LAUNCH.max_restarts and _restart_after_death(again)
+                restarted = _restart_after_death(again)
             except hf_sup.Cancelled:
                 cancelled = True
             if not restarted and not cancelled:
@@ -1086,6 +1199,7 @@ def run_manifest(proc, entries):
             continue
 
         log(f"workflow {idx}/{total} succeeded ({len(moved)} file(s))")
+        _CTX.consecutive_deaths = 0
         _CTX.item(idx, "succeeded", len(moved))
     _CTX.current_wf = None
     return 1 if any_failed else 0
@@ -1095,12 +1209,18 @@ def shutdown(proc):
     if proc is None or proc.poll() is not None:
         return
     _CTX.phase("shutdown", "start")
+    _beat("finishing")
     log("shutting down ComfyUI")
-    proc.terminate()
+    proc.terminate()  # the whole process group: no child outlives the job
     try:
         proc.wait(timeout=5 if _CTX.cancel.is_set() else 15)
     except subprocess.TimeoutExpired:
         proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+    proc.reap_tree()
     _CTX.phase("shutdown", "end")
 
 
@@ -1149,6 +1269,10 @@ def _start_telemetry():
 
 
 def _stop_background():
+    _PREFETCH_STOP.set()
+    deadline = time.monotonic() + 3.0  # a copy stops within one chunk; never wait for the whole file
+    for t in list(_PREFETCH_THREADS):
+        t.join(max(0.0, deadline - time.monotonic()))
     for worker in (_TELEMETRY, _WS):
         if worker is not None:
             try:
@@ -1158,12 +1282,13 @@ def _stop_background():
 
 
 def _run():
-    global _CTX, _RELAY
+    global _CTX, _RELAY, _HEARTBEAT
     nonce = os.environ.get("HF_EVENT_NONCE") or None
     nonce_ok = nonce is None or hf_events.valid_nonce(nonce)
     em = hf_events.install(hf_events.Emitter(nonce=nonce if nonce_ok else None))
     _CTX = hf_sup.RunContext(em)
     hf_sup.install_signal_handlers(_CTX)
+    _HEARTBEAT = hf_sup.Heartbeat(HEALTH_FILE, HEARTBEAT_SECONDS, port=PORT).start()
     _CTX.phase("boot", "start")
     log_banner()
 
@@ -1277,6 +1402,8 @@ def _finish(code):
     _stop_background()
     if _CTX is not None:
         _CTX.finish(code)
+    if _HEARTBEAT is not None:
+        _HEARTBEAT.stop("finished", code)
     hf_events.get().close()
 
 
