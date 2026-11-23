@@ -125,3 +125,11 @@ Dockerfile and builds the runtime image.
 
 AGPL-3.0, see [LICENSE](LICENSE). HaloFuse is built on an MIT-licensed bridge and runtime; that notice is kept
 in [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
+
+## What changed on 2026-11-23
+
+- Workflow Check reads core Math Expression inputs correctly and skips nodes that feed no output, as ComfyUI does.
+- Node availability is checked against the cloud image's own node list (shipped with the extension).
+- The sidebar panel scrolls.
+- Models are found anywhere in the cloud library by name and size, and missing models upload by themselves (same
+  folders as on this computer; switch off under Advanced). Details: CHANGELOG.md.
