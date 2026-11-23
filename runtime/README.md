@@ -47,7 +47,11 @@ output files · `6` ComfyUI failed to start or died (and no restart was allowed 
 
 Environment: `STARTUP_TIMEOUT_SECONDS` (default 300), `JOB_TIMEOUT_SECONDS` (default 0 = unlimited), `BATCH_COUNT`
 (render repeats, 1–100), `ALLOW_PARTIAL_OUTPUTS`, `PREFETCH_MODELS` / `PREFETCH_THREADS` (copy the referenced models
-from `/assets` to local disk first), `COMFY_PORT` (default 8188), and for 0.4.0: `HF_PRESET` (launch preset),
+from `/assets` to local disk in the order the workflow first uses them, while the workflow already runs; a model load
+that needs an unfinished copy waits for that copy only), `HF_PREFETCH_BEFORE_SUBMIT=1` (the earlier behaviour: every
+copy finishes before the workflow is sent), `HF_PREFETCH_STALL_SECONDS` (default 600: a model load stops waiting for a
+copy that made no progress this long and reads the original), `HF_PREFETCH_STATE` (default `/tmp/halofuse-prefetch`,
+the copy plan shared with ComfyUI), `COMFY_PORT` (default 8188), and for 0.4.0: `HF_PRESET` (launch preset),
 `COMFY_EXTRA_ARGS` / `EXTRA_ENV` (checked against `runner/launch_allowlist.json`; anything else is rejected before
 ComfyUI starts, and the argument list never goes through a shell), `HF_RESTART_POLICY` (`each` (default: one
 restart per manifest entry), `once`, `twice`, `off`), `HF_UNRESPONSIVE_SECONDS` (default 300: a live ComfyUI that
