@@ -545,7 +545,7 @@ class QueueRunner:
             manifest = {"workflows": entries}
             ref = jobs.stage_and_submit(
                 self.backend, settings=self.settings, instance_type=sku,
-                files={image_contract.MANIFEST_NAME: json.dumps(manifest)},
+                files={self.settings.get("manifest_name") or image_contract.MANIFEST_NAME: json.dumps(manifest)},
                 workflows_for_inputs=[e["workflow"] for e in entries],
                 env=jobs._job_env(self.settings, jobs._build_chunk_env(self.settings), max_runtime_s=max_rt,
                                   preview_mode=None, nonce=nonce),

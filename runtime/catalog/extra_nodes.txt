@@ -1,0 +1,11 @@
+# HaloFuse runtime - extra custom node packs (owner-editable)
+#
+# One GitHub repository per line: owner/repo, or owner/repo@ref (a branch, tag or 40-character commit).
+# At image build time each line is pinned to an exact commit (recorded in /etc/halofuse/install_report.json),
+# downloaded and its requirements.txt installed with the base image's torch pinned. Extras are optional: a pack that
+# fails to download or install is moved aside and the build continues. A pack already in the chosen profile is
+# skipped. Lines starting with # are comments.
+#
+# Example:
+# kijai/ComfyUI-KJNodes
+# someone/ComfyUI-SomePack@v1.2.0

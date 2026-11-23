@@ -1,6 +1,6 @@
 # Custom-node catalog
 
-`catalog.json` lists every repository of the work order (247 entries) with the 16 required fields; `profiles.json`
+`catalog.json` lists every repository of the work order (246 entries; one more is kept in a private list) with the 16 required fields; `profiles.json`
 defines the runtime profiles and the licence policy. `catalog.schema.json` is the JSON Schema;
 `python scripts/hf_catalog.py validate | summary | resolve <profile>` checks and explains them.
 

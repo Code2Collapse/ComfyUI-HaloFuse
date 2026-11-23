@@ -256,9 +256,13 @@ def load_settings() -> dict:
     data.update(raw)
     for key in _PRIVATE_KEYS:
         data.pop(key, None)
-    # image/command are node-version constants; never honour a stale saved value.
-    data["image"] = DEFAULTS["image"]
-    data["command"] = DEFAULTS["command"]
+    # image / command / manifest come from the runtime contract (provider/image_contract.py), chosen by the
+    # environment or the file-only `runtime_image` key; a stale saved image or command is never honoured.
+    contract = image_contract.select(settings=raw)
+    data["image"] = contract.image
+    data["command"] = list(contract.command)
+    data["manifest_name"] = contract.manifest_name
+    data["runtime_image"] = contract.name
     return data
 
 

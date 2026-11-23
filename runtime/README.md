@@ -76,7 +76,9 @@ weights, and the build never downloads models.
 
 The custom-node set comes from the catalog in [catalog/](catalog/README.md): one entry per pack with its pinned
 version, content hash, licence and status, and named profiles built as separate images (`PROFILE` build argument).
-`python scripts/hf_catalog.py summary` lists the profiles. The `default` profile is exactly the 31 packs of the image
+`python scripts/hf_catalog.py summary` lists the profiles. To add packs without editing JSON, list them in
+[`catalog/extra_nodes.txt`](catalog/extra_nodes.txt) (`owner/repo` or `owner/repo@ref` per line): each is pinned to
+an exact commit at build time and is optional - one that fails to install is moved aside and the build continues. The `default` profile is exactly the 31 packs of the image
 the extension uses today, so saved workflows keep working; any install failure fails that build. In the other
 profiles a pack that fails to install is moved aside and reported, and the build continues. ComfyUI-Manager is never
 installed (a batch container must not install or update code by itself).
