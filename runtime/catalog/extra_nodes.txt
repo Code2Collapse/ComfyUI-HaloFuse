@@ -5,6 +5,9 @@
 # downloaded and its requirements.txt installed with the base image's torch pinned. Extras are optional: a pack that
 # fails to download or install is moved aside and the build continues. A pack already in the chosen profile is
 # skipped. Lines starting with # are comments.
+# Packs the catalog keeps out of cloud images (UI-only, ComfyUI-Manager, research repositories) are rejected with
+# the reason (check offline: python scripts/install_nodes.py check-extras). Each extra's licence is recorded in the
+# install report; a non-permissive licence is installed but flagged (listing it here is the owner's decision).
 #
 # Example:
 # kijai/ComfyUI-KJNodes

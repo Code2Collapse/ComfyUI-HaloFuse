@@ -7341,76 +7341,80 @@
    "notes": "uses ultralytics (AGPL-3.0)"
   },
   {
-   "repo": "nkxx188/ComfyUIMiniMaxH3-Easy",
-   "url": "https://github.com/nkxx188/ComfyUIMiniMaxH3-Easy",
-   "category": "incompatible",
-   "backend_frontend": "unknown",
-   "install_target": "reference-only",
+   "repo": "nkxx188/ComfyUI-MiniMaxH3-Easy",
+   "url": "https://github.com/nkxx188/ComfyUI-MiniMaxH3-Easy",
+   "category": "combined",
+   "backend_frontend": "both",
+   "install_target": "cloud",
    "install": {
-    "method": "none",
-    "notes": "not installed by HaloFuse"
+    "method": "git-archive",
+    "folder": "ComfyUI-MiniMaxH3-Easy",
+    "archive": "https://github.com/nkxx188/ComfyUI-MiniMaxH3-Easy/archive/<commit>.zip"
    },
    "requirements": {
-    "value": "unknown",
-    "reason": "incompatible / reference-only: not installed into a cloud image, requirements not evaluated",
-    "declared_pip": []
+    "python": "not declared (runs on the base image's Python 3.13)",
+    "torch": "uses ComfyUI's torch from the base image",
+    "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
+    "pip": [],
+    "source": "no requirements.txt at the repository root; pyproject.toml at 5c026b9878d5 declares requests, psutil (both in the base image)"
    },
-   "system_deps": {
-    "value": "unknown",
-    "reason": "incompatible / reference-only: not installed by HaloFuse"
-   },
+   "system_deps": [],
    "model_download": {
-    "value": "unknown",
-    "reason": "not installed by HaloFuse (category/target); download behaviour not evaluated"
+    "behavior": "models-from-mount",
+    "evidence": "no hf_hub_download / snapshot_download / load_file_from_url / urlretrieve found by GitHub code search (default branch, 2026-11-23); other download paths not excluded",
+    "dependency_hints": [
+     "declares requests (network calls possible at runtime)"
+    ],
+    "policy": "the image never downloads models at build time; runtime downloads need network in the job"
    },
    "license": {
-    "class": "unknown",
-    "spdx": null,
-    "source": "repository unreachable",
-    "notes": "not readable",
-    "flags": [
-     "unknown-licence"
-    ]
+    "class": "permissive",
+    "spdx": "MIT",
+    "source": "GitHub licence detection (LICENSE file)",
+    "notes": "",
+    "flags": []
    },
    "compatibility": {
-    "compatible": false,
-    "notes": "repository not found (GitHub API 404 and git ls-remote \"Repository not found\", 2026-11-20). A repository nkxx188/ComfyUI-MiniMaxH3-Easy exists: probable typo in the work order, NEEDS_OWNER to confirm"
+    "compatible": true,
+    "notes": "ComfyUI node pack (__init__.py with NODE_CLASS_MAPPINGS, 23 classes, web/ extension); no blocker found by static inspection; import NOT VERIFIED"
    },
    "conflicts": {
     "conflicts_with": [],
     "overlaps": [],
     "notes": ""
    },
-   "profiles": [],
+   "profiles": [
+    "video",
+    "full"
+   ],
    "enabled_by_default": false,
    "pin": {
-    "commit": null,
+    "commit": "5c026b9878d56d848f87f79628132d2df702bc01",
     "version": null,
-    "reason": "repository unreachable; nothing to pin",
-    "pinned_at": "2026-11-20",
-    "content_sha256": null
+    "pinned_at": "2026-11-23",
+    "content_sha256": null,
+    "pin_source": "default branch HEAD on 2026-11-23 (GitHub API; commit date 2026-11-12)"
    },
    "verified": {
     "status": "NOT VERIFIED",
     "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
    },
    "source_list": "Main custom-node collection",
-   "description": "",
+   "description": "The easiest way to use MiniMax H3. One compact workflow for T2V, I2V, first/last-frame, and reference video generation, with a unified multi-media input, powerful @ references, and inline dialogue blocks. Less wiring. More creative control.",
    "upstream": {
-    "reachable": false,
-    "http_status": 404,
-    "canonical_name": null,
-    "archived": null,
-    "fork": null,
-    "default_branch": null,
-    "head_commit": null,
-    "head_date": null,
+    "reachable": true,
+    "http_status": 200,
+    "canonical_name": "nkxx188/ComfyUI-MiniMaxH3-Easy",
+    "archived": false,
+    "fork": false,
+    "default_branch": "main",
+    "head_commit": "5c026b9878d56d848f87f79628132d2df702bc01",
+    "head_date": "2026-11-12T17:39:19Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20",
-    "candidate": "nkxx188/ComfyUI-MiniMaxH3-Easy (exists; not catalogued until the owner confirms)"
+    "probed_at": "2026-11-23"
    },
-   "needs_owner": "confirm the repository name"
+   "notes": "owner list 2026-11-21 confirms this spelling; replaces the work order's 404 name nkxx188/ComfyUIMiniMaxH3-Easy"
   },
   {
    "repo": "Songssx/ComfyUI-MiniMaxH3-TimelineDirector",

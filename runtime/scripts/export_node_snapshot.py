@@ -139,6 +139,28 @@ def build_snapshot(catalog: dict, profiles: dict, profile: str, *, object_info: 
         else:
             missing_any = True
         packs.append(rec)
+    # extra_nodes.txt packs (install report only, not in the catalog): listed and their classes kept, otherwise the
+    # bridge preflight would block their nodes as unknown
+    for rep in (install_report or {}).get("packs", []):
+        if not rep.get("extra"):
+            continue
+        folder = rep.get("folder") or ""
+        key = folder.lower()
+        rec = {"repo": rep["repo"], "folder": folder, "commit": rep.get("commit"), "version": rep.get("version"),
+               "status": "not_captured", "node_classes": None, "error": None, "extra": True}
+        if rep.get("status") == "failed":
+            rec.update(status="failed", error=_clean_error(rep.get("error")) or "install failed")
+        elif object_info is None:
+            pass
+        elif key in failures:
+            rec.update(status="failed", error=_clean_error(failures[key]))
+        elif key in present or key in classes_by_folder:
+            names = sorted(classes_by_folder.get(key, []))
+            rec.update(status="loaded", node_classes=names)
+            loaded_classes.update(names)
+        else:
+            missing_any = True
+        packs.append(rec)
     for e, reason in res.excluded:
         packs.append({"repo": e["repo"], "folder": hf_catalog.folder_of(e), "commit": e["pin"].get("commit"),
                       "version": e["pin"].get("version"), "status": "not_installed", "node_classes": None,
