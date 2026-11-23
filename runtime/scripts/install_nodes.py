@@ -27,6 +27,11 @@ Failure handling
     already has. pip resolves before installing, so a refused pack leaves the
     environment as it was.
 
+  * per-pack catalog fixes, non-strict profiles only (`install.requirement_overrides` rewrites one upstream
+    requirement line, e.g. a numpy<2 cap the image moved past; `install.extra_requirements` adds a package the
+    pack imports but never declared). pip installs a rewritten copy under the work dir; the pack's own files are
+    never edited. A stale override (upstream changed the line) is not applied and is reported.
+
 torch/torchvision/torchaudio are always constrained to the base image build.
 No git binary is needed for the packs themselves; nothing here runs at
 container start.
@@ -396,10 +401,67 @@ def _torch_only(lines: list[str]) -> list[str]:
     return [l for l in lines if l.split("==")[0].lower() in TORCH_PKGS]
 
 
+_req_key = hf_catalog.req_key
+
+
+def apply_requirement_overrides(lines: list[str], overrides: list[dict]) -> tuple[list[str], list[str], list[str]]:
+    """Rewrite the requirement lines named by catalog `install.requirement_overrides`.
+
+    An override applies only when the pack still writes exactly its `upstream` line (comments, whitespace, name case
+    and separators ignored); otherwise it is stale: not applied, reported, and the upstream line is installed as is.
+    Returns (lines, applied, stale)."""
+    out = list(lines)
+    applied, stale = [], []
+    for ov in overrides:
+        name = re.sub(r"[-_.]+", "-", ov["name"]).lower()
+        want = _req_key(ov["upstream"])
+        hits = [i for i, l in enumerate(out) if l is not None and hf_catalog.req_name(l) == name]
+        match = [i for i in hits if _req_key(out[i]) == want]
+        if not match:
+            found = "; ".join(out[i].split("#", 1)[0].strip() for i in hits) or "no such line"
+            stale.append(f"{ov['upstream']} (requirements.txt has: {found})")
+            continue
+        for i in match:
+            out[i] = ov["use"]
+        applied.append(f"{ov['upstream']} -> {ov['use'] if ov['use'] is not None else '(dropped)'}")
+    return [l for l in out if l is not None], applied, stale
+
+
+def _requirements_for(rec: dict, req: Path, entry: dict | None, strict: bool, work: Path) -> Path:
+    """The requirements file pip installs: the pack's own, or (non-strict profiles with catalog
+    `requirement_overrides` / `extra_requirements`) a rewritten copy under work/<folder>/. The pack's files are never
+    edited (its content hash stays valid). Strict profiles (`default`, production parity) always install upstream."""
+    inst = (entry or {}).get("install") or {}
+    overrides = inst.get("requirement_overrides") or []
+    extras = inst.get("extra_requirements") or []
+    if strict or not (overrides or extras):
+        return req
+    lines, applied, stale = apply_requirement_overrides(req.read_text(encoding="utf-8").splitlines(), overrides)
+    added = []
+    for ex in extras:
+        have = [hf_catalog.req_name(l) for l in lines]
+        if hf_catalog.req_name(ex["requirement"]) in have:
+            stale.append(f"{ex['requirement']} (already required upstream: {hf_catalog.req_name(ex['requirement'])})")
+            continue
+        lines.append(ex["requirement"])
+        added.append(ex["requirement"])
+    rec["requirement_overrides"] = {"applied": applied, "added": added, "stale": stale}
+    for s in stale:
+        log(f"override for {rec['repo']} is STALE, installed as upstream wrote it: {s}")
+    if not (applied or added):
+        return req
+    log(f"requirement overrides for {rec['repo']}: {', '.join(applied + [f'+ {a}' for a in added])}")
+    out = work / rec["folder"] / "requirements.txt"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out
+
+
 def install_deps(catalog_dir, profile: str, custom_nodes: Path, report: dict, pip=run_pip,
                  work: Path | None = None, base_constraints: Path = BASE_CONSTRAINTS) -> dict:
     catalog, profiles = _load(catalog_dir)
     res = hf_catalog.resolve(catalog, profiles, profile)
+    by_repo = hf_catalog.entries_by_repo(catalog)
     custom_nodes = Path(custom_nodes)
     disabled = custom_nodes.parent / "custom_nodes_disabled"
     work = Path(work or tempfile.mkdtemp(prefix="hf-deps-"))
@@ -421,6 +483,8 @@ def install_deps(catalog_dir, profile: str, custom_nodes: Path, report: dict, pi
             continue
         frozen = torch_pins if res.strict else sorted(set(_freeze(pip)) | set(torch_pins))
         constraints.write_text("\n".join(frozen) + "\n")
+        entry = None if rec.get("extra") else by_repo.get(rec["repo"])
+        req = _requirements_for(rec, req, entry, res.strict, work)
         argv = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "--no-input",
                 "--progress-bar", "off", "-r", str(req), "-c", str(constraints)]
         log(f"pip install -r {rec['folder']}/requirements.txt")

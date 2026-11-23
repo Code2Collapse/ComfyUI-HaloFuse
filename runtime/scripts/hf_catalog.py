@@ -61,6 +61,85 @@ COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 FOLDER_RE = re.compile(r"^[A-Za-z0-9_.][A-Za-z0-9_.-]*$")
 INSTALLABLE_CATEGORIES = ("backend", "combined")
+REQ_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+PROTECTED_REQS = ("torch", "torchvision", "torchaudio")  # always the base image build; never overridden
+
+
+def req_name(line: str) -> str | None:
+    """PEP 503 normalised project name of a plain requirement line (None for options, URLs, paths, blanks)."""
+    text = str(line).split("#", 1)[0].strip()
+    m = REQ_NAME_RE.match(text)
+    if not m or "://" in text or text.startswith(("-", ".", "/")):
+        return None
+    return re.sub(r"[-_.]+", "-", m.group(1)).lower()
+
+
+def req_key(line: str) -> str:
+    """Comparable form of a requirement line: comment and whitespace removed, the name normalised."""
+    text = str(line).split("#", 1)[0]
+    text = re.sub(r"\s+", "", text)
+    name = req_name(text)
+    if name is None:
+        return text
+    return name + text[REQ_NAME_RE.match(text).end():].lower()
+
+
+def _validate_requirement_overrides(overrides) -> list[str]:
+    """`install.requirement_overrides`: each rewrites ONE upstream requirement line of the pack, in non-strict
+    profiles only (install_nodes.py). {name, upstream, use: str | null (drop), reason}."""
+    if not isinstance(overrides, list):
+        return ["install.requirement_overrides must be a list"]
+    errs = []
+    for i, ov in enumerate(overrides):
+        where = f"install.requirement_overrides[{i}]"
+        if not isinstance(ov, dict):
+            errs.append(f"{where} must be an object")
+            continue
+        name = ov.get("name")
+        norm = re.sub(r"[-_.]+", "-", str(name or "")).lower()
+        if not name or req_name(str(name)) != norm:
+            errs.append(f"{where}: name must be a plain package name")
+            continue
+        if norm in PROTECTED_REQS:
+            errs.append(f"{where}: {norm} is never overridden (torch stays the base image build)")
+        if len(str(ov.get("reason") or "").strip()) < 10:
+            errs.append(f"{where}: a reason (why the upstream requirement can be changed) is required")
+        if req_name(str(ov.get("upstream") or "")) != norm:
+            errs.append(f"{where}: upstream must be the pack's own requirement line for {name}")
+        if "use" not in ov:
+            errs.append(f"{where}: use is required (a requirement, or null to drop the line)")
+        elif ov["use"] is not None:
+            use = str(ov["use"])
+            if not _plain_requirement(use):
+                errs.append(f"{where}: use must be a plain requirement (no options, URLs or markers)")
+            elif req_name(use) != norm:
+                errs.append(f"{where}: use must name the same package as name ({name}), not {use}")
+    return errs
+
+
+def _plain_requirement(text: str) -> bool:
+    return req_name(text) is not None and not any(t in text for t in ("://", "@", " -", ";", "#"))
+
+
+def _validate_extra_requirements(extras) -> list[str]:
+    """`install.extra_requirements`: packages the pack imports at load time but its requirements.txt omits; added in
+    non-strict profiles only (install_nodes.py). {requirement, reason}."""
+    if not isinstance(extras, list):
+        return ["install.extra_requirements must be a list"]
+    errs = []
+    for i, ex in enumerate(extras):
+        where = f"install.extra_requirements[{i}]"
+        if not isinstance(ex, dict):
+            errs.append(f"{where} must be an object")
+            continue
+        req = str(ex.get("requirement") or "")
+        if not _plain_requirement(req):
+            errs.append(f"{where}: requirement must be a plain requirement (no options, URLs or markers)")
+        elif req_name(req) in PROTECTED_REQS:
+            errs.append(f"{where}: {req_name(req)} is never added (torch stays the base image build)")
+        if len(str(ex.get("reason") or "").strip()) < 10:
+            errs.append(f"{where}: a reason (which import needs it) is required")
+    return errs
 
 
 class CatalogError(ValueError):
@@ -144,6 +223,12 @@ def validate_entry(entry: dict) -> list[str]:
             err("git-archive install needs a safe folder name")
     if entry["install_target"] == "cloud" and method not in ("registry", "git-archive", "base-image"):
         err("a cloud entry must be installable (registry, git-archive or base-image)")
+    if isinstance(inst, dict) and "requirement_overrides" in inst:
+        for msg in _validate_requirement_overrides(inst["requirement_overrides"]):
+            err(msg)
+    if isinstance(inst, dict) and "extra_requirements" in inst:
+        for msg in _validate_extra_requirements(inst["extra_requirements"]):
+            err(msg)
 
     for key in ("requirements", "system_deps", "model_download"):
         val = entry[key]

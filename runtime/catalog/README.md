@@ -15,6 +15,8 @@ defines the runtime profiles and the licence policy. `catalog.schema.json` is th
 | `verified.status` | `NOT VERIFIED` unless an import test ran; image snapshots (`/etc/halofuse/node_snapshot.json`) carry the real per-pack result |
 | `pin.content_sha256` | sha256 of the extracted tree; the build refuses a different archive. `null` = not locked yet (`scripts/lock_catalog.py --profile P --write`, needs network) |
 | `license.class` | permissive, copyleft, network-copyleft (AGPL), non-commercial, restrictive-custom, no-licence, unknown |
+| `install.requirement_overrides` | non-strict profiles only (`full` etc.; never `default`): rewrite one upstream requirement line, e.g. a `numpy<2` cap the image moved past (`use: null` drops the line); `upstream` must match the pack's line exactly or the override is reported stale and not applied. Each has a `reason` |
+| `install.extra_requirements` | non-strict profiles only: a package the pack imports at load time but its requirements.txt omits, with a `reason` |
 | `model_download` | evidence from GitHub code search at the pin; the image never downloads models at build time |
 
 Unknown values are written as `{"value": "unknown", "reason": "..."}`, never omitted.

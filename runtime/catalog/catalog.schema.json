@@ -33,7 +33,20 @@
           "properties": {
             "method": {"enum": ["registry", "git-archive", "base-image", "local-user", "none"]},
             "folder": {"type": "string", "pattern": "^[A-Za-z0-9_.][A-Za-z0-9_.-]*$"},
-            "registry_id": {"type": "string"}
+            "registry_id": {"type": "string"},
+            "requirement_overrides": {
+              "description": "Non-strict profiles only: rewrite one upstream requirement line (use null = drop it).",
+              "type": "array",
+              "items": {"type": "object", "required": ["name", "upstream", "use", "reason"],
+                        "properties": {"name": {"type": "string"}, "upstream": {"type": "string"},
+                                       "use": {"type": ["string", "null"]}, "reason": {"type": "string", "minLength": 10}}}
+            },
+            "extra_requirements": {
+              "description": "Non-strict profiles only: packages the pack imports at load time but does not declare.",
+              "type": "array",
+              "items": {"type": "object", "required": ["requirement", "reason"],
+                        "properties": {"requirement": {"type": "string"}, "reason": {"type": "string", "minLength": 10}}}
+            }
           }
         },
         "requirements": {"oneOf": [{"$ref": "#/$defs/unknown"},

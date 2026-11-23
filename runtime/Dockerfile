@@ -12,7 +12,7 @@
 # Optional attention layer: --build-arg ATTENTION=sage (SageAttention 1.0.6; launch preset "sage"; experimental).
 #
 # Layer order (least to most frequently changing): base -> tini -> node sources -> node dependencies ->
-# OpenCV/onnxruntime normalisation -> attention -> Haar cascades -> bytecode -> snapshot -> runner.
+# OpenCV/onnxruntime normalisation -> system libraries -> attention -> Haar cascades -> bytecode -> snapshot -> runner.
 # Only the scripts a layer needs are copied before it, so editing the healthcheck, snapshot or smoke scripts never
 # re-runs the dependency layers. BuildKit cache mounts keep downloaded archives and pip wheels between builds; they
 # never enter the image.
@@ -184,6 +184,19 @@ os.environ["MPLBACKEND"] = "Agg"
 import matplotlib.font_manager as fm
 fm.fontManager
 PY
+
+# System libraries a pack loads at import time that the base image lacks (L9.323); after the pip layers, so editing
+# this list never re-runs them. Never in `default`: that image stays the original image (frozen production parity).
+# portaudio (EPEL 10, which the base already enables): the sounddevice module ComfyUI_AudioTools imports at load
+# raises "PortAudio library not found" without it. The check resolves the library the way sounddevice does
+# (ctypes.util.find_library), so a missing one fails the build.
+# DL3040: the dnf cache is a BuildKit mount, not a layer. DL3041: EPEL keeps only its newest build, so an exact
+# version pin would break the next rebuild.
+# hadolint ignore=DL3040,DL3041
+RUN --mount=type=cache,id=halofuse-dnf,target=/var/cache/dnf,sharing=locked \
+    if [ "$PROFILE" = "default" ]; then echo "extra system packages: none (default profile)"; \
+    else dnf install -y --setopt=install_weak_deps=False portaudio && rpm -q portaudio \
+      && python3.13 -c "import ctypes.util, sys; sys.exit(0 if ctypes.util.find_library('portaudio') else 'portaudio not found by ctypes')"; fi
 
 # Optional attention backend (D2). Only one prebuilt wheel fits this base (torch 2.13 / CUDA 13 / Python 3.13):
 # SageAttention 1.0.6, a pure-Python Triton implementation (Apache-2.0 upstream), hash-pinned. SageAttention 2.x
