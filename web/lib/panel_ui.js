@@ -168,12 +168,13 @@ export class Panel {
     const unavailable = !detailed || detailed.available === false;
     const opt = [...this.methodSel.options].find((o) => o.value === "taesd");
     opt.disabled = unavailable;
+    opt.title = unavailable ? (detailed?.reason || "") : "";
     opt.textContent = unavailable ? "Detailed (unavailable)" : "Detailed";
     this.methodSel.value = st.previewMethod;
     const desc = PREVIEW_METHODS.find(([k]) => k === st.previewMethod)?.[2] || "";
     const reason = unavailable && st.previewMethod === "taesd"
       ? `${detailed?.reason || "Detailed preview is not available on this computer."} This render will use Fast.` : "";
-    const why = unavailable && st.previewMethod !== "taesd" && detailed?.reason ? `Detailed is unavailable: ${detailed.reason}` : "";
+    const why = unavailable && st.previewMethod !== "taesd" ? "Detailed needs preview decoder files in models/vae_approx." : "";
     this.methodHint.className = `hf-hint${reason ? " hf-tone-warning" : ""}`;
     this.methodHint.textContent = [reason || desc, why, LIVE_TEXT.experimental].filter(Boolean).join(" ");
   }

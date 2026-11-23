@@ -220,7 +220,6 @@ export const HF_CSS = `
 .hf-live-stage { position: relative; margin: 0; min-height: 200px; background: #111 repeating-conic-gradient(#1a1a1a 0 25%, #141414 0 50%) 0 0 / 16px 16px;
   border: 1px solid var(--hf-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .hf-live-frame, .hf-live-canvas { display: block; width: 100%; height: 100%; max-height: 62vh; object-fit: contain; image-rendering: auto; }
-.hf-live-canvas { width: auto; height: auto; max-width: 100%; }
 .hf-live-stale .hf-live-frame, .hf-live-stale .hf-thumb { opacity: .55; }
 .hf-live-empty { color: var(--hf-muted); padding: 24px; text-align: center; max-width: 42ch; }
 .hf-live-step { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 18px; display: flex; align-items: center;

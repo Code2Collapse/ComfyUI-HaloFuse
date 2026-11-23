@@ -186,9 +186,16 @@ _NEW = (
 
 # ---- registration -------------------------------------------------------------------------------------------------------
 
+# An <img> element cannot send X-HaloFuse-Request, so preview FILES are header-free; the loopback peer + Host
+# allowlist still applies (PREVIEW_DESIGN section 5: same residual as ComfyUI's own /view; job ids are random UUIDs).
+_HEADER_FREE = {"get_preview_file"}
+
+
 def _guarded(handler):
+    needs_header = handler.__name__ not in _HEADER_FREE
+
     async def wrapper(request):
-        refused = request_guard(request, needs_header=True)
+        refused = request_guard(request, needs_header=needs_header)
         if refused is not None:
             return refused
         return await handler(request)
