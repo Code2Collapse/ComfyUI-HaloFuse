@@ -7,7 +7,11 @@ from __future__ import annotations
 
 from server import PromptServer
 
-routes = PromptServer.instance.routes
+# Every /halofuse route records its failures (and the Workflow Check result) in the bridge activity log the console's
+# Activity tab reads (owner 2026-11-23: the console showed nothing, not even failures). Handlers are unchanged.
+from . import activity  # noqa: E402
+
+routes = activity.RecordingRoutes(PromptServer.instance.routes, prefix="/halofuse")
 
 
 # R-WS1-05: settings, account / credentials, GPU list and estimate live in routes_account (guarded: loopback + custom
@@ -35,3 +39,5 @@ routes_jobs.register(routes, prefix="/halofuse")
 from . import routes_preflight  # noqa: E402
 
 routes_preflight.register(routes, prefix="/halofuse")
+
+activity.register(PromptServer.instance.routes, prefix="/halofuse")

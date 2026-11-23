@@ -3,12 +3,13 @@
 // X-HaloFuse-Request: 1. Errors use the C-4 envelope {"error": {"code","message","id"}}.
 
 export class ApiError extends Error {
-  constructor(code, message, id = null, status = 0) {
+  constructor(code, message, id = null, status = 0, jobId = null) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.id = id;
     this.status = status;
+    this.jobId = jobId; // a submit that failed after the bridge created the job record names it (its log has details)
   }
 }
 
@@ -69,7 +70,8 @@ export function createApi(fetchImpl) {
       try { env = await res.json(); } catch { env = null; }
       const e = env && typeof env.error === "object" && env.error ? env.error : null;
       if (e && typeof e.code === "string") {
-        throw new ApiError(e.code, String(e.message || "HaloFuse request failed."), e.id ?? null, res.status);
+        throw new ApiError(e.code, String(e.message || "HaloFuse request failed."), e.id ?? null, res.status,
+          typeof e.job_id === "string" && e.job_id ? e.job_id : null);
       }
       throw new ApiError(`http_${res.status}`, `HaloFuse request failed (HTTP ${res.status}).`, null, res.status);
     }
@@ -123,6 +125,8 @@ export function createApi(fetchImpl) {
     previewMethods: () => get("/halofuse/preview_methods"),
     getDelivery: (id) => get(`${J(id)}/delivery`),
     retryDelivery: (id) => post(`${J(id)}/delivery/retry`),
+    /** Bridge activity (failures outside a job log): the newest `limit` entries, or those from `since` on. */
+    getActivity: ({ since, limit } = {}) => get(`/halofuse/activity${query({ since, limit })}`),
     recentJobs: (limit = 50) => get(`/halofuse/recent_jobs${query({ limit })}`),
     recoverJob: (id) => post(`/halofuse/recovery/${enc(id)}`),
     preflight: (body) => post("/halofuse/preflight", body),

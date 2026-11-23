@@ -152,6 +152,18 @@ export class Controller {
     } catch (err) { this._set({ recentError: err.message }); }
   }
 
+  /** Opening the console with nothing followed shows the last job from the bridge's persisted record (history, not
+   *  only live; owner 2026-11-23: the console showed no data at all). Returns that job's summary, or null. */
+  async attachLatest() {
+    if (this.session.id) return this.session.job;
+    try {
+      const r = await this.api.listJobs({ limit: 5 });
+      const j = (r.jobs || []).find((x) => x.kind !== "chunk");
+      if (j && !this.session.id) this.session.attach(j.job_id, "job");
+      return j || null;
+    } catch { return null; } // the console's Activity tab reports an unreachable bridge
+  }
+
   openJob(id) { this.session.attach(id, "job"); }
 
   async recover(id) {
@@ -199,8 +211,18 @@ export class Controller {
       if (!this._gate(check, () => this._submit(workflow))) return;
       await this._submit(workflow);
     } catch (err) {
-      this.say(err.message || String(err), "danger");
+      this._failed(err);
     } finally { this._set({ busy: false }); }
+  }
+
+  /** A failed render: say it, and when the bridge kept a failed job for it, follow that job so the console shows its
+   *  persisted log (the failure is in it). */
+  _failed(err) {
+    if (err?.jobId) {
+      this.session.attach(err.jobId, "job");
+      this.loadRecent();
+      this.say(`${err.message || String(err)} The console has the details.`, "danger");
+    } else this.say(err?.message || String(err), "danger");
   }
 
   /** Returns the preflight result, or null when the route does not exist yet. */
@@ -280,7 +302,7 @@ export class Controller {
     const c = this.state.consent;
     if (!c) return;
     this._set({ consent: null, busy: true });
-    try { await c.proceed(); } catch (err) { this.say(err.message, "danger"); } finally { this._set({ busy: false }); }
+    try { await c.proceed(); } catch (err) { this._failed(err); } finally { this._set({ busy: false }); }
   }
 
   consentCancel() {
@@ -295,7 +317,7 @@ export class Controller {
       this._set({ upload: st });
       if (st.status === "done") {
         this._set({ upload: null, busy: !!then });
-        if (then) { try { await then(); } catch (err) { this.say(err.message, "danger"); } finally { this._set({ busy: false }); } }
+        if (then) { try { await then(); } catch (err) { this._failed(err); } finally { this._set({ busy: false }); } }
         else this.say("Model upload complete.", "success");
       } else if (st.status === "failed" || st.status === "cancelled") {
         this._set({ upload: null, busy: false });

@@ -6,6 +6,12 @@ import { bindH } from "./dom.js";
 import { LAYOUT_KEY, clampGeometry, loadLayout, nearFullScreen, saveLayout } from "./layout.js";
 
 const HANDLES = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
+// The console and the floating panel window share one layer: the one opened or clicked last sits on top (the console
+// used to open BEHIND the floating panel it was opened from). Two values only, so nothing climbs over ComfyUI's
+// menus (1001) or dialogs.
+const Z_TOP = "1000";
+const Z_BELOW = "999";
+const OPEN_WINDOWS = new Set();
 
 export class FloatingWindow {
   /**
@@ -51,6 +57,9 @@ export class FloatingWindow {
     this._onPointerDown = (ev) => this._pointerDown(ev);
     this._onResize = () => this._scheduleFit();
     this.el.addEventListener("pointerdown", this._onPointerDown);
+    this._onRaise = () => this.raise();
+    this.el.addEventListener("pointerdown", this._onRaise, true);
+    OPEN_WINDOWS.add(this);
     this.head.addEventListener("dblclick", (ev) => { if (!ev.target.closest("button")) this.toggleMax(); });
     win.addEventListener("resize", this._onResize);
     doc.body.append(this.el, this.pill);
@@ -61,11 +70,19 @@ export class FloatingWindow {
 
   onChange(fn) { this._listeners.add(fn); return () => this._listeners.delete(fn); }
 
+  /** Put this window above the other HaloFuse window. */
+  raise() {
+    for (const w of OPEN_WINDOWS) if (w !== this) w.el.style.zIndex = Z_BELOW;
+    this.el.style.zIndex = Z_TOP;
+  }
+
   /** Show the window in its remembered mode (a remembered "min" opens normally). */
   open() {
     if (this.layout.mode === "min") this.layout.mode = "normal";
+    this.layout.open = true;
     this.el.hidden = false;
     this.pill.hidden = true;
+    this.raise();
     this._apply();
     this._persist();
     this.titleEl.focus({ preventScroll: true });
@@ -75,11 +92,13 @@ export class FloatingWindow {
   close() {
     this.el.hidden = true;
     this.pill.hidden = true;
+    if (this.layout.open) { this.layout.open = false; this._persist(); }
     this._emit();
   }
 
   minimize() {
     this.layout.mode = "min";
+    this.layout.open = false;
     this.el.hidden = true;
     this.pill.hidden = false;
     this._persist();
@@ -89,8 +108,10 @@ export class FloatingWindow {
 
   restore() {
     this.layout.mode = this._modeBeforeMin === "max" ? "max" : "normal";
+    this.layout.open = true;
     this.el.hidden = false;
     this.pill.hidden = true;
+    this.raise();
     this._apply();
     this._persist();
     this.titleEl.focus({ preventScroll: true });
@@ -123,6 +144,8 @@ export class FloatingWindow {
   destroy() {
     this.win.removeEventListener("resize", this._onResize);
     this.el.removeEventListener("pointerdown", this._onPointerDown);
+    this.el.removeEventListener("pointerdown", this._onRaise, true);
+    OPEN_WINDOWS.delete(this);
     if (this._raf) this.win.cancelAnimationFrame(this._raf);
     this.el.remove();
     this.pill.remove();

@@ -7,7 +7,7 @@ export const MIN_W = 420;
 export const MIN_H = 260;
 
 const MODES = ["normal", "max", "min"];
-const TABS = ["logs", "progress", "telemetry", "problems", "summary"];
+const TABS = ["logs", "activity", "progress", "telemetry", "problems", "summary"];
 const SOURCE_KEYS = ["runner", "comfyui", "bridge", "provider"];
 
 const fin = (n) => typeof n === "number" && Number.isFinite(n);
@@ -53,6 +53,7 @@ export function sanitizeLayout(obj, vp) {
     tab: TABS.includes(o.tab) ? o.tab : "logs",
     timestamps: typeof o.timestamps === "boolean" ? o.timestamps : true,
     wrap: typeof o.wrap === "boolean" ? o.wrap : false,
+    open: o.open === true, // was the window open when the page went away (the floating panel reopens; owner 2026-11-23)
     sources,
   };
 }

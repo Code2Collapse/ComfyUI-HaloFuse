@@ -21,7 +21,8 @@ export class LogView {
    */
   constructor(o) {
     Object.assign(this, { doc: o.doc, win: o.win, store: o.store, prefs: o.prefs, setPrefs: o.setPrefs,
-      getFullText: o.getFullText, fileName: o.fileName, onTimestamps: o.onTimestamps, hasJob: o.hasJob });
+      getFullText: o.getFullText, fileName: o.fileName, onTimestamps: o.onTimestamps, hasJob: o.hasJob,
+      emptyText: o.emptyText, label: o.label || "Job log" });
     const H = bindH(this.doc);
     this.view = new FilteredView(this.store);
     this._work = 0;
@@ -68,7 +69,7 @@ export class LogView {
       H("span", { className: "hf-btn-group", attrs: { role: "group", "aria-label": "Log actions" } },
         this.tsBtn, this.followBtn, this.copyBtn, this.saveBtn, this.clearBtn));
     this.filterError = H("div", { className: "hf-filter-error", hidden: true, attrs: { role: "alert" } });
-    this.listEl = H("div", { className: "hf-loglist", attrs: { role: "grid", "aria-label": "Job log", "aria-readonly": "true" } });
+    this.listEl = H("div", { className: "hf-loglist", attrs: { role: "grid", "aria-label": this.label, "aria-readonly": "true" } });
     this.detailHead = H("div", { className: "hf-detail-head" });
     this.detailPre = H("pre", { tabIndex: 0 });
     this.detail = H("div", { className: "hf-detail", hidden: true, attrs: { role: "region", "aria-label": "Line details" } },
@@ -118,6 +119,9 @@ export class LogView {
     if (on) { this.list.scrollToEnd(); this._newWhilePaused = 0; } else this.list.follow = false;
     this._setFollowState(on);
   }
+
+  /** Re-evaluate the status line and the empty state (its reason may change without new lines). */
+  refreshStatus() { this._updateStatus(true); }
 
   /** Called when the store was replaced by another job. */
   reset() {
@@ -258,7 +262,11 @@ export class LogView {
     if (!this.list.follow && this._newWhilePaused) parts.push(`${nf.format(this._newWhilePaused)} new since paused`);
     this.statusText.textContent = parts.join(" · ");
     let empty = "";
-    if (this.store.size === 0) empty = this.hasJob?.() ? "Waiting for the first log lines from the cloud job…" : "No job attached. Start a render or open one from Recent jobs.";
+    if (this.store.size === 0) {
+      // the owner of the view says why it is empty (no job yet, bridge unreachable, ...); else the job-log defaults
+      empty = this.emptyText?.() || (this.hasJob?.() ? "Waiting for the first log lines from the cloud job…"
+        : "No job attached. Start a render or open one from Recent jobs.");
+    }
     else if (c.total === 0) empty = "The view is cleared. New lines appear here; use “Show cleared” to bring the earlier ones back.";
     else if (done && this.view.length === 0) empty = "No lines match the current filters.";
     this.emptyEl.textContent = empty;

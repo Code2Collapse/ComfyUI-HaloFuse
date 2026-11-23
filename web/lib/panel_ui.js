@@ -194,10 +194,12 @@ export class Panel {
     const box = this.checkBox;
     clear(box);
     const p = st.preflight;
-    if (p && (p.blocking?.length || p.warnings?.length || st.previewMode === "check")) {
+    if (p && (p.blocking?.length || p.warnings?.length || p.notes?.length || st.previewMode === "check")) {
       const list = H("div", { className: "hf-list" });
       for (const b of p.blocking || []) list.append(H("div", { className: "hf-item hf-tone-danger" }, H("span", { className: "hf-grow", title: b.message, text: `${b.node_id ? `Node ${b.node_id}${b.class_type ? ` (${b.class_type})` : ""}: ` : ""}${b.message}` })));
       for (const w of p.warnings || []) list.append(H("div", { className: "hf-item hf-tone-warning" }, H("span", { className: "hf-grow", title: w.message, text: w.message })));
+      // information only (e.g. a model the node downloads itself in the cloud): a neutral line, nothing to do
+      for (const n of p.notes || []) list.append(H("div", { className: "hf-item hf-tone-neutral" }, H("span", { className: "hf-grow", title: n.message, text: n.message })));
       const c = p.checked || {};
       box.append(H("div", { className: "hf-hint", style: { margin: "4px 0" }, text: `Checked ${c.nodes ?? "?"} nodes, ${c.models ?? "?"} models, ${c.inputs ?? "?"} input files${p.profile ? ` against the “${p.profile}” runtime` : ""}.` }), list);
     }

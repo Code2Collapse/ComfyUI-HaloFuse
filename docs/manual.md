@@ -135,11 +135,12 @@ applies at once, without a reload:
 | Panel location | What you see |
 |---|---|
 | Sidebar (default) | the **HaloFuse** tab in the left sidebar |
-| Floating window | no sidebar tab; a round bolt button at the right edge of the canvas. Click it to show or hide the panel in its own window, which you can move by its title bar and resize from any edge. Drag the button itself to put it anywhere |
+| Floating window | no sidebar tab; the panel opens in its own window as soon as you choose this, and a round bolt button at the right edge of the canvas shows or hides it. Move the window by its title bar and resize it from any edge. Drag the button itself to put it anywhere |
 | Both | the sidebar tab and the bolt button |
 
-The bolt button shows a small blue dot while a render is running. The window's size and position and the button's
-position are remembered by this browser only. The command **HaloFuse: Show or hide the floating panel** (command
+The bolt button shows a small blue dot while a render is running. The window's size and position, whether it was
+open, and the button's position are remembered by this browser only; a window or button saved on another (larger)
+screen comes back fully on this one. The command **HaloFuse: Show or hide the floating panel** (command
 palette) works in every mode.
 
 ![The HaloFuse panel](images/panel.png)
@@ -218,8 +219,13 @@ They survive extension updates and reinstalls.
   Runner and ComfyUI lines are styled differently. Click a line for its details. On the test machine the console
   kept up with 1,000 lines per second for 60 seconds without a slow frame, and searched 60,000 lines in under three
   seconds.
-- **Reattach.** After a browser reload, or a ComfyUI restart, the console reattaches to running and recent jobs and
-  restores the complete log from disk.
+- **Reattach.** After a browser reload, or a ComfyUI restart, the console reattaches to a running job; when nothing
+  runs, opening the console shows the last job. Either way the complete log is restored from disk. A render that
+  failed while it was being submitted (for example a sign-in error) is opened in the console with its log.
+- **Activity tab.** What the bridge refused or reported outside a job log, with the time: Workflow Check results (each
+  blocking problem, warning and note on its own line), renders refused before a job existed, model upload failures,
+  sign-in and GPU-list errors. Kept on this computer (the newest 1,000 entries). When there is no job yet, or a failure
+  is newer than the job, the console opens on this tab. An empty tab says why it is empty.
 - **Progress tab** (*needs the 0.4.0 runtime image*). Step and percentage of the running sampler, a phase timeline
   (for example runner start, ComfyUI start, executing the workflow) and per-node timing; click a node row to centre
   that node on the canvas.

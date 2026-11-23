@@ -100,12 +100,25 @@ async def post_job(request):
     workflow = body.get("workflow") or body.get("prompt")
     if not isinstance(workflow, dict) or not workflow:
         raise HaloFuseError("bad_request", "No workflow provided.", 400)
-    rec = await _run(lambda: jobs.submit_render(
-        workflow, instance_type=body.get("instance_type"),
-        render_repeats=body.get("render_repeats", body.get("batch_count")),
-        max_runtime_s=body.get("max_runtime_s"), max_job_cost_usd=body.get("max_job_cost_usd"),
-        label=str(body.get("label") or "Render"), client_ref=body.get("client_ref"),
-        preview_mode=body.get("preview_mode"), preview_method=body.get("preview_method")))
+    client_ref = body.get("client_ref")
+    try:
+        rec = await _run(lambda: jobs.submit_render(
+            workflow, instance_type=body.get("instance_type"),
+            render_repeats=body.get("render_repeats", body.get("batch_count")),
+            max_runtime_s=body.get("max_runtime_s"), max_job_cost_usd=body.get("max_job_cost_usd"),
+            label=str(body.get("label") or "Render"), client_ref=client_ref,
+            preview_mode=body.get("preview_mode"), preview_method=body.get("preview_method")))
+    except HaloFuseError as exc:
+        # A submit that failed AFTER the record was created (sign-in, upload, cloud refusal) left a failed job whose
+        # log holds the failure: name it, so the panel and the console can open that log (owner 2026-11-23).
+        job_id = await _run(lambda: default_store().find_by_client_ref(client_ref)) \
+            if isinstance(client_ref, str) and client_ref else None
+        resp = _error(exc.code, exc.message, exc.status)
+        if job_id:
+            env = json.loads(resp.body.decode("utf-8"))
+            env["error"]["job_id"] = job_id
+            resp = web.json_response(env, status=exc.status)
+        return resp
     return web.json_response({"job": lifecycle.job_summary(rec, default_store())}, status=202)
 
 

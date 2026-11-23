@@ -8,6 +8,8 @@ import { Controller } from "./lib/controller.js";
 import { Panel } from "./lib/panel_ui.js";
 import { HaloFuseConsole } from "./lib/console_ui.js";
 import { FloatingWindow } from "./lib/console_window.js";
+import { ActivityFeed } from "./lib/activity.js";
+import { loadLayout } from "./lib/layout.js";
 import { PANEL_LAYOUT_KEY, PANEL_SETTING, clampLauncher, loadLauncher, normalizeMode, panelGeometry, saveLauncher, wants }
   from "./lib/panel_place.js";
 
@@ -62,6 +64,8 @@ function start() {
   const consoleWin = new HaloFuseConsole({
     doc: document, win: window, storage: safeStorage(), session,
     viewUrl,
+    activity: new ActivityFeed({ api: hfApi }),
+    onOpen: () => controller.attachLatest(),
     previewUrl: (jobId, name) => comfyApi.apiURL(previewPath(jobId, name)),
     onFocusNode: focusNode,
     onRetryDelivery: (id) => controller.retryDelivery(id),
@@ -124,24 +128,39 @@ function sidebarTabSpec(inst) {
 
 function panelWindow(inst) {
   if (floatWin) return floatWin;
-  floatWin = new FloatingWindow({ doc: document, win: window, storage: safeStorage(), title: "HaloFuse",
+  // Built completely before it is kept: a failure half-way must not leave an empty window behind that every later
+  // click "opens" (the error is reported, not swallowed).
+  const w = new FloatingWindow({ doc: document, win: window, storage: safeStorage(), title: "HaloFuse",
     layoutKey: PANEL_LAYOUT_KEY, initialGeometry: panelGeometry, label: "panel", minimizable: false });
-  floatWin.el.classList.add("hf-panel-window");
-  // A second Panel on the same controller + session: both views stay in step (the sidebar one may be open too).
-  const p = new Panel({ doc: document, win: window, api: inst.hfApi, controller: inst.controller, session: inst.session,
-    openConsole: (tab) => inst.consoleWin.open(tab), viewUrl: inst.viewUrl });
-  p.mount(floatWin.body);
-  const showVersion = () => floatWin.setJobLabel(p.version.textContent); // the inner heading is hidden in the window
-  inst.controller.subscribe(showVersion);
-  showVersion();
-  floatWin.onChange((w) => launcher?.el.setAttribute("aria-pressed", String(w.isOpen)));
+  try {
+    w.el.classList.add("hf-panel-window");
+    // A second Panel on the same controller + session: both views stay in step (the sidebar one may be open too).
+    const p = new Panel({ doc: document, win: window, api: inst.hfApi, controller: inst.controller, session: inst.session,
+      openConsole: (tab) => inst.consoleWin.open(tab), viewUrl: inst.viewUrl });
+    p.mount(w.body);
+    const showVersion = () => w.setJobLabel(p.version.textContent); // the inner heading is hidden in the window
+    inst.controller.subscribe(showVersion);
+    showVersion();
+    w.onChange((x) => launcher?.el.setAttribute("aria-pressed", String(x.isOpen)));
+  } catch (err) {
+    w.destroy();
+    throw err;
+  }
+  floatWin = w;
   return floatWin;
 }
 
-function togglePanelWindow() {
-  const w = panelWindow(start());
-  if (w.isOpen) w.close(); else w.open();
+function showPanelWindow(show) {
+  try {
+    const w = panelWindow(start());
+    if (show === undefined ? !w.isOpen : show) w.open(); else w.close();
+  } catch (err) {
+    console.error("HaloFuse: the floating panel could not open", err);
+    toast("error", "HaloFuse", `The floating panel could not open: ${err?.message || err}`);
+  }
 }
+
+function togglePanelWindow() { showPanelWindow(); }
 
 function makeLauncher(inst) {
   const vp = () => ({ w: window.innerWidth, h: window.innerHeight });
@@ -198,7 +217,7 @@ function makeLauncher(inst) {
   return { el: b, remove: () => { window.removeEventListener("resize", onResize); unsub?.(); b.remove(); } };
 }
 
-function applyPanelMode(value) {
+function applyPanelMode(value, { startup = false } = {}) {
   panelMode = normalizeMode(value);
   const inst = instance;
   if (!inst) return; // setup() applies the stored mode once the extension is running
@@ -211,8 +230,18 @@ function applyPanelMode(value) {
     em.unregisterSidebarTab("halofuse"); // a frontend without unregisterSidebarTab keeps the tab (= Both)
     sidebarOn = false;
   }
-  if (want.floating && !launcher) launcher = makeLauncher(inst);
-  else if (!want.floating && launcher) { launcher.remove(); launcher = null; floatWin?.close(); }
+  if (want.floating && !launcher) {
+    launcher = makeLauncher(inst);
+    // Owner 2026-11-23 "the floating window is not appearing": choosing Floating window used to show only a 48 px
+    // button at the screen edge and no window at all, and after a reload the window stayed closed. Now the window
+    // opens when the setting is switched to it, and comes back after a reload when it was open.
+    if (!startup || loadLayout(safeStorage(), { width: window.innerWidth, height: window.innerHeight },
+      PANEL_LAYOUT_KEY, panelGeometry).open) showPanelWindow(true);
+  } else if (!want.floating && launcher) {
+    launcher.remove();
+    launcher = null;
+    floatWin?.close();
+  }
 }
 
 app.registerExtension({
@@ -243,6 +272,6 @@ app.registerExtension({
     start();
     let stored = panelMode;
     try { stored = app.extensionManager.setting?.get?.(PANEL_SETTING) ?? panelMode; } catch { /* default */ }
-    applyPanelMode(stored);
+    applyPanelMode(stored, { startup: true });
   },
 });

@@ -7,19 +7,26 @@ import { LogView } from "./console_logs.js";
 import { renderProblems, renderProgress, renderSummary, renderTelemetry } from "./console_panes.js";
 import { cancelInfo, isTerminal, progressText, statusInfo } from "./job_view.js";
 import { createImageCache, renderLive } from "./live_preview.js";
+import { formatEntry } from "./log_model.js";
 
 const TABS = [
-  ["live", "Live"], ["logs", "Logs"], ["progress", "Progress"], ["telemetry", "Telemetry"], ["problems", "Problems"],
+  ["live", "Live"], ["logs", "Logs"], ["activity", "Activity"], ["progress", "Progress"], ["telemetry", "Telemetry"], ["problems", "Problems"],
   ["summary", "Summary"],
 ];
 const ANNOUNCE_MIN_MS = 5000; // the step text is read out at most every 5 s
 const PANE_MIN_INTERVAL_MS = 500;
+const ACTIVITY_POLL_MS = 2000;
+// a bridge failure this much newer than the followed job's last change is news the console opens on
+const NEWER_THAN_JOB_S = 2;
 
 export class HaloFuseConsole {
   /**
    * @param {{doc: Document, win: Window, storage: Storage|null, session: import("./session.js").JobSession,
    *   viewUrl: (ref: object) => string, previewUrl: (jobId: string, name: string) => string,
-   *   onFocusNode: (nodeId: string) => void, onRetryDelivery: (jobId: string) => void}} o
+   *   onFocusNode: (nodeId: string) => void, onRetryDelivery: (jobId: string) => void,
+   *   activity?: import("./activity.js").ActivityFeed, onOpen?: () => Promise<object|null>}} o
+   *   activity: bridge failures outside a job log (Activity tab). onOpen: attach the last job when nothing is
+   *   followed (history), resolving to that job's summary.
    */
   constructor(o) {
     this.doc = o.doc;
@@ -53,8 +60,32 @@ export class HaloFuseConsole {
       fileName: () => `halofuse-${this.session.id || "log"}.log`,
       onTimestamps: (on) => this.window.el.classList.toggle("hf-no-ts", !on),
       hasJob: () => !!this.session.id,
+      emptyText: () => (this.session.id ? null
+        : "No render has been followed yet. Failures before a job exists (Workflow Check, submit, model upload, "
+          + "sign-in) are listed under Activity."),
     });
     this.panels.logs.append(this.logView.el);
+    this.activity = o.activity || null;
+    if (this.activity) {
+      const feed = this.activity;
+      this.activityView = new LogView({
+        doc: this.doc, win: this.win, store: feed.store, label: "HaloFuse activity",
+        prefs: () => this.window.prefs(), setPrefs: (p) => this.window.setPrefs(p),
+        getFullText: async () => {
+          const lines = [];
+          for (let s = 0; s < feed.store.size; s++) lines.push(formatEntry(feed.store.get(s)));
+          return lines.length ? `${lines.join("\n")}\n` : "";
+        },
+        fileName: () => "halofuse-activity.log",
+        onTimestamps: (on) => this.window.el.classList.toggle("hf-no-ts", !on),
+        hasJob: () => true,
+        emptyText: () => feed.emptyText(),
+      });
+      this.panels.activity.append(this.activityView.el);
+      this._unfeed = feed.subscribe(() => { this.activityView.refreshStatus(); this._refreshChrome(); });
+    } else {
+      this.tabButtons.activity.hidden = true;
+    }
     // Live view state (PREVIEW_DESIGN 4.1); images are reused across renders so a frame never re-downloads
     this._imgs = createImageCache(this.doc, (name) => o.previewUrl(this.session.id, name));
     this._live = { selected: null, mode: "overlay", message: null, autoPending: false, userPicked: false };
@@ -73,10 +104,22 @@ export class HaloFuseConsole {
 
   get isOpen() { return this.window.isOpen; }
 
-  open(tab) {
+  /** Show the console. It always has data to show: the followed job, else the last job from the bridge's record,
+   *  and the bridge activity (failures outside a job). With no job, or a bridge failure newer than the job, it opens
+   *  on Activity unless a tab was asked for or picked meanwhile. Resolves when the history is loaded. */
+  async open(tab) {
+    const opened = Date.now();
     this.window.open();
     if (tab) this.selectTab(tab);
     this._renderPane(true);
+    const [att] = await Promise.allSettled([this.o.onOpen ? this.o.onOpen() : null, this.activity?.refresh()]);
+    if (tab || this._pickedAt >= opened || !this.window.isOpen || !this.activity) return;
+    const job = this.session.job || (att.status === "fulfilled" ? att.value : null);
+    const failedAt = this.activity.lastErrorTs;
+    const jobAt = Number(job?.updated_at ?? job?.created_at) || 0;
+    if (!this.session.id ? this.activity.store.size > 0 : failedAt != null && failedAt > jobAt + NEWER_THAN_JOB_S) {
+      this.selectTab("activity", false, false);
+    }
   }
 
   close() { this.window.close(); }
@@ -84,7 +127,7 @@ export class HaloFuseConsole {
 
   selectTab(id, focus = true, byUser = focus) {
     if (!this.panels[id]) id = "logs";
-    if (byUser) this._live.userPicked = true;
+    if (byUser) { this._live.userPicked = true; this._pickedAt = Date.now(); }
     this.tab = id;
     for (const [tid, btn] of Object.entries(this.tabButtons)) {
       const on = tid === id;
@@ -106,6 +149,9 @@ export class HaloFuseConsole {
   destroy() {
     this._unsub?.();
     this._unwin?.();
+    this._unfeed?.();
+    this.activity?.stop();
+    this.activityView?.destroy();
     this.logView.destroy();
     this.window.destroy();
   }
@@ -167,6 +213,8 @@ export class HaloFuseConsole {
 
   _onWindow() {
     this.session.setWatching(this.window.isOpen);
+    // the activity record is followed only while the console is open (open() loads its history first)
+    if (this.window.isOpen) this.activity?.start(ACTIVITY_POLL_MS); else this.activity?.stop();
     if (this.window.isOpen) this._renderPane(true);
   }
 
@@ -210,7 +258,7 @@ export class HaloFuseConsole {
 
   /** Non-log panes re-render at most twice a second, and only when visible. */
   _renderPane(force = false) {
-    if (!this.window.isOpen || this.tab === "logs") return;
+    if (!this.window.isOpen || this.tab === "logs" || this.tab === "activity") return;
     const now = Date.now();
     if (!force && now - this._lastPane < PANE_MIN_INTERVAL_MS) {
       if (!this._paneTimer) {
