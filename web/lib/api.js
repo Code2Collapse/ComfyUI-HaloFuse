@@ -151,6 +151,8 @@ export function createApi(fetchImpl) {
     saveHfToken: (token) => post("/halofuse/models/hf_token", { token }),
     clearHfToken: () => call("DELETE", "/halofuse/models/hf_token"),
     listPreviews: (id, since = 0, limit = 200) => get(`${J(id)}/previews${query({ since, limit })}`),
+    /** Per-node preview sections of a job (an older bridge answers 404). */
+    getNodes: (id) => get(`${J(id)}/nodes`),
     createQueue: (body) => post("/halofuse/queues", body),
     getQueue: (id) => get(Q(id)),
     listQueues: ({ active } = {}) => get(`/halofuse/queues${query({ active: active ? 1 : undefined })}`),

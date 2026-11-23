@@ -57,6 +57,8 @@ function start() {
     comfy: {
       graphToPrompt: () => app.graphToPrompt(),
       graphNodes: () => app.graph?._nodes || [],
+      // frontend 1.53+: the workspace store's workflow store (app.extensionManager.workflow), filename of the open tab
+      workflowName: () => app.extensionManager?.workflow?.activeWorkflow?.filename || null,
       toast,
     },
   });

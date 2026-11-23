@@ -14,6 +14,22 @@
   than* (20 GB); models of unknown size or found only in a personal upload also ask first. The C2C *Never download
   models* setting (or `C2C_NO_DOWNLOADS=1`) turns all of this off. Gated Hugging Face models need an optional token,
   kept in this computer's keychain. Models inside an H2Vault vault are left to the vault.
+- **Previews by node.** The console's Live tab (and the panel's job card, compactly) shows one section per node of
+  the running workflow that shows something: samplers with their latest step frame, PreviewImage, mask previews,
+  video, audio and text outputs, each under the node's title with a state badge (Waiting, Running, Done, Cached,
+  Failed, Not run). A node served from ComfyUI's cache shows its last result, from this render or an earlier one on
+  this computer. Output kinds HaloFuse cannot show are named in plain words. An H2Vault vault shows one card and only
+  what its author allows; nothing inside it is listed. Audio, text and exact file-to-node matching need the next
+  HaloFuse runtime image; with the current one, files are matched to nodes by their file name prefix (the console says
+  so).
+- **Outputs saved by name.** After delivery, every output is also saved in
+  `output/HaloFuse/by-name/<input name>/<date>/<time>_<job>/<node title>/` (hard links when the disk allows, copies
+  otherwise) with `job.log`, `metadata.json`, the workflow (API and UI) and a small `.json` next to each file (node,
+  seeds, models, GPU, sha256). The job folder `output/HaloFuse/<job_id>/` is unchanged; older jobs are not moved. The
+  folder is a setting (empty switches it off).
+- **Two new render options (Advanced, off by default):** *Ignore ComfyUI's cache* (`--cache-none`) and *Preview nodes
+  that have no preview* (adds a one-frame preview to the cloud copy of the workflow for image and mask outputs; your
+  graph is not changed; at most 8).
 - **My custom nodes.** A new panel section takes extra custom node packs for your own jobs, one per line
   (`owner/repo`, `owner/repo@tag`, a GitHub address or a Comfy Registry id). *Check and save* pins each one to an exact
   version and shows its licence; the list is installed at the start of every job on a HaloFuse image whose runner

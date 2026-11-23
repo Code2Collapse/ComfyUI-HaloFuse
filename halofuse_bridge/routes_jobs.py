@@ -107,7 +107,8 @@ async def post_job(request):
             render_repeats=body.get("render_repeats", body.get("batch_count")),
             max_runtime_s=body.get("max_runtime_s"), max_job_cost_usd=body.get("max_job_cost_usd"),
             label=str(body.get("label") or "Render"), client_ref=client_ref,
-            preview_mode=body.get("preview_mode"), preview_method=body.get("preview_method")))
+            preview_mode=body.get("preview_mode"), preview_method=body.get("preview_method"),
+            ui_workflow=body.get("ui_workflow"), workflow_name=body.get("workflow_name")))
     except HaloFuseError as exc:
         # A submit that failed AFTER the record was created (sign-in, upload, cloud refusal) left a failed job whose
         # log holds the failure: name it, so the panel and the console can open that log (owner 2026-11-23).

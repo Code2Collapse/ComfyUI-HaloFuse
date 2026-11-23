@@ -402,11 +402,26 @@ def validate_extra_env(env) -> bool:
 
 
 PREVIEW_METHODS = ("none", "latent2rgb", "taesd")
+CACHE_FLAGS = ("--cache-classic", "--cache-lru", "--cache-none", "--cache-ram")
+
+
+def _without_flags(args: list, flags) -> list:
+    """`args` without each flag in `flags` and the values that follow it (up to the next `--` flag)."""
+    out, skip = [], False
+    for a in args:
+        if a in flags:
+            skip = True
+            continue
+        if skip and not str(a).startswith("--"):
+            continue
+        skip = False
+        out.append(a)
+    return out
 LIVE_PREVIEW_SIZE = "384"
 
 
 def job_env(name: str = "safe", extra_args=None, extra_env=None, preview: bool = False, nonce: str | None = None,
-            oom_ladder: str | None = None, preview_method: str | None = None) -> dict:
+            oom_ladder: str | None = None, preview_method: str | None = None, ignore_cache: bool = False) -> dict:
     """The runner environment for one cloud job (C-3 section 7). Raises ValueError for anything the runner would
     reject, so a misconfigured job is never submitted (and never billed).
 
@@ -420,6 +435,9 @@ def job_env(name: str = "safe", extra_args=None, extra_env=None, preview: bool =
         raise ValueError(f"preview method must be one of {', '.join(PREVIEW_METHODS)}")
     env = {"HF_PRESET": name}
     args = list(extra_args or [])
+    if ignore_cache:
+        # "Ignore cache for this render": --cache-none replaces any other cache flag (they are one exclusive group)
+        args = _without_flags(args, CACHE_FLAGS) + ["--cache-none"]
     method_added = False
     if preview:
         if "--preview-method" not in args:

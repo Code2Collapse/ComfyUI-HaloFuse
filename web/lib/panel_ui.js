@@ -14,6 +14,7 @@ import { LIVE_TEXT, createImageCache } from "./live_preview.js";
 import { cancelActions, cancelInfo, costText, deliveryText, isTerminal, progressText, statusInfo } from "./job_view.js";
 import { fmtBytes, fmtLocal, fmtUsd } from "./format.js";
 import { outputKind } from "./console_panes.js";
+import { AUTO_PREVIEW_MODES, renderNodeSections } from "./node_sections.js";
 
 function H_field(H, label, input) {
   return H("label", { className: "hf-field", htmlFor: input.id }, H("span", { text: label }), input);
@@ -56,6 +57,7 @@ export class Panel {
       const i = v.indexOf("/view?");
       return `${i >= 0 ? v.slice(0, i) : ""}${previewPath(jobId, name)}`;
     });
+    this._previewUrl = previewUrl;
     this._imgs = createImageCache(this.doc, (name) => previewUrl(this.session.id, name), 8);
     this._imgsFor = null;
     this.repeats = H("input", { className: "hf-input", type: "number", id: `hf-repeats-${uid}`, min: "1", max: "100", step: "1",
@@ -81,6 +83,11 @@ export class Panel {
     const hfToken = H("input", { className: "hf-input", type: "password", id: `hf-hftoken-${uid}`, autocomplete: "off",
       placeholder: "hf_…", attrs: { spellcheck: "false" } });
     const hfTokenHint = H("div", { className: "hf-hint" });
+    // owner 2026-11-23 (node previews): cache, auto-preview of the cloud copy, organised saving
+    const noCache = H("input", { type: "checkbox", id: `hf-nocache-${uid}` });
+    const autoPrev = H("select", { className: "hf-select", id: `hf-autoprev-${uid}` },
+      ...AUTO_PREVIEW_MODES.map(([k, label]) => H("option", { value: k, text: label })));
+    const byName = H("input", { className: "hf-input", type: "text", id: `hf-byname-${uid}`, placeholder: "HaloFuse/by-name" });
     const runtime = H("select", { className: "hf-select", id: `hf-runtime-${uid}` },
       H("option", { value: "legacy", text: "Original image (default)" }),
       H("option", { value: "halofuse", text: "HaloFuse image (adds the newer node packs; first renders not yet verified)" }));
@@ -91,15 +98,21 @@ export class Panel {
       libHint.textContent = v && !v.startsWith("/") ? "The path must start with “/”." : "";
       libHint.className = `hf-hint${v && !v.startsWith("/") ? " hf-tone-warning" : ""}`;
     });
-    this.adv = { lib, affinity, guard, autoUp, autoDown, askAbove, hfTokenHint, runtime, runtimeHint };
+    this.adv = { lib, affinity, guard, autoUp, autoDown, askAbove, hfTokenHint, runtime, runtimeHint, noCache, autoPrev, byName };
     const saveAdv = H("button", { className: "hf-btn", type: "button", text: "Save settings", onclick: () => {
       const v = lib.value.trim();
       if (v && !v.startsWith("/")) { this.ctl.say("The cloud model library path must start with “/”.", "warning"); return; }
       const g = parseInt(guard.value, 10);
+      const folder = byName.value.trim().replace(/\\/g, "/");
+      if (folder && (folder.startsWith("/") || /^[A-Za-z]:/.test(folder) || folder.split("/").includes(".."))) {
+        this.ctl.say("The by-name folder must be a folder inside ComfyUI's output folder (or empty to switch it off).", "warning");
+        return;
+      }
       const a = Number(askAbove.value);
       const prefs = { assets_library_path: v, image_affinity: affinity.value, upload_guard_gb: g > 0 ? g : 50,
                       auto_upload_models: autoUp.checked, auto_download_models: autoDown.checked,
-                      download_ask_above_gb: Number.isFinite(a) && a >= 0 ? a : 20 };
+                      download_ask_above_gb: Number.isFinite(a) && a >= 0 ? a : 20,
+                      ignore_cache: noCache.checked, auto_preview: autoPrev.value, organized_output_dir: folder };
       if (!runtime.disabled) prefs.runtime_image = runtime.value;
       this.ctl.saveAdvanced(prefs);
     } });
@@ -132,6 +145,13 @@ export class Panel {
         H("label", { className: "hf-field hf-check", htmlFor: autoDown.id }, autoDown,
           H("span", { text: "Download missing models automatically (from the workflow’s links, the ComfyUI-Manager model list or Hugging Face), then upload them" })),
         field("Ask before downloading models larger than (GB, 0 = never ask)", askAbove),
+        H("label", { className: "hf-field hf-check", htmlFor: noCache.id }, noCache,
+          H("span", { text: "Ignore ComfyUI's cache for renders (every node runs again; slower)" })),
+        H("div", { className: "hf-hint", text: "A fresh cloud machine has no cache anyway; this matters for render repeats, queues and warm machines." }),
+        field("Preview nodes that have no preview", autoPrev,
+          H("div", { className: "hf-hint", text: "Adds a one-frame preview to the cloud copy for image and mask outputs no preview node shows (at most 8). Your graph is not changed. H2Vault nodes are never previewed." })),
+        field("Save outputs by name in (inside the ComfyUI output folder)", byName,
+          H("div", { className: "hf-hint", text: "<input name>/<date>/<time>_<job>/<node title>/ with job.log and metadata.json. The job folder is kept. Empty = off." })),
         saveAdv,
         field("Hugging Face token (only for gated models; kept in this computer’s keychain)", hfToken, hfTokenHint),
         H("div", { className: "hf-row" },
@@ -165,6 +185,9 @@ export class Panel {
       this.adv.autoUp.checked = st.settings.auto_upload_models !== false;
       this.adv.autoDown.checked = st.settings.auto_download_models !== false;
       this.adv.askAbove.value = st.settings.download_ask_above_gb ?? 20;
+      this.adv.noCache.checked = st.settings.ignore_cache === true;
+      this.adv.autoPrev.value = AUTO_PREVIEW_MODES.some(([k]) => k === st.settings.auto_preview) ? st.settings.auto_preview : "off";
+      this.adv.byName.value = typeof st.settings.organized_output_dir === "string" ? st.settings.organized_output_dir : "HaloFuse/by-name";
       this.adv.runtime.value = st.settings.runtime_image === "halofuse" ? "halofuse" : "legacy";
       this.adv.runtime.disabled = st.settings.runtime_image_locked === true;
       const halo = this.adv.runtime.querySelector('option[value="halofuse"]');
@@ -427,6 +450,10 @@ export class Panel {
       card.append(fig);
     } else if (this.ctl.state.previewMode !== "none" && (latest || out)) {
       card.append(H("img", { className: "hf-thumb", src: latest && !out ? latest.dataUrl : this.viewUrl(out), alt: latest && !out ? "Latest preview" : "Latest output" }));
+    }
+    if (!isQueue && job && s.nodes?.sections?.length) {
+      card.append(renderNodeSections(H, { board: s.nodes, jobId: s.id, compact: true,
+        previewUrl: (jobId, name) => this._previewUrl(jobId, name), viewUrl: this.viewUrl }));
     }
     const btns = H("div", { className: "hf-row" });
     const stopping = s.stopping || job?.cancel?.state === "cancel_requested" || job?.cancel?.state === "cancel_accepted";

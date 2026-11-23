@@ -8,6 +8,7 @@ import { renderProblems, renderProgress, renderSummary, renderTelemetry } from "
 import { cancelInfo, isTerminal, progressText, statusInfo } from "./job_view.js";
 import { createImageCache, renderLive } from "./live_preview.js";
 import { formatEntry } from "./log_model.js";
+import { renderNodeSections } from "./node_sections.js";
 
 const TABS = [
   ["live", "Live"], ["logs", "Logs"], ["activity", "Activity"], ["progress", "Progress"], ["telemetry", "Telemetry"], ["problems", "Problems"],
@@ -168,6 +169,21 @@ export class HaloFuseConsole {
     this.selectTab(ids[i]);
   }
 
+  /** One <img> per node item URL, reused across renders (no re-fetch, no flicker). */
+  _nodeImg(item, url) {
+    this._nodeImgs = this._nodeImgs || new Map();
+    let img = this._nodeImgs.get(url);
+    if (!img) {
+      img = this.doc.createElement("img");
+      img.decoding = "async";
+      img.loading = "lazy";
+      img.src = url;
+      this._nodeImgs.set(url, img);
+      while (this._nodeImgs.size > 200) this._nodeImgs.delete(this._nodeImgs.keys().next().value);
+    }
+    return img;
+  }
+
   _liveCtx(run) {
     const s = this.session;
     const job = s.job;
@@ -222,6 +238,7 @@ export class HaloFuseConsole {
     if (what === "attach") {
       this.logView.reset();
       this._imgs.clear();
+      this._nodeImgs?.clear();
       this._live = { selected: null, mode: this._live.mode, message: null, autoPending: true, userPicked: false };
     }
     if (this._live.autoPending && this.session.job) {
@@ -278,7 +295,10 @@ export class HaloFuseConsole {
     else if (this.tab === "problems") el = renderProblems(H, { ...ctx, warnings: s.warnings, onJump: (seq) => this.jumpTo(seq) });
     else if (this.tab === "live") {
       const live = this._liveCtx(run);
-      el = renderLive(H, live);
+      el = H("div", { className: "hf-scroll" }, renderLive(H, live), renderNodeSections(H, {
+        board: s.nodes, jobId: s.id, previewUrl: (jobId, name) => this.o.previewUrl(jobId, name),
+        viewUrl: this.o.viewUrl, onFocusNode: (id) => this.o.onFocusNode(id),
+        imgFor: (item, url) => this._nodeImg(item, url) }));
       this._announceStep(live.view);
     }
     else {

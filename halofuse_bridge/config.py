@@ -89,6 +89,13 @@ DEFAULTS = {
     # Housekeeping between the workflows of one cloud job (runtime hf/housekeeping.py).
     "clean_between_renders": True,
     "unload_models_between_renders": False,
+    # Owner 2026-11-23 (node previews): render with ComfyUI's cache off (--cache-none) - matters for warm sessions,
+    # queues and render repeats; add one-frame previews to the CLOUD COPY for IMAGE/MASK outputs no output node shows
+    # (off | first | last | first_last); save delivered outputs by input name / date / node title next to the job
+    # folder ("" = off; a folder inside ComfyUI's output folder).
+    "ignore_cache": False,
+    "auto_preview": "off",
+    "organized_output_dir": "HaloFuse/by-name",
 }
 
 # The only keys the browser may read or write. Never the endpoint or a credential. `runtime_image` is the NAME of a
@@ -100,7 +107,7 @@ PUBLIC_KEYS = [
     "auto_download_models", "download_ask_above_gb",
     "max_runtime_seconds", "max_job_cost_usd", "daily_spend_cap_usd",
     "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode", "preview_method",
-    "runtime_image", "user_nodes",
+    "runtime_image", "user_nodes", "ignore_cache", "auto_preview", "organized_output_dir",
     "keep_warm", "warm_hold_seconds", "clean_between_renders", "unload_models_between_renders",
 ]
 
@@ -333,6 +340,14 @@ def _valid_pref(key: str, value) -> bool:
         return user_nodes.valid_entries(value)
     if key == "oom_ladder":
         return isinstance(value, str) and bool(_OOM_LADDER_RE.match(value))
+    if key == "ignore_cache":
+        return isinstance(value, bool)
+    if key == "auto_preview":
+        from .auto_preview import MODES
+        return value in MODES
+    if key == "organized_output_dir":
+        from .organize import valid_dir_setting
+        return valid_dir_setting(value)
     if key == "comfy_extra_args":
         if not (isinstance(value, list) and len(value) <= 64
                 and all(isinstance(a, str) and 0 < len(a) <= 256 for a in value)):
