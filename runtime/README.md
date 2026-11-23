@@ -90,9 +90,13 @@ an exact commit at build time and is optional - one that fails to install is mov
 Lines naming a pack the catalog keeps out of cloud images (UI-only packs, ComfyUI-Manager, research repositories) are
 rejected with the catalog's reason (`python scripts/install_nodes.py check-extras` checks the file offline; CI runs
 it). Each extra's licence is recorded in the install report and anything other than a permissive licence is
-flagged: listing a pack there is the owner's decision. The `default` profile is exactly the 31 packs of the image
-the extension uses today, so saved workflows keep working; any install failure fails that build. In the other
-profiles a pack that fails to install is moved aside and reported, and the build continues. ComfyUI-Manager is never
+flagged: listing a pack there is the owner's decision. The `default` profile is exactly the 31 packs of the original
+image at their original pins (frozen, no extras), so its snapshot describes that image; any install failure fails
+that build. The `full` profile is the HaloFuse image: the 31 original packs at current pins plus every catalog pack
+the licence policy allows plus the extras (the artist chooses it in the extension under Advanced > Cloud runtime).
+CI builds both on every push. In every profile but `default` a pack that fails to install is moved aside and
+reported, and the build continues. Pins are moved to the newest releases with `scripts/update_pins.py`
+([catalog/PIN_UPDATES.md](catalog/PIN_UPDATES.md) lists the last update). ComfyUI-Manager is never
 installed (a batch container must not install or update code by itself).
 
 Licences travel with each pack inside the image. The catalog flags packs whose licence needs a decision before
@@ -111,6 +115,7 @@ not measured by it.
 The `FROM` line in the [Dockerfile](Dockerfile) pins the base image by digest, not by tag, because the upstream tag is
 rebuilt for each ComfyUI release. Changing the pin is the deliberate way to upgrade ComfyUI: check the custom nodes
 against the new version and test on a branch first. The comment above the `FROM` line records the previous pin.
+Current pin (2026-11-23): ComfyUI 0.46.0, the newest stable release, with the frontend package it pins (1.59.6).
 
 ## Build
 

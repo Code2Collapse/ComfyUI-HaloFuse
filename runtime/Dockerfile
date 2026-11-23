@@ -6,7 +6,8 @@
 #
 # The custom-node set is a catalog profile (catalog/profiles.json), chosen with the PROFILE build arg:
 #   default  = exactly the 31 packs of the image in production before the catalog (saved workflows keep working)
-#   core | image | video | audio | depth-segmentation | vfx | prompting-utilities | research-experimental | full
+#   full     = the HaloFuse image: every pack of `default` plus every pack the licence policy allows, + extra_nodes.txt
+#   core | image | video | audio | depth-segmentation | vfx | prompting-utilities | research-experimental
 #   docker buildx build --build-arg PROFILE=video -t halofuse-runtime:video .
 # Optional attention layer: --build-arg ATTENTION=sage (SageAttention 1.0.6; launch preset "sage"; experimental).
 #
@@ -21,10 +22,14 @@
 # Base pinned by digest: the moving cu130-slim-v2 tag silently changed ComfyUI between rebuilds. The ComfyUI
 # version inside this pin is recorded by the snapshot step (/etc/halofuse/node_snapshot.json, comfyui_version);
 # it was not inspected outside a build (no Docker on the machine that wrote this file).
+# 20261119 = ComfyUI v0.46.0 (the newest stable release; the base checks out the newest v* tag) with the
+# comfyui-frontend-package that release pins (1.59.6). The cloud runtime is headless, so the frontend is never served
+# to an artist; it stays at the version core pins. Digest from Docker Hub, 2026-11-23.
 # Rollback targets (previous production pins):
+#   yanwk/comfyui-boot:cu130-slim-v2-20261027@sha256:9c222bf018d44b9490a1e21f832e6555f4845ebd34c57cb2371a6fb246f99e98 (0.43.0)
 #   yanwk/comfyui-boot:cu130-slim-v2-20260803@sha256:9cde099f3fa5b39a58ceadf4562d4e157b4f5e3008d1690d6c5bba9ffd0cffbb
 #   yanwk/comfyui-boot:cu130-slim-v2-20260717@sha256:e2fada7c3db5ed043d99b336ab2e1b68d100cac74e094ad39a28831e1bb7fffb
-ARG BASE_IMAGE=yanwk/comfyui-boot:cu130-slim-v2-20261027@sha256:9c222bf018d44b9490a1e21f832e6555f4845ebd34c57cb2371a6fb246f99e98
+ARG BASE_IMAGE=yanwk/comfyui-boot:cu130-slim-v2-20261119@sha256:1ebd87fc7a22c0edc53e54620d4f93915a09bbb3ac99df466ac3a086d058a412
 
 # ------------------------------------------------------------------------------------------------ base
 FROM ${BASE_IMAGE} AS base

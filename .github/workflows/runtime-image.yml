@@ -24,12 +24,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: runtime-${{ github.ref }}-${{ inputs.profile || 'default' }}-${{ inputs.attention || 'none' }}
+  group: runtime-${{ github.ref }}-${{ inputs.profile || 'all' }}-${{ inputs.attention || 'none' }}
   cancel-in-progress: true
 
 env:
   RUNTIME_DIR: "runtime"
-  PROFILE: ${{ inputs.profile || 'default' }}
   ATTENTION: ${{ inputs.attention || 'none' }}
   # Registry namespace is an owner decision (D-4): unset = build and test only, never push.
   IMAGE_REPOSITORY: ${{ vars.IMAGE_REPOSITORY }}
@@ -61,6 +60,15 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Pushes and pull requests build both images: `default` (the production-parity node set; its snapshot describes
+    # the original image) and `full` (the HaloFuse image, which the bridge's `halofuse` runtime runs: every catalog pack the
+    # licence policy allows plus extra_nodes.txt). A manual run builds the profile it names.
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.profile) || '["default","full"]') }}
+    env:
+      PROFILE: ${{ matrix.profile }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 

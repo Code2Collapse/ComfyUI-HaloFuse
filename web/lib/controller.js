@@ -124,8 +124,10 @@ export class Controller {
 
   async saveAdvanced(prefs) {
     try {
+      const runtimeChanged = prefs.runtime_image !== undefined && prefs.runtime_image !== this.state.settings?.runtime_image;
       const s = await this.api.saveSettings(prefs);
-      this._set({ settings: s });
+      // another cloud runtime has another node set: an earlier Workflow Check result no longer applies
+      this._set(runtimeChanged ? { settings: s, preflight: null } : { settings: s });
       this.say("Settings saved.", "success");
     } catch (err) { this.say(err.message, "danger"); }
   }

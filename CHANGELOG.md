@@ -32,6 +32,11 @@
 - **Missing models upload by themselves.** A model the workflow needs that is on this computer but not in the cloud
   library is uploaded into the same folders as on this computer, then the render starts. Models larger than the
   automatic upload limit still ask first. Switch it off under Advanced > "Upload missing models automatically".
+- **Choose the cloud runtime under Advanced.** "Cloud runtime": *Original image* (default) or *HaloFuse image*
+  (adds the newer node packs; first renders on it are not yet verified). The Workflow Check checks nodes against the
+  runtime you chose. The HaloFuse image is built from every node pack of the owner's list that may legally go into a
+  cloud image, updated to the newest releases, on ComfyUI 0.46.0; it keeps every pack of the original image and adds
+  newer KJNodes (Model Preview Override) and DepthAnythingV2. It is used once its build has been published.
 
 ## 0.5.0 — 2026-11-21
 

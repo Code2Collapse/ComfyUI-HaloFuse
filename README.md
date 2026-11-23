@@ -135,3 +135,5 @@ in [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
   folders as on this computer; switch off under Advanced). Details: CHANGELOG.md.
 - Later the same day: the console always shows the last job and every failure (new Activity tab), the floating
   window opens when chosen, and Workflow Check reads input files the way ComfyUI does.
+- Advanced > Cloud runtime: Original image (default) or HaloFuse image (the newer node packs); the Workflow Check
+  follows the choice.

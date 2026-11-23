@@ -74,12 +74,15 @@ DEFAULTS = {
     "live_preview_files": False,
 }
 
-# The only keys the browser may read or write. Never the endpoint, a credential or the runtime image.
+# The only keys the browser may read or write. Never the endpoint or a credential. `runtime_image` is the NAME of a
+# built-in runtime contract (provider/image_contract.py: "legacy" / "halofuse"); an image reference or command is
+# never taken from the browser (owner 2026-11-23: the cloud runtime is chosen in the panel's Advanced section).
 PUBLIC_KEYS = [
     "instance_type", "assets_library_path", "assets_library_space",
     "model_base_dir", "image_affinity", "batch_count", "upload_guard_gb", "auto_upload_models",
     "max_runtime_seconds", "max_job_cost_usd", "daily_spend_cap_usd",
     "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode", "preview_method",
+    "runtime_image",
 ]
 
 # Public keys whose value may be explicitly cleared with null.
@@ -266,7 +269,7 @@ def load_settings() -> dict:
     for key in _PRIVATE_KEYS:
         data.pop(key, None)
     # image / command / manifest come from the runtime contract (provider/image_contract.py), chosen by the
-    # environment or the file-only `runtime_image` key; a stale saved image or command is never honoured.
+    # environment or the `runtime_image` contract name; a stale saved image or command is never honoured.
     contract = image_contract.select(settings=raw)
     data["image"] = contract.image
     data["command"] = list(contract.command)
@@ -298,6 +301,8 @@ def _valid_pref(key: str, value) -> bool:
         return value in _PREVIEW_MODES
     if key == "preview_method":
         return value in PREVIEW_METHODS
+    if key == "runtime_image":
+        return isinstance(value, str) and value in image_contract.CONTRACTS
     if key == "oom_ladder":
         return isinstance(value, str) and bool(_OOM_LADDER_RE.match(value))
     if key == "comfy_extra_args":

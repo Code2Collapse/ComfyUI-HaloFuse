@@ -190,6 +190,44 @@ def validate_entry(entry: dict) -> list[str]:
     return errs
 
 
+def _validate_frozen_pins(name: str, d: dict, by_repo: dict) -> list[str]:
+    """`pins` freezes a members profile at exact pins (the `default` = production-parity image), so the catalog
+    entries themselves can move to newer pins for every other profile."""
+    pins = d.get("pins")
+    if pins is None:
+        return []
+    errs = []
+    if not isinstance(pins, dict) or d.get("members") is None:
+        return [f"profile {name}: pins needs an explicit members list and must be an object"]
+    for repo, pin in pins.items():
+        if repo not in (d.get("members") or []):
+            errs.append(f"profile {name}: pin for {repo!r}, which is not a member")
+            continue
+        method = ((by_repo.get(repo) or {}).get("install") or {}).get("method")
+        if not isinstance(pin, dict):
+            errs.append(f"profile {name}: pin for {repo} must be an object")
+            continue
+        if pin.get("commit") is not None and not COMMIT_RE.match(str(pin["commit"])):
+            errs.append(f"profile {name}: pin.commit of {repo} must be 40 hex or null")
+        if pin.get("content_sha256") is not None and not SHA256_RE.match(str(pin["content_sha256"])):
+            errs.append(f"profile {name}: pin.content_sha256 of {repo} must be 64 hex or null")
+        if method == "git-archive" and not pin.get("commit"):
+            errs.append(f"profile {name}: frozen git-archive pin of {repo} needs a commit")
+        if method == "registry" and not pin.get("version"):
+            errs.append(f"profile {name}: frozen registry pin of {repo} needs a version")
+    return errs
+
+
+def _with_pin(entry: dict, frozen: dict | None, profile: str) -> dict:
+    """The entry as a profile installs it: a frozen profile pin replaces the catalog pin (a copy; the catalog is
+    never changed)."""
+    if not frozen:
+        return entry
+    pin = {**entry["pin"], "commit": frozen.get("commit"), "version": frozen.get("version"),
+           "content_sha256": frozen.get("content_sha256"), "pin_source": f"frozen by profile {profile}"}
+    return {**entry, "pin": pin}
+
+
 def validate(catalog: dict, profiles: dict) -> None:
     """Raise CatalogError listing every problem, or return None."""
     errs = []
@@ -217,6 +255,12 @@ def validate(catalog: dict, profiles: dict) -> None:
         for p in e.get("profiles") or []:
             if p not in defs:
                 errs.append(f"{e.get('repo')}: unknown profile {p!r}")
+    by_repo = {e.get("repo"): e for e in entries if isinstance(e, dict)}
+    for name, d in defs.items():
+        errs.extend(_validate_frozen_pins(name, d, by_repo))
+        for ref in d.get("include_members_of") or []:
+            if ref == name or (defs.get(ref) or {}).get("members") is None:
+                errs.append(f"profile {name}: include_members_of {ref!r} must name another profile with members")
     policy = profiles.get("licence_policy") or {}
     for cls in LICENCE_CLASSES:
         if policy.get(cls) not in POLICY_ACTIONS:
@@ -244,8 +288,13 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
       * `members` (explicit list, used by `default`) installs exactly those
         entries; the licence policy is reported as flags, not applied, because
         that list reproduces the image already in production (owner decision).
+        Its optional `pins` freeze those members at the production pins
+        while the catalog entries move on for every other profile.
       * `rule: "all-compatible-backend"` (`full`) = every cloud entry of an
         installable category whose compatibility is true.
+      * `include_members_of` adds the members of the named profiles first
+        (catalog pins, that profile's licence exemption, flagged), so an
+        image that replaces another never loses one of its packs.
       * otherwise members are the entries listing the profile in `profiles`.
       * cloud profiles keep only cloud, compatible entries; the licence policy
         then includes, flags or excludes; conflicts exclude the later entry.
@@ -261,8 +310,9 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
     by_repo = entries_by_repo(catalog)
 
     if d.get("members") is not None:
+        frozen = d.get("pins") or {}
         for repo in d["members"]:
-            e = by_repo[repo]
+            e = _with_pin(by_repo[repo], frozen.get(repo), name)
             res.installed.append(e)
             action = _licence_action(e, policy)
             if action != "include":
@@ -276,7 +326,21 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
         candidates = [e for e in catalog["entries"] if name in e["profiles"]]
 
     taken = {}
+    # `include_members_of`: the packs an earlier image already ships stay in this one (at the catalog's current
+    # pins), under the same licence exemption as that profile, so switching images never loses a node.
+    for ref in d.get("include_members_of") or []:
+        for repo in defs[ref]["members"]:
+            e = by_repo[repo]
+            if repo in taken:
+                continue
+            res.installed.append(e)
+            taken[repo] = e
+            if _licence_action(e, policy) != "include":
+                res.flagged.append((e, f"licence class {e['license']['class']} "
+                                       f"({e['license'].get('spdx') or 'see notes'}; kept: shipped in the {ref} image)"))
     for e in candidates:
+        if e["repo"] in taken:
+            continue
         if target == "local":
             if e["install_target"] != "local":
                 res.excluded.append((e, f"install target is {e['install_target']}, not local"))

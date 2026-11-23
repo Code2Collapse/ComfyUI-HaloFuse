@@ -4,7 +4,8 @@
 # At image build time each line is pinned to an exact commit (recorded in /etc/halofuse/install_report.json),
 # downloaded and its requirements.txt installed with the base image's torch pinned. Extras are optional: a pack that
 # fails to download or install is moved aside and the build continues. A pack already in the chosen profile is
-# skipped. Lines starting with # are comments.
+# skipped. Lines starting with # are comments. Extras go into the HaloFuse image (`full` and the other new profiles),
+# never into `default`, which stays the original image's node set (profiles.json `extras: false`).
 # Packs the catalog keeps out of cloud images (UI-only, ComfyUI-Manager, research repositories) are rejected with
 # the reason (check offline: python scripts/install_nodes.py check-extras). Each extra's licence is recorded in the
 # install report; a non-permissive licence is installed but flagged (listing it here is the owner's decision).
@@ -12,3 +13,8 @@
 # Example:
 # kijai/ComfyUI-KJNodes
 # someone/ComfyUI-SomePack@v1.2.0
+
+# Owner 2026-11-23: DepthAnything_V2 + DownloadAndLoadDepthAnythingV2Model (his workflow). The repository has no
+# licence file (catalog: no-licence, so the licence policy alone keeps it out); listed here by the owner's decision,
+# flagged in the install report. Commit = upstream HEAD on 2026-11-23 (unchanged since 2026-03-06).
+kijai/ComfyUI-DepthAnythingV2@553187872eeb1d52e50dc53209fa57e569609a72

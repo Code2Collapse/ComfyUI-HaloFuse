@@ -29,6 +29,38 @@ of two conflicting packs. A failing optional pack is isolated at build time (mov
 marked in `/etc/halofuse/install_report.json`). `full` is every compatible backend entry. `frontend-extensions` is a
 local list and is never built into an image. ComfyUI-Manager is in no cloud profile.
 
+Since 2026-11-23 (owner: "add all the nodes ... updating all nodes to the latest"):
+
+- **`full` is the HaloFuse image** (the bridge's `halofuse` runtime, Advanced > Cloud runtime). Its
+  `include_members_of: ["default"]` puts every pack of the original image in first, at the catalog's current pins and
+  under the same licence exemption (flagged), so switching an artist to the HaloFuse image never loses a node. Then
+  every compatible backend entry the licence policy allows, then `extra_nodes.txt`. CI builds `default` and `full` on
+  every push (`<profile>-sha-<commit>` tags).
+- **`default` is frozen**: its `pins` (profiles.json) hold the production pins, so moving catalog pins to newer
+  releases never changes it, and `extras: false` keeps `extra_nodes.txt` out of it. Its snapshot therefore describes
+  the original image, which is what the Workflow Check uses for the "Original image" runtime.
+
+## Updating pins
+
+`python scripts/update_pins.py --write --markdown catalog/PIN_UPDATES.md` (network; `GITHUB_TOKEN` optional) moves
+every installable cloud entry to the newest Comfy Registry version whose registry status is *active* (versions the
+registry flags or deprecates are skipped and named; a pin is never moved backwards) or to the default branch HEAD,
+clears the old content hash and refreshes the requirement list. A GitHub-detected licence that changed upstream holds
+the old pin for review. Then `python scripts/lock_catalog.py --profile full --write` records the new content hashes.
+The last run's old -> new table is [PIN_UPDATES.md](PIN_UPDATES.md). Pins move; compatibility verdicts were made
+at the older pins (static inspection) and are re-checked only by the image build's install and smoke stages.
+
+## Size and start-up of the HaloFuse image (2026-11-23)
+
+MEASURED offline (`lock_catalog.py --profile full --stats-out`): the 147 `full` packs are 1276 MB of archives and
+1781 MB / 21,575 files extracted; the 31 `default` packs at the same pins are 371 MB / 508 MB. The `full` packs name
+130 distinct pip requirements against 81 for `default` (new heavy ones: openai-whisper / faster-whisper, librosa,
+ultralytics, open-clip-torch, ai-edge-litert, moderngl). ESTIMATE (not built yet): custom_nodes layer about 3.5x the
+measured 388 MiB, so 1.3-1.6 GiB, plus 0.5-2 GiB of dependencies: a compressed image of roughly 7.5-9 GiB instead of
+5.9 GiB, a longer first pull on a cold machine, and a ComfyUI start that imports about 4.7x as many packs (12.4 s for
+31 packs on the CI CPU). Artists who need speed keep the Original image; a smaller profile can be published as its
+own image later. The first CI build of `full` records the real numbers (smoke_report.json, measurement.json).
+
 ## Licence policy (owner decision 12 is open)
 
 Lead default in `profiles.json`: GPL/AGPL packs are installed but flagged (publishing an image creates source-offer

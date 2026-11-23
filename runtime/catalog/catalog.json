@@ -108,11 +108,9 @@
     "pip": [
      "pillow>=10.3.0",
      "color-matcher",
-     "matplotlib",
-     "mss",
-     "opencv-python-headless"
+     "matplotlib"
     ],
-    "source": "requirements.txt at the registry"
+    "source": "Comfy Registry dependencies of version 1.5.0"
    },
    "system_deps": [],
    "model_download": {
@@ -148,15 +146,15 @@
    "enabled_by_default": true,
    "pin": {
     "commit": null,
-    "version": "1.3.7",
+    "version": "1.5.0",
     "reason": "Comfy Registry package version (the registry does not expose the source commit)",
-    "pinned_at": "2026-11-20",
-    "content_sha256": "51b3dc9e7c3cdd31791f8891b5ad4c37052726359cea262df1cfa74d22988e43",
-    "pin_source": "baseline nodes.json (production image; unchanged)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "141111c79a6306c975426a6c4f00fde732c16e6b29b1b749990aadbf4e590315",
+    "pin_source": "latest active Comfy Registry version on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "in the production image before this change (baseline nodes.json, commit 018b911); no build or import test was run in this audit"
+    "evidence": "pin moved from 1.3.7 to 1.5.0 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Various custom nodes for ComfyUI",
@@ -271,7 +269,7 @@
     "version": "1.1.5",
     "reason": "Comfy Registry package version (the registry does not expose the source commit)",
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "e69df8f665352a184129b1c0ce12aa72672987c3b79837db7d210ea045f48f5b",
     "pin_source": "baseline nodes.json (production image; unchanged)"
    },
    "verified": {
@@ -484,7 +482,7 @@
     "torch": "uses ComfyUI's torch from the base image",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [],
-    "source": "requirements.txt at the registry"
+    "source": "Comfy Registry dependencies of version 1.0.2608210019"
    },
    "system_deps": [],
    "model_download": {
@@ -516,15 +514,15 @@
    "enabled_by_default": true,
    "pin": {
     "commit": null,
-    "version": "1.0.2604070017",
+    "version": "1.0.2608210019",
     "reason": "Comfy Registry package version (the registry does not expose the source commit)",
-    "pinned_at": "2026-11-20",
-    "content_sha256": "877423a7f30f352d7acf983446d6a1d015fd210437f83821672c2abcb50b3335",
-    "pin_source": "baseline nodes.json (production image; unchanged)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "7d98c9bbbc31423a7b074dd8172d274c2104fb40a0752d2fb0cfbd4f16888502",
+    "pin_source": "latest active Comfy Registry version on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "in the production image before this change (baseline nodes.json, commit 018b911); no build or import test was run in this audit"
+    "evidence": "pin moved from 1.0.26040700 to 1.0.26082100 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Making ComfyUI more comfortable!",
@@ -635,7 +633,7 @@
     "pip": [
      "piexif"
     ],
-    "source": "requirements.txt at the registry"
+    "source": "Comfy Registry dependencies of version 1.23.0"
    },
    "system_deps": [],
    "model_download": {
@@ -668,15 +666,15 @@
    "enabled_by_default": true,
    "pin": {
     "commit": null,
-    "version": "1.21.0",
+    "version": "1.23.0",
     "reason": "Comfy Registry package version (the registry does not expose the source commit)",
-    "pinned_at": "2026-11-20",
-    "content_sha256": "f3adc67c26a13641e9f92b4d01cf96ee078ca5a9f20b4921fe19370cd580a49d",
-    "pin_source": "baseline nodes.json (production image; unchanged)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "60b0650ca5a3ea4b2b79013e4c81b2169114bfff6f8ec715e645d87712432874",
+    "pin_source": "latest active Comfy Registry version on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "in the production image before this change (baseline nodes.json, commit 018b911); no build or import test was run in this audit"
+    "evidence": "pin moved from 1.21.0 to 1.23.0 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "All the tools you need to save images with their generation metadata on ComfyUI. Compatible with Civitai & Prompthero geninfo auto-detection. Works with png, jpeg and webp.",
@@ -922,7 +920,7 @@
     "head_date": "2025-01-09T02:38:39Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -943,7 +941,7 @@
     "pip": [
      "dynamicprompts[yaml]>=0.34.0"
     ],
-    "source": "requirements.txt at 3f2fff32358c"
+    "source": "requirements.txt at af3309b20fe0"
    },
    "system_deps": [],
    "model_download": {
@@ -974,15 +972,15 @@
    ],
    "enabled_by_default": true,
    "pin": {
-    "commit": "3f2fff32358cf39e21b8b440ca87eac9a8e2bade",
+    "commit": "af3309b20fe0633f104b0d0968b8396e1f7e6d2a",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": "d0151b7b6432191c19a019db208d984daa512d7f88c148b959498a25c79c8af2",
-    "pin_source": "baseline nodes.json (production image; unchanged)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "ea1c3ebcf919cbd1c539bc646fb0bea285fc1dba4891b08b6c9ec3cc243ec89d",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "in the production image before this change (baseline nodes.json, commit 018b911); no build or import test was run in this audit"
+    "evidence": "pin moved from 3f2fff32358c to af3309b20fe0 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "ComfyUI custom nodes for Dynamic Prompts",
@@ -997,7 +995,7 @@
     "head_date": "2026-11-14T13:50:05Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -1072,7 +1070,7 @@
     "head_date": "2024-01-24T22:44:09Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -1148,7 +1146,7 @@
     "head_date": "2025-06-13T16:15:05Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "repository archived upstream (no further fixes)"
   },
@@ -1224,7 +1222,7 @@
     "head_date": "2023-11-20T01:08:18Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "creates a symlink into ComfyUI's web directory at startup (startup_utils.py)",
    "needs_owner": "licence decision 12 (no-licence)"
@@ -1317,7 +1315,7 @@
     "head_date": "2025-11-28T06:04:49Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "fork of cubiq/ComfyUI_essentials with the same node class names (ImageResize+, ImageCrop+ ... verified in image.py)"
   },
@@ -1348,7 +1346,7 @@
      "opencv-python",
      "scipy"
     ],
-    "source": "requirements.txt at 088128b22424"
+    "source": "requirements.txt at a7439db30bed"
    },
    "system_deps": [],
    "model_download": {
@@ -1390,15 +1388,15 @@
    ],
    "enabled_by_default": true,
    "pin": {
-    "commit": "088128b224242e110d3906c6750e9a3a348a659b",
+    "commit": "a7439db30bed0c5b5fa437d77ae8a7bb220dfd00",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": "d295601908b9d48e57119f0e554e0662b961138a3a40c3c6ccd9f4ca13711924",
-    "pin_source": "baseline nodes.json (production image; unchanged)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "b466ede822d5e8962e9b6dc02f77418deb0d7490a795c2963a4c043cc75892a3",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "in the production image before this change (baseline nodes.json, commit 018b911); no build or import test was run in this audit"
+    "evidence": "pin moved from 088128b22424 to a7439db30bed on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "",
@@ -1413,7 +1411,7 @@
     "head_date": "2026-11-13T01:07:13Z",
     "submodules": [],
     "committed_weight_bytes": 4895338,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -1496,7 +1494,7 @@
     "head_date": "2026-05-27T16:00:28Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "requires onnxruntime-gpu; the image keeps exactly one onnxruntime build"
   },
@@ -1580,7 +1578,7 @@
     "head_date": "2025-09-28T08:35:29Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -1676,7 +1674,7 @@
     "head_date": "2025-10-18T04:06:39Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -1694,7 +1692,7 @@
     "torch": "uses ComfyUI's torch from the base image",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [],
-    "source": "no requirements.txt at the repository root"
+    "source": "no requirements.txt at 9cba1bba06e1"
    },
    "system_deps": [],
    "model_download": {
@@ -1727,15 +1725,15 @@
    ],
    "enabled_by_default": true,
    "pin": {
-    "commit": "726d727217a15a469319731d9a17a66159435557",
+    "commit": "9cba1bba06e1108e5ca8f7b4650410fdeeb00ee2",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": "8d3c96d43984b57e0604c2109f3bd0478c567cf6374f12d865816cd1b39bc757",
-    "pin_source": "baseline nodes.json (production image; unchanged)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "a30d9ff90460d8d11d6e6305ec1a023db18188d5b8d8610948632d5e5867d4b7",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "in the production image before this change (baseline nodes.json, commit 018b911); no build or import test was run in this audit"
+    "evidence": "pin moved from 726d727217a1 to 9cba1bba06e1 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Advanced tools for basic ComfyUI work",
@@ -1746,11 +1744,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "master",
-    "head_commit": "c157722a2b484d80dee6b6d3f166c90d9ec197b8",
-    "head_date": "2026-11-18T15:35:17Z",
+    "head_commit": "9cba1bba06e1108e5ca8f7b4650410fdeeb00ee2",
+    "head_date": "2026-11-20T22:57:36Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -1845,7 +1843,7 @@
     "head_date": "2026-01-08T10:09:33Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "model weights carry their own licences (not in the image)"
   },
@@ -1921,7 +1919,7 @@
     "head_date": "2026-09-11T17:25:44Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -1949,7 +1947,7 @@
      "openimageio",
      "transformers>=4.50.0"
     ],
-    "source": "requirements.txt at 220e1d45aa04"
+    "source": "requirements.txt at ced6bad92b82"
    },
    "system_deps": [
     "build toolchain (ninja)"
@@ -1984,15 +1982,15 @@
    ],
    "enabled_by_default": true,
    "pin": {
-    "commit": "220e1d45aa0469f518e982102fca4dca92a61862",
+    "commit": "ced6bad92b82f90028e1e1fd5a37527302550fc5",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": "a11e2077b7a7fe65007d2ecd1f82309c1921f5422cae80bab10df880673ed697",
-    "pin_source": "baseline nodes.json (production image; unchanged)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "f385ce67b59e0d10cd2689ca3769c2f5c6390ad1614fb65d21a4c09b17a39b1b",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "in the production image before this change (baseline nodes.json, commit 018b911); no build or import test was run in this audit"
+    "evidence": "pin moved from 220e1d45aa04 to ced6bad92b82 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "LTX-Video Support for ComfyUI",
@@ -2007,7 +2005,7 @@
     "head_date": "2026-11-12T14:14:51Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (restrictive-custom)"
   },
@@ -2043,7 +2041,7 @@
      "loguru",
      "khatt>=0.4.0"
     ],
-    "source": "requirements.txt at 51977b27869a"
+    "source": "requirements.txt at 1f7edb653715"
    },
    "system_deps": [],
    "model_download": {
@@ -2082,15 +2080,15 @@
    ],
    "enabled_by_default": true,
    "pin": {
-    "commit": "51977b27869af9369e3d11a75d6fe8eb706f9821",
+    "commit": "1f7edb65371526195621fdde274bf895e117120e",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": "b55179fbb225d11035c6e874c88855610460c3d5a114c405f4e6948ac901d0a0",
-    "pin_source": "baseline nodes.json (production image; unchanged)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "b39dfd48012ff3b83ed1a419505e888b3997ccd2bbac251c39043fb74630416d",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "in the production image before this change (baseline nodes.json, commit 018b911); no build or import test was run in this audit"
+    "evidence": "pin moved from 51977b27869a to 1f7edb653715 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "A set of nodes for ComfyUI that can composite layer and mask to achieve Photoshop like functionality.",
@@ -2105,7 +2103,7 @@
     "head_date": "2026-11-07T11:04:40Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "needs opencv-contrib (cv2.ximgproc); the image normalises to one OpenCV distribution"
   },
@@ -2194,7 +2192,7 @@
     "head_date": "2026-09-14T07:39:09Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -2290,7 +2288,7 @@
      "wiki"
     ],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "git submodules (extern/GFPGAN, extern/frame_interpolation) are not in archive installs; the nodes that use them are unavailable"
   },
@@ -2379,7 +2377,7 @@
     "head_date": "2025-05-05T04:23:55Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (non-commercial)"
   },
@@ -2479,7 +2477,7 @@
     "head_date": "2026-06-04T10:25:53Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "requirements contain git+ URLs (a git binary is needed at build time)"
   },
@@ -2568,7 +2566,7 @@
     "head_date": "2026-02-02T01:40:50Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "uses OpenCV Haar cascades (vendored into the image)"
   },
@@ -2592,7 +2590,7 @@
      "pywavelets",
      "numpy>=1.26.4"
     ],
-    "source": "requirements.txt at 56e44755d866"
+    "source": "requirements.txt at cb2c312d979b"
    },
    "system_deps": [],
    "model_download": {
@@ -2626,15 +2624,15 @@
    ],
    "enabled_by_default": true,
    "pin": {
-    "commit": "56e44755d866c87ff9cb4b6608c8e42155db6ecc",
+    "commit": "cb2c312d979b3ab4aaca97a3b70f892f4be554f4",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": "f106133e02857decf9c8c8088cfd4d1e0384eb70ba6eb994499985b3884ce51d",
-    "pin_source": "baseline nodes.json (production image; unchanged)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "f709cefd862cd0f74ced66f3274397d06aaa1308ee63ed806c90201b772d9070",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "in the production image before this change (baseline nodes.json, commit 018b911); no build or import test was run in this audit"
+    "evidence": "pin moved from 56e44755d866 to cb2c312d979b on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "",
@@ -2649,7 +2647,7 @@
     "head_date": "2026-11-12T20:20:04Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "__init__.py at the pinned commit only ADDS schedulers/samplers (lines 22-54, guarded by \"if not in\"); the rest of the pack was not audited for global patches",
    "owner_decision": "11 (RES4LYF in the image): lead default 'as in main' keeps it in the default image. 12 (GPL / non-commercial in a published image): flagged, not decided. Its LICENSE forbids commercial AI-image services without permission: NEEDS_OWNER",
@@ -2965,7 +2963,7 @@
     "head_date": "2025-10-26T19:10:17Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -3543,7 +3541,7 @@
     "head_date": "2026-06-04T07:37:37Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -3662,7 +3660,7 @@
      "dill",
      "matplotlib"
     ],
-    "source": "requirements.txt at 1d32710e6d36",
+    "source": "requirements.txt at 0982e3602435",
     "install_py": "has install.py (not run by the archive installer; see compatibility)"
    },
    "system_deps": [],
@@ -3702,15 +3700,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "1d32710e6d36a062028746a8b050ed972b8070fb",
+    "commit": "0982e36024351d3c17d104e3034ce140f2bb5aa3",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "c5c160876c619286aaffac0cb2cdbae76ebc77bd30b9115b8f9f9e062dd4a30e",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 1d32710e6d36 to 0982e3602435 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Custom nodes pack for ComfyUI This custom node helps to conveniently enhance images through Detector, Detailer, Upscaler, Pipe, and more.",
@@ -3721,11 +3719,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "Main",
-    "head_commit": "1d32710e6d36a062028746a8b050ed972b8070fb",
-    "head_date": "2026-11-19T21:02:15Z",
+    "head_commit": "0982e36024351d3c17d104e3034ce140f2bb5aa3",
+    "head_date": "2026-11-23T10:48:55Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -3751,7 +3749,7 @@
      "opencv-python-headless",
      "dill"
     ],
-    "source": "requirements.txt at 50c7b71a6a22",
+    "source": "requirements.txt at 31b729aaa8d5",
     "install_py": "has install.py (not run by the archive installer; see compatibility)"
    },
    "system_deps": [],
@@ -3794,15 +3792,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "50c7b71a6a224734cc9b21963c6d1926816a97f1",
+    "commit": "31b729aaa8d5e5c183e2d5b942064a204eec2d34",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "d1ee3529701dd6c5eb70aa8eac39eded3385dee9e7510fa9d4f8b87c066bc394",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 50c7b71a6a22 to 31b729aaa8d5 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "This extension serves as a complement to the Impact Pack, offering features that are not deemed suitable for inclusion by default in the ComfyUI Impact Pack",
@@ -3813,11 +3811,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "50c7b71a6a224734cc9b21963c6d1926816a97f1",
-    "head_date": "2025-07-22T03:43:06Z",
+    "head_commit": "31b729aaa8d5e5c183e2d5b942064a204eec2d34",
+    "head_date": "2026-11-23T11:25:08Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "companion of ComfyUI-Impact-Pack; uses ultralytics (AGPL-3.0)",
    "needs_owner": "licence decision 12 (network-copyleft)"
@@ -3873,7 +3871,7 @@
     "commit": "5b7681746fe19e563113d27366ba85236bc1ba5b",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "75f38f9080c75f14fbb49ca268fbcd50e11a5bc88cfd163ffa7a87052cb177d8",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -3893,7 +3891,7 @@
     "head_date": "2026-10-04T09:01:17Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -3948,7 +3946,7 @@
     "commit": "6005efc02f7745649118edd89cdd084c2b9bd3ae",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "3d32efab7b2c27d613f4b4574bd38e3b804243fb45ea1c4cc2ec489641e171a8",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -3968,7 +3966,7 @@
     "head_date": "2026-10-21T14:00:36Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -4131,7 +4129,7 @@
     "head_date": "2026-04-29T15:30:56Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (non-commercial)"
   },
@@ -4201,7 +4199,7 @@
     "commit": "4490bd1f482e026674543386bb2a4d176da245b9",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "d40bd7c699a68c20cfd75627b0a059ed50b13ee50379f746177a85192c320c94",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -4221,7 +4219,7 @@
     "head_date": "2025-12-24T08:52:32Z",
     "submodules": [],
     "committed_weight_bytes": 1251640,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -4275,7 +4273,7 @@
     "commit": "a0f451a5113cf9becb0847b92884cb10cbdec0ef",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "8ea7db63c625c6d8a962ad92f581232b1f1a663793165fbf8d00c0fbc386ee93",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -4295,7 +4293,7 @@
     "head_date": "2025-04-14T07:29:11Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -4378,7 +4376,7 @@
     "head_date": "2025-05-20T05:18:36Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -4458,7 +4456,7 @@
     "head_date": "2025-04-14T07:49:57Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -4549,7 +4547,7 @@
     "head_date": "2025-04-14T07:33:21Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -4638,7 +4636,7 @@
     "head_date": "2024-08-21T06:14:24Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -4703,7 +4701,7 @@
     "commit": "4d9dc6205b793ffd0fb319816136d9b8c0dbfdff",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "af8e66fd78a2a09c050c3708e8845f31926d2259b470bada9676ed2da91597ac",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -4723,7 +4721,7 @@
     "head_date": "2024-08-04T23:39:29Z",
     "submodules": [],
     "committed_weight_bytes": 3988342,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -4810,7 +4808,7 @@
     "head_date": "2026-11-14T05:05:49Z",
     "submodules": [],
     "committed_weight_bytes": 11850,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -4865,7 +4863,7 @@
     "commit": "22811d903af8a90100dccef1c4b579526649a6ab",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "6b4b796683b43afeea74d984123c4e9c7a42e5162ae378d73bfa8b6f1401fab5",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -4885,7 +4883,7 @@
     "head_date": "2025-05-30T19:21:17Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -4940,7 +4938,7 @@
     "commit": "b4f6a9e024064a4489f774a8b91049ce0b606ea3",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "8d558172b20fc69ab12f9a5a6e8fc64901dea5d7c6f225f10970714a681c53ea",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -4960,7 +4958,7 @@
     "head_date": "2025-02-25T16:35:50Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -5066,7 +5064,7 @@
     "head_date": "2026-11-17T00:05:57Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -5203,7 +5201,7 @@
     "commit": "27a67fee80cf46c198b10588a5651f23d67d1e95",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "c5c02bd78de89b61348e98ee8c92dd1b2f3bb12a5c25052c5bc5cc5069d2fed4",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -5223,7 +5221,7 @@
     "head_date": "2026-07-28T11:39:29Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -5276,7 +5274,7 @@
     "commit": "9257651221002dcba0a12f9cff37e1944e58fb60",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "819a81c809e5a827ff2be6f486f3a06290f3f590a260c21cb64b82be2b0a2176",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -5296,7 +5294,7 @@
     "head_date": "2026-07-28T11:39:28Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -5368,7 +5366,7 @@
     "head_date": "2026-03-29T02:54:30Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -5431,7 +5429,7 @@
     "commit": "156b014d7cb60a0d7f78940b1396556d42a0f109",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "aec5b7a4cc09f3cffc6d8622733b62c3ed5592af3a017d252cc47dbb6355bdbe",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -5451,7 +5449,7 @@
     "head_date": "2026-11-03T19:28:56Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -5516,7 +5514,7 @@
     "commit": "8eaeb72edc3aaf2059b57f2d96a1f6f689f19ae2",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "fcb85dd556b4c23dcbdfe75b310aeb6f7b4588e57d28a7e3b2ef9e4eb89a9b9d",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -5536,7 +5534,7 @@
     "head_date": "2026-02-01T13:26:59Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -5628,7 +5626,7 @@
     "head_date": "2026-02-18T07:40:52Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -5686,7 +5684,7 @@
     "commit": "9ece3de914214c5f581d725167bc9d0eeb0d1120",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "17a6f22b7af306c25207cdac20c15810c206bffb0c800b3140bfdf7683c1b7e3",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -5706,7 +5704,7 @@
     "head_date": "2026-05-06T09:00:44Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -5790,7 +5788,7 @@
     "head_date": "2026-06-07T04:56:11Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "openai-whisper calls the ffmpeg binary at runtime",
    "needs_owner": "licence decision 12 (non-commercial)"
@@ -6059,7 +6057,7 @@
     "commit": "9e0a6e700299182fc05c58b62e7ad9f72182a78b",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "f5897464eeb01311f7b0d95006642b7331f474bdcd19379dde9cc12b4a8a95e4",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -6079,7 +6077,7 @@
     "head_date": "2025-07-11T09:59:23Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "requires onnxruntime (CPU); the image's normalisation step reinstalls exactly one onnxruntime-gpu build"
   },
@@ -6178,7 +6176,7 @@
     "head_date": "2026-09-06T23:20:46Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -6250,7 +6248,7 @@
     "head_date": "2026-10-09T03:20:52Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -6335,7 +6333,7 @@
     "head_date": "2026-05-21T13:40:00Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -6421,7 +6419,7 @@
     "head_date": "2025-11-07T05:19:37Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -6475,7 +6473,7 @@
     "commit": "3394e44afea04ed0188fb37b21f0d9952469766b",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "6a8e91ce46e2b49de6e30626facb98913d4dd253926fe72a6301323972141f93",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -6495,7 +6493,7 @@
     "head_date": "2026-08-18T18:36:50Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -6547,7 +6545,7 @@
     "commit": "53238538b9197732250a9d24d7ae4a551227883f",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "57fcd8df9708a2552aef6bb06bc7d9bd40ed436c72dc5fc21aa8477f579f5389",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -6567,7 +6565,7 @@
     "head_date": "2025-12-06T14:22:41Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -6619,7 +6617,7 @@
     "commit": "cdd4d028c6491d27a40092d7795158668cec9189",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "0e2382e8d4fca2734e920a416012e5dd98984dbf57bb76e789efac67361f97cb",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -6639,7 +6637,7 @@
     "head_date": "2026-01-24T18:45:07Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -6658,7 +6656,7 @@
     "torch": "uses ComfyUI's torch from the base image",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [],
-    "source": "no requirements.txt at the repository root"
+    "source": "no requirements.txt at 082d7d36c849"
    },
    "system_deps": [],
    "model_download": {
@@ -6694,15 +6692,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "beeaeb79e1f905683a525913f4e88392536a8929",
+    "commit": "082d7d36c84989c9632852b0a2f7541e6eac941c",
     "version": null,
-    "pinned_at": "2026-11-20",
+    "pinned_at": "2026-11-23",
     "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from beeaeb79e1f9 to 082d7d36c849 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "LoRA Loader & Diffsynth/LoRA ControlNet Loader for Nunchaku Qwen Image & Nunchaku Z-Image Turbo. Krea2 Depth/OpenPose LoRA ControlNet Loader",
@@ -6713,11 +6711,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "beeaeb79e1f905683a525913f4e88392536a8929",
-    "head_date": "2026-11-06T10:27:21Z",
+    "head_commit": "082d7d36c84989c9632852b0a2f7541e6eac941c",
+    "head_date": "2026-11-21T20:32:42Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -6810,7 +6808,7 @@
     "head_date": "2026-11-10T02:25:32Z",
     "submodules": [],
     "committed_weight_bytes": 4271,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -6868,7 +6866,7 @@
     "commit": "6e07c280664d356dd69df2043151dd7e9b0fd917",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "14f5a55361bc7d57822230e7fff43371957fdd855d35361c3eec3ae57bc9ddc3",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -6888,7 +6886,7 @@
     "head_date": "2026-03-11T03:27:09Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "prompt enhancement can call an external LLM API; never put API keys in job env"
   },
@@ -6908,7 +6906,7 @@
     "torch": "uses ComfyUI's torch from the base image",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [],
-    "source": "no requirements.txt at the repository root"
+    "source": "no requirements.txt at bd103140710e"
    },
    "system_deps": [],
    "model_download": {
@@ -6938,15 +6936,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "a40c22894a60b975cafc917deed1e6e2a4426a47",
+    "commit": "bd103140710edce447c9301c057efcd1a1c4a8ca",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "27600701bc088c63004c227b464b34e62e18bdfe4c8b4b984388254ae553d136",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from a40c22894a60 to bd103140710e on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "A set of ComfyUI nodes designed specifically for the Z-Image / Z-Image Turbo model.",
@@ -6957,11 +6955,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "master",
-    "head_commit": "a40c22894a60b975cafc917deed1e6e2a4426a47",
-    "head_date": "2026-11-17T00:45:35Z",
+    "head_commit": "bd103140710edce447c9301c057efcd1a1c4a8ca",
+    "head_date": "2026-11-21T22:56:44Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -7013,7 +7011,7 @@
     "commit": "13ef60f20828949becada815d3cbc371eb5ccaab",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "7eced8633b0e4c0b2b05508351c344dadda96f459b55412e2dced9010a2bae1c",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -7033,7 +7031,7 @@
     "head_date": "2026-10-16T16:36:29Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -7085,7 +7083,7 @@
     "commit": "7756566160c4a1b24bb1bd9f0ff3ced1a83d7547",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "fbcf475ab2933efe364da8da2e94958be090b4f34a15128b7999c7b91f994810",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -7105,7 +7103,7 @@
     "head_date": "2026-07-17T14:55:50Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -7179,7 +7177,7 @@
     "head_date": "2026-07-04T11:33:33Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -7235,7 +7233,7 @@
     "commit": "b3377be990c0fa296459a20a4503dda40c045b4b",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "e4c216e80d0ed5ba6f12c8d298973624494f47b12aab07792f6987a789094563",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -7255,7 +7253,7 @@
     "head_date": "2026-10-23T03:09:01Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -7280,7 +7278,7 @@
      "scenedetect>=0.6.4,<0.8",
      "ultralytics>=8.0"
     ],
-    "source": "requirements.txt at 85c66f59d6b1"
+    "source": "requirements.txt at aff2579b063a"
    },
    "system_deps": [],
    "model_download": {
@@ -7313,15 +7311,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "85c66f59d6b13bec71324271258fcae07a2a5898",
+    "commit": "aff2579b063aae38273a54edcc58aa13819c8668",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "75ac2e370a1ac29a528f8b6ab0af1c9cc69dcfd14519f4a042dd1901c55ab330",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 85c66f59d6b1 to aff2579b063a on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Multi-segment MiniMax H3 Director for official ComfyUI MiniMax-H3",
@@ -7332,11 +7330,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "85c66f59d6b13bec71324271258fcae07a2a5898",
-    "head_date": "2026-11-12T07:32:49Z",
+    "head_commit": "aff2579b063aae38273a54edcc58aa13819c8668",
+    "head_date": "2026-11-21T08:01:35Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "uses ultralytics (AGPL-3.0)"
   },
@@ -7392,7 +7390,7 @@
     "commit": "5c026b9878d56d848f87f79628132d2df702bc01",
     "version": null,
     "pinned_at": "2026-11-23",
-    "content_sha256": null,
+    "content_sha256": "cc29bac0c3200c55289fdcb910beef4a7b1bd8aa14a727fde08c03e1dc9b98e4",
     "pin_source": "default branch HEAD on 2026-11-23 (GitHub API; commit date 2026-11-12)"
    },
    "verified": {
@@ -7467,7 +7465,7 @@
     "commit": "050226d37d25e20d878b47bdf92c8f912afccdaa",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "fd11dcc6e27ba38e7c01d771493ea2b7c808e73c342386bcd69dd2e2e24435d7",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -7487,7 +7485,7 @@
     "head_date": "2026-10-21T12:31:28Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -7552,7 +7550,7 @@
     "commit": "518c083d11d80fa5920222ad89889924ee4401c9",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "41aa1210fb5f984590c5f5331a4fa090a21d1f9507301a98a61ccb69065180ad",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -7572,7 +7570,7 @@
     "head_date": "2026-10-18T04:17:52Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -7628,7 +7626,7 @@
     "commit": "be3a3e9219feb63848b3415f1dd1d1571b812203",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "c77a9e4eb3288fdad5dc0b90deddc4c6303a7c03f1838ac3c5362c8d85e62c63",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -7648,7 +7646,7 @@
     "head_date": "2026-11-17T06:10:28Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -7704,7 +7702,7 @@
     "commit": "266405844738da9f16e8a072482320168a17c494",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "afc2456af5b14ea8211d5339e257057744df174dc191a2b979cbd10af9b72918",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -7724,7 +7722,7 @@
     "head_date": "2026-10-24T19:49:32Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -7776,7 +7774,7 @@
     "commit": "4f188183f3a4874307728f22ed0a6d0c433a8b02",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "d73b8ea622329239c425d084bf4fecfd9347fe5adb0bc1a53c5888e0b53c4ed8",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -7796,7 +7794,7 @@
     "head_date": "2026-11-19T18:24:03Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "LoRA training inside a render job (long GPU time)"
   },
@@ -7816,7 +7814,7 @@
     "torch": "uses ComfyUI's torch from the base image",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [],
-    "source": "requirements.txt at 541c4b23853c"
+    "source": "requirements.txt at da0a341b3bb9"
    },
    "system_deps": [],
    "model_download": {
@@ -7848,15 +7846,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "541c4b23853c6e03d9634f4c827252e80f66e547",
+    "commit": "da0a341b3bb97df3211285e336b77777d182663f",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "eb38be03efa560b5e02205ef57add21cdb0555ea6e03b93431f6fb5df0870320",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 541c4b23853c to da0a341b3bb9 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Two ComfyUI V3 nodes that encapsulate the Flux Klein pipeline (Presampling + Postsampling)",
@@ -7867,11 +7865,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "master",
-    "head_commit": "541c4b23853c6e03d9634f4c827252e80f66e547",
-    "head_date": "2026-11-18T16:23:06Z",
+    "head_commit": "da0a341b3bb97df3211285e336b77777d182663f",
+    "head_date": "2026-11-21T00:33:39Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -7891,7 +7889,7 @@
     "torch": "uses ComfyUI's torch from the base image",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [],
-    "source": "no requirements.txt at the repository root"
+    "source": "no requirements.txt at f5c5434b2c7a"
    },
    "system_deps": [],
    "model_download": {
@@ -7923,15 +7921,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "2c5917057efc87312d8c2e5060eb2e5529602df2",
+    "commit": "f5c5434b2c7a5eda42cfdd41dd206e24357d5d81",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "c66b3272043534c54807038754660eabceb8d3a4263b011013c7d6c1e460a912",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 2c5917057efc to f5c5434b2c7a on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "A small set of preview and masking tools for ComfyUI",
@@ -7942,11 +7940,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "2c5917057efc87312d8c2e5060eb2e5529602df2",
-    "head_date": "2026-11-18T18:10:22Z",
+    "head_commit": "f5c5434b2c7a5eda42cfdd41dd206e24357d5d81",
+    "head_date": "2026-11-20T23:01:04Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -7966,7 +7964,7 @@
     "torch": "uses ComfyUI's torch from the base image",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [],
-    "source": "requirements.txt at a689bb86e004"
+    "source": "requirements.txt at 88099ca2572f"
    },
    "system_deps": [],
    "model_download": {
@@ -7998,15 +7996,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "a689bb86e0048cb4ee74dc539bf234ec5250b9c1",
+    "commit": "88099ca2572f3cb295c455bda9115f27ff3c836b",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "5a992e7e535a376fa9219aa6a347354b5cf8821eb25aca4d16259e5ab78df7f7",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from a689bb86e004 to 88099ca2572f on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "All-in-one ComfyUI nodes for Qwen Image 2.1: text-to-image, editing with up to 16 references, inpainting and detailing",
@@ -8017,11 +8015,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "master",
-    "head_commit": "a689bb86e0048cb4ee74dc539bf234ec5250b9c1",
-    "head_date": "2026-10-29T18:45:16Z",
+    "head_commit": "88099ca2572f3cb295c455bda9115f27ff3c836b",
+    "head_date": "2026-11-21T00:33:39Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -8368,7 +8366,7 @@
     "commit": "2b0d8f8ded36eaed2b331e8b70261fcc1f877586",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "222ad1ea9746a19e47ca0fb4b0f00ebcc9036bd21c7a3e157a4ebeb93f07612e",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -8388,7 +8386,7 @@
     "head_date": "2026-10-30T01:00:31Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -8441,7 +8439,7 @@
     "commit": "12827020620b6ec92cda73292ba02950f927a1ba",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "ac82eeb9b816130242415ae3641b53becd5d5a78f9bd8d057c9a5c2636bda1aa",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -8461,7 +8459,7 @@
     "head_date": "2026-09-03T10:34:16Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "installs an attention override at import (sdpa_fix.py), a global patch; kept out of the general profiles"
   },
@@ -8481,7 +8479,7 @@
     "torch": "uses ComfyUI's torch from the base image",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [],
-    "source": "no requirements.txt at the repository root"
+    "source": "no requirements.txt at 6b44ced61e83"
    },
    "system_deps": [],
    "model_download": {
@@ -8522,15 +8520,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "160e6648b853f5f3f03c8e58bccb67120f8b1259",
+    "commit": "6b44ced61e836761fd9f6d8c887261727b8099c3",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "33f60d6e8f45437cd9297637caa0c85636972a831c5d0206990aae495110e7e1",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 160e6648b853 to 6b44ced61e83 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "",
@@ -8541,11 +8539,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "master",
-    "head_commit": "160e6648b853f5f3f03c8e58bccb67120f8b1259",
-    "head_date": "2026-11-16T13:16:10Z",
+    "head_commit": "6b44ced61e836761fd9f6d8c887261727b8099c3",
+    "head_date": "2026-11-23T01:38:39Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -8578,7 +8576,7 @@
      "opencolorio>=2.6.0",
      "moderngl>=5.10"
     ],
-    "source": "requirements.txt at 6168b2e4fbd4"
+    "source": "requirements.txt at 1b79fc335c79"
    },
    "system_deps": [],
    "model_download": {
@@ -8620,15 +8618,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "6168b2e4fbd4542d09becf3a0d7bb28590b65290",
+    "commit": "1b79fc335c7931d8ab5c204ac6f3d6a6bce9d5f0",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "90c6669c7697feb8602f62e20e04311f31ef085494516b06814fb7b95cfbe218",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 6168b2e4fbd4 to 1b79fc335c79 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Experimental nodes! This is a production suite for ComfyUI — SAM2.1/SAM3 segmentation, alpha matting, inpaint crop/stitch, VFX tools (EXR I/O, LUTs, render passes), video mask propagation, temporal an",
@@ -8639,11 +8637,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "6168b2e4fbd4542d09becf3a0d7bb28590b65290",
-    "head_date": "2026-11-19T13:38:27Z",
+    "head_commit": "1b79fc335c7931d8ab5c204ac6f3d6a6bce9d5f0",
+    "head_date": "2026-11-23T12:24:30Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "large multi-family pack"
   },
@@ -8669,7 +8667,7 @@
      "mediapipe>=0.10.18",
      "ai-edge-litert"
     ],
-    "source": "requirements.txt at fc308d9a8f6a"
+    "source": "requirements.txt at 5afa92ff1c68"
    },
    "system_deps": [
     "mediapipe wheel for the image's Python version"
@@ -8708,15 +8706,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "fc308d9a8f6a324b6f883b1b864a7223eac6b6a6",
+    "commit": "5afa92ff1c6862d36ecb1ed485a201d073c95d3b",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "492a92743e5c7e9144bc0f5314e9c80bf752665679d247bf49006fe160d47700",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from fc308d9a8f6a to 5afa92ff1c68 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Advanced version with the help of @Kijai and @steven850",
@@ -8727,11 +8725,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "fc308d9a8f6a324b6f883b1b864a7223eac6b6a6",
-    "head_date": "2026-11-18T14:42:01Z",
+    "head_commit": "5afa92ff1c6862d36ecb1ed485a201d073c95d3b",
+    "head_date": "2026-11-23T08:29:49Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -8814,7 +8812,7 @@
     "commit": "6f5efb1aebc52f78b332459169569adf10a6a820",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "544073fa34c4b1e9720d5c0be21a8647e88a7ad6292b29abc4eda1dec48ccf14",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -8834,7 +8832,7 @@
     "head_date": "2026-11-18T16:53:15Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -8857,7 +8855,7 @@
      "scipy>=1.11.0",
      "numpy>=1.24.0"
     ],
-    "source": "requirements.txt at caaa01df1a6e"
+    "source": "requirements.txt at 6d39050037d6"
    },
    "system_deps": [],
    "model_download": {
@@ -8890,15 +8888,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "caaa01df1a6e56b19009f0c0d7a24e485f359b4f",
+    "commit": "6d39050037d631007f669b2e37684d38e147a8c4",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "2fa5bdcf75705ed01bd7a3551f7b416acd78dba5973fb487ba790a46bf79082e",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from caaa01df1a6e to 6d39050037d6 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Trying to create a customware of ComfyUI to use it for Minimax",
@@ -8909,11 +8907,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "caaa01df1a6e56b19009f0c0d7a24e485f359b4f",
-    "head_date": "2026-11-18T17:14:49Z",
+    "head_commit": "6d39050037d631007f669b2e37684d38e147a8c4",
+    "head_date": "2026-11-23T12:02:44Z",
     "submodules": [],
     "committed_weight_bytes": 5510600,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -8966,7 +8964,7 @@
     "commit": "2a42c717f1f8d22f999d665b0d772554ed7b81a2",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "4a0778510048bbe84b84a55f179093ff7031e2d88a48bd917e8339dce5ddab08",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -8986,7 +8984,7 @@
     "head_date": "2026-11-18T17:14:52Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -9005,12 +9003,11 @@
     "torch": "declares torch; the installer constrains torch/torchvision/torchaudio to the base image build, so it is never replaced",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [
-     "git+https://github.com/huggingface/transformers.git",
-     "git+https://github.com/huggingface/diffusers.git",
-     "torch",
+     "diffusers>=0.37.0",
+     "transformers>=5.0.0",
      "pillow"
     ],
-    "source": "requirements.txt at 668d9c8193ae"
+    "source": "requirements.txt at fe69967a3a4f"
    },
    "system_deps": [
     "git binary at build time (git+ requirement)"
@@ -9041,15 +9038,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "668d9c8193aec2fa2dfd39a5b829b8e84bc4a4a6",
+    "commit": "fe69967a3a4ff88860cbc9af3cd0712ac3bd020f",
     "version": null,
-    "pinned_at": "2026-11-20",
+    "pinned_at": "2026-11-23",
     "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 668d9c8193ae to fe69967a3a4f on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Under construction for GLM",
@@ -9060,11 +9057,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "668d9c8193aec2fa2dfd39a5b829b8e84bc4a4a6",
-    "head_date": "2026-11-18T14:42:07Z",
+    "head_commit": "fe69967a3a4ff88860cbc9af3cd0712ac3bd020f",
+    "head_date": "2026-11-23T12:35:34Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -9083,7 +9080,7 @@
     "torch": "uses ComfyUI's torch from the base image",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [],
-    "source": "requirements.txt at 2746b5f7f01d"
+    "source": "requirements.txt at 7b630bda4004"
    },
    "system_deps": [],
    "model_download": {
@@ -9113,15 +9110,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "2746b5f7f01d16ef11e81c3bbbd30b88f154fe88",
+    "commit": "7b630bda4004ea0128a2802ec9621f218384b522",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "768a91f19ae52c5238876226fa00d38938f85687468702010643e4104d78c7c9",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 2746b5f7f01d to 7b630bda4004 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Estimating the pose of animals inside ComfyUI",
@@ -9132,11 +9129,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "2746b5f7f01d16ef11e81c3bbbd30b88f154fe88",
-    "head_date": "2026-11-18T08:44:02Z",
+    "head_commit": "7b630bda4004ea0128a2802ec9621f218384b522",
+    "head_date": "2026-11-23T12:29:29Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -9160,7 +9157,7 @@
      "opencv-python>=4.8",
      "torchvision>=0.16"
     ],
-    "source": "requirements.txt at e4312f9648b4"
+    "source": "requirements.txt at 473300590217"
    },
    "system_deps": [],
    "model_download": {
@@ -9200,15 +9197,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "e4312f9648b4757fa154ec581f47c7e289647fc5",
+    "commit": "4733005902173f0f5c2788bfb4d0871aef6411f2",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "ab19aa6a50ae6b6cf8e7885645c30c8d7d16c2a6d36c43f4df5ea3d8078d4e8e",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from e4312f9648b4 to 473300590217 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "",
@@ -9219,11 +9216,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "master",
-    "head_commit": "e4312f9648b4757fa154ec581f47c7e289647fc5",
-    "head_date": "2026-11-18T16:57:25Z",
+    "head_commit": "4733005902173f0f5c2788bfb4d0871aef6411f2",
+    "head_date": "2026-11-23T08:29:07Z",
     "submodules": [],
     "committed_weight_bytes": 9790676,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -9483,7 +9480,7 @@
     "head_date": "2025-11-05T16:18:45Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -9641,7 +9638,7 @@
      "dvd_repo"
     ],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -9978,7 +9975,7 @@
     "commit": "52bec773fb133399a67d313ce2d698dedecfb3ec",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "323cd1f4776677153b01f3495cc4bfbd03e9b33da5356a2601332c680ce65f20",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -9998,7 +9995,7 @@
     "head_date": "2026-10-29T20:18:02Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -10072,7 +10069,7 @@
     "head_date": "2026-08-20T19:57:44Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -10165,7 +10162,7 @@
     "torch": "uses ComfyUI's torch from the base image",
     "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
     "pip": [],
-    "source": "no requirements.txt at the repository root"
+    "source": "no requirements.txt at c74c4877c387"
    },
    "system_deps": [],
    "model_download": {
@@ -10197,15 +10194,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "aaf3ae6ae617193c6877a995da2d625160298fdc",
+    "commit": "c74c4877c38762cdceea382c0dd9a340b8722d26",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "b1f9d87d892b56beb33d60d98a869487d93025b6140c2ca1dfce36e8f207dca2",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from aaf3ae6ae617 to c74c4877c387 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Windows third-party repositories",
    "description": "ComfyUI nodes I made for my own workflows: click or type to mask a thing, crop, rotate and pad by dragging handles, inpaint and outpaint that keep your original pixels, tiled upscale, a video trim tim",
@@ -10216,11 +10213,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "aaf3ae6ae617193c6877a995da2d625160298fdc",
-    "head_date": "2026-11-19T04:25:04Z",
+    "head_commit": "c74c4877c38762cdceea382c0dd9a340b8722d26",
+    "head_date": "2026-11-23T05:08:06Z",
     "submodules": [],
     "committed_weight_bytes": 2301622,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -10290,7 +10287,7 @@
     "commit": "74e4368b6fe79211f431e7f4c76ea47d92d1353e",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "50dfd1f1b965abff53ec434f12226ebf408ecae7351f55e3f082234a67d480c3",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -10310,7 +10307,7 @@
     "head_date": "2026-11-03T17:16:04Z",
     "submodules": [],
     "committed_weight_bytes": 24856,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -10333,7 +10330,7 @@
      "openai-whisper>=20250625",
      "urllib3>=2.7,<3"
     ],
-    "source": "requirements.txt at e5b4fe12eddd"
+    "source": "requirements.txt at b43184f41d5a"
    },
    "system_deps": [
     "ffmpeg binary at runtime"
@@ -10369,15 +10366,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "e5b4fe12eddd114164b74e1898f6d7150ee34762",
+    "commit": "b43184f41d5aca84808f37da220ccceba4b48bde",
     "version": null,
-    "pinned_at": "2026-11-20",
+    "pinned_at": "2026-11-23",
     "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from e5b4fe12eddd to b43184f41d5a on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Windows third-party repositories",
    "description": "ComfyUI custom nodes for RTX Video Super Resolution, NVIDIA VFX/nvvfx, LTX 2.3, Bernini Prompt Guide, Wan2.2 reference video edit, image/video compare, video preview, loaders, resize, and visual workf",
@@ -10388,11 +10385,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "e5b4fe12eddd114164b74e1898f6d7150ee34762",
-    "head_date": "2026-11-17T22:12:47Z",
+    "head_commit": "b43184f41d5aca84808f37da220ccceba4b48bde",
+    "head_date": "2026-11-21T21:13:16Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -10464,7 +10461,7 @@
     "head_date": "2026-11-16T00:32:27Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -10516,7 +10513,7 @@
     "commit": "8bbf9635e2dd3319ee88f092dfb513feb4b4c64a",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "deeacb6dd2c8c949630f65e548fb11173bd62faa84f0910ff959581e663c7a59",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -10536,7 +10533,7 @@
     "head_date": "2026-09-15T22:21:55Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -10603,7 +10600,7 @@
     "commit": "ba6b30622693ef2388972d7c622ed051d50468e3",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "63c879e00efe8918e2a7c16e70d50803f1836550f8e85144f19f50c42a8942d9",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -10623,7 +10620,7 @@
     "head_date": "2026-11-04T09:57:40Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (network-copyleft)"
   },
@@ -10676,7 +10673,7 @@
     "commit": "7e5531233b42dadd19c40d86770521a36508c358",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "1212fb3bf719633bcf502520ebc2c7897d0a85c7e15596d156b863c5ded1b7d1",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -10696,7 +10693,7 @@
     "head_date": "2026-08-18T12:38:59Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -10778,7 +10775,7 @@
     "head_date": "2026-09-13T03:23:13Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -10842,7 +10839,7 @@
     "commit": "361624fb406b63eb6694442eac6c895fc1533a70",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "f34f4bc01b2cbddaf90f0ef33dd2bcf818431d324d860c91c5b793b77328627e",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -10862,7 +10859,7 @@
     "head_date": "2026-09-05T22:41:41Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -10917,7 +10914,7 @@
     "commit": "078654ddd1848a5851672fc1a55d0d1db6238689",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "c0e5b396c60cfd6020e2627f9328e029c1454088ac68809e88b52d241068f8e0",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -10937,7 +10934,7 @@
     "head_date": "2026-08-18T23:39:37Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (network-copyleft)"
   },
@@ -11003,7 +11000,7 @@
     "commit": "44b0c6f769a1e90d986308ccc7d83851216e191d",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "eb142eb1ea71eca251d74c2040304407d361401be4f6fee6a32fb614ebf8e957",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11023,7 +11020,7 @@
     "head_date": "2026-03-09T19:40:11Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -11077,7 +11074,7 @@
     "commit": "6e2a66505033e4359d69adf4813aa21b74ad01de",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "98efef7b8661d69c9e8c27cbf42cc8a5073aaf2da68af2bbf1b42827ceb81416",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11097,7 +11094,7 @@
     "head_date": "2026-10-02T06:19:02Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (network-copyleft)"
   },
@@ -11160,7 +11157,7 @@
     "commit": "36336dcee1ecb49a5ee98426456aeb353c8535bd",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "192e7fd0ac15b86aa7e57d71e3d5474c0d79bc834892aeb0290f9374a84393a9",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11180,7 +11177,7 @@
     "head_date": "2026-09-07T18:12:41Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -11246,7 +11243,7 @@
     "commit": "dc178b729809288c87d2579937c6e50b3c45cc05",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "ae8f9469cc80ea42b9f6639fe1daccc2d6b96c11688bd30d5ddf66ba6e090d2c",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11266,7 +11263,7 @@
     "head_date": "2026-09-06T16:10:30Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -11288,7 +11285,7 @@
     "pip": [
      "imageio-ffmpeg"
     ],
-    "source": "requirements.txt at 009088b66b80"
+    "source": "requirements.txt at b1ddb527eaab"
    },
    "system_deps": [],
    "model_download": {
@@ -11328,15 +11325,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "009088b66b805adf099555b3c73d51b66eef4f2f",
+    "commit": "b1ddb527eaabfbb315b0e1196f8227222a549e6f",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "645aa66226d0a4a848440a504bd2687e8d39ae780931e16b24aebf6ce70abf96",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 009088b66b80 to b1ddb527eaab on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Windows third-party repositories",
    "description": "ComfyUI node for MiniMax H3 that chains multiple video clips with motion context, disk caching, dynamic image references, audio reference support, and seamless final video/audio decoding.",
@@ -11347,11 +11344,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "009088b66b805adf099555b3c73d51b66eef4f2f",
-    "head_date": "2026-11-17T19:31:23Z",
+    "head_commit": "b1ddb527eaabfbb315b0e1196f8227222a549e6f",
+    "head_date": "2026-11-22T10:13:35Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -11403,7 +11400,7 @@
     "commit": "9834e55976cd1d0572b55a3453de0e1b3c5d3dad",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "b1a6ca14e1bd27fe51dee73642c4078a019d4ff1443ee12048bf6914ecffa646",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11423,7 +11420,7 @@
     "head_date": "2026-09-30T10:00:53Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "repository archived upstream"
   },
@@ -11476,7 +11473,7 @@
     "commit": "c6aff92516536581abf728209cffc6f711644709",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "7ff238a991fa91b5dc54c0be1faba4c555f8689ed1c02efa16db0c4e6f761799",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11496,7 +11493,7 @@
     "head_date": "2026-11-19T14:44:43Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -11549,7 +11546,7 @@
     "commit": "4274783a23afcfdbea3b4876cb79effd6c510785",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "bd5fbf03a445bb386923773b62247aec2b46c078f62890aa61741448b3ae7015",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11569,7 +11566,7 @@
     "head_date": "2026-08-14T14:14:50Z",
     "submodules": [],
     "committed_weight_bytes": 5510600,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -11633,7 +11630,7 @@
     "commit": "8a45e096a2a05c140dd4d909eb74e4279b673819",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "756ed1217935eab248a2e614b63d3ec9e5dfe63fee335e64af437c976df961bb",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11653,7 +11650,7 @@
     "head_date": "2026-08-03T23:57:37Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -11786,7 +11783,7 @@
     "commit": "d474755360cc1784df1b7c933ca28195e55e3445",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "6b99499bc86db3d355564439eebdd46cbbe4666237d46981f566619928b06cc5",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11806,7 +11803,7 @@
     "head_date": "2026-10-12T17:21:59Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -11858,7 +11855,7 @@
     "commit": "e10c6cdbe7708c18238cd4f1dcd7b0e58144ae14",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "39143459ae2abc9c70cb531a2c3302d53a98ab775aed3ec328b7e3ddd6135024",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11878,7 +11875,7 @@
     "head_date": "2026-08-24T10:00:23Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -11930,7 +11927,7 @@
     "commit": "986f8e9ebd4477caa6395eead23d968648cc7a7d",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "3dcf9aefbe5f68fd8b68aa83ea6cb27f40a33449ac096ea83a013aca92bb2555",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -11950,7 +11947,7 @@
     "head_date": "2026-08-07T01:42:50Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -12032,7 +12029,7 @@
     "head_date": "2026-08-17T21:32:13Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -12093,7 +12090,7 @@
     "commit": "613de6c5afc1f9c8c204112901f7dafba66c0dc7",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "b728a8cd03b9e26857774764632ac23b5d91a16c3feec1831a52cc462a2ac64e",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -12113,7 +12110,7 @@
     "head_date": "2026-11-13T08:08:00Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -12178,7 +12175,7 @@
     "commit": "0246554974a86ced59a4206903fec61be6e725f2",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "e259955e09c643b0682512788e11e539fd09a93384a739ce6251609f28c8f38f",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -12198,7 +12195,7 @@
     "head_date": "2026-11-06T19:49:34Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -12258,7 +12255,7 @@
     "commit": "f34cadb19f10fee7e36091b690cac39b4eb40573",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "6f2b4d8bf116c41c3d8e771b21a6ad6432d8cb32440d0263c2f98d39ad110a93",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -12278,7 +12275,7 @@
     "head_date": "2026-11-10T13:09:19Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -12486,7 +12483,7 @@
     "commit": "35a68a5723c68113c3f6879667fc5e781bd61111",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "cb058fbbe6cf3050d542e4cf43848810ea79223c1874ba8d3b7ee32f71d051f5",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -12506,7 +12503,7 @@
     "head_date": "2026-11-02T21:48:24Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -12634,7 +12631,7 @@
     "commit": "46ff77854417ed6d6f99d10ee4430faa7e9e72bf",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "0a8885f3241b302e557e68b58ef301edd534fd19bb044708910ec79e59181551",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -12654,7 +12651,7 @@
     "head_date": "2026-11-07T22:41:12Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -12707,7 +12704,7 @@
     "commit": "a85bd9664a752637c5ec88bf4b1930b4688fc251",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "ccfeb557b4d8a6c23721f5a4f3229127ce6525e712a673917c5a067e639ed4b0",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -12727,7 +12724,7 @@
     "head_date": "2026-11-09T12:52:26Z",
     "submodules": [],
     "committed_weight_bytes": 26768,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -12748,7 +12745,7 @@
     "pip": [
      "imageio-ffmpeg"
     ],
-    "source": "requirements.txt at 7ec7ed49f6bd"
+    "source": "requirements.txt at f389185cc469"
    },
    "system_deps": [],
    "model_download": {
@@ -12778,15 +12775,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "7ec7ed49f6bd23d76706e06d4d348b0d4e7284dc",
+    "commit": "f389185cc469a0b6cfaadd5eb3aef55f7c6d6383",
     "version": null,
-    "pinned_at": "2026-11-20",
-    "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pinned_at": "2026-11-23",
+    "content_sha256": "f03ff5935bdcfe9f3e97f8f3f2772666341faf565c6ed7e6cd5c74e73e256977",
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 7ec7ed49f6bd to f389185cc469 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Windows third-party repositories",
    "description": "Pixaroma ComfyUI Nodes",
@@ -12797,11 +12794,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "7ec7ed49f6bd23d76706e06d4d348b0d4e7284dc",
-    "head_date": "2026-11-19T05:41:23Z",
+    "head_commit": "f389185cc469a0b6cfaadd5eb3aef55f7c6d6383",
+    "head_date": "2026-11-20T05:50:32Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "editor nodes save their result from the browser; a cloud job uses only the saved input files"
   },
@@ -12876,7 +12873,7 @@
     "head_date": "2024-06-21T23:01:47Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -12931,7 +12928,7 @@
     "commit": "224936631054fb40e33355c5b3350b21f4ce67d0",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "81a214f669e985053f00d955e2e5c3aa5ac0a5e5fd4fde53dc8167168e671a2b",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -12951,7 +12948,7 @@
     "head_date": "2026-11-06T15:12:57Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -13015,7 +13012,7 @@
     "commit": "7df883bb2361b7884ad789e97effd1dc37c8963a",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "4752ddda4f83393186b503d8b64a3fd4f161a86549be00d0d7d0203e64093175",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -13035,7 +13032,7 @@
     "head_date": "2026-11-10T19:23:01Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -13231,7 +13228,7 @@
     "commit": "d516bf0247d34298a8325d50087da121811e5144",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "0e1f2ceafaf0885d84c09855d636a13fc1eb3dd31ddf0aad726e8462ee33972f",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -13251,7 +13248,7 @@
     "head_date": "2026-07-04T04:12:18Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -13347,7 +13344,7 @@
     "head_date": "2026-02-09T01:31:51Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -13490,7 +13487,7 @@
     "commit": "c9fab146979b0dc489fc864e4aa0e9bfa8e63677",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "ef4bbbac54b1237a54c2a4eb1e41521c8bb898698171567eb289e3a38bde36c3",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -13510,7 +13507,7 @@
     "head_date": "2026-05-16T21:05:09Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -13645,7 +13642,7 @@
     "commit": "e5e11b77774bb42010b95cf347a0c36f6c7b3f39",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "532199807b99abbb77c4070d8bef046293474532fd21567739533cb4217f9979",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -13665,7 +13662,7 @@
     "head_date": "2026-08-08T16:51:26Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -13777,7 +13774,7 @@
     "commit": "51ee6a999bb0f3bb0ab488f5a37dbbd28d3c60b1",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "7305b0248775d1a2936c226e7d0554f5b0fcdad95f9d574135124a89f3a87782",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -13797,7 +13794,7 @@
     "head_date": "2026-09-18T02:07:42Z",
     "submodules": [],
     "committed_weight_bytes": 3758596,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -13849,7 +13846,7 @@
     "commit": "12245ec5f89444725dc6ce752a97c4e96a2235bd",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "b4bd56632da1d9b8cfd7b16183e3d783156f041147c6fc6e1cce8d7e8e2a85db",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -13869,7 +13866,7 @@
     "head_date": "2026-10-24T03:42:14Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -13933,7 +13930,7 @@
     "commit": "4b1edd678de7356beebf3761b2532a35e07d0389",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "84375c784735669f61fe1aec72a37cee75a4ff3b74e83095234b12d29516600c",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -13953,7 +13950,7 @@
     "head_date": "2026-08-22T21:39:33Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -14317,7 +14314,7 @@
     "commit": "c2435532d532fe841ac929ebc49e755b3c06c36e",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "dc4fe4a152ec9f18cec9e146409202c9b42885e52199fa2a2e778c8d87cb593b",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -14337,7 +14334,7 @@
     "head_date": "2026-10-21T12:39:00Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -14737,7 +14734,7 @@
     "head_date": "2026-11-19T02:52:13Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -15180,7 +15177,7 @@
     "commit": "a3c809c8b593a74c2ddcd6c1f83ad85ebebe3c64",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "2127dcd7507f68488913bb1dcdb597a775efaa7f41a9feee8ff2d5b4072c0dde",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -15200,7 +15197,7 @@
     "head_date": "2026-07-30T23:02:26Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -15327,7 +15324,7 @@
     "commit": "c231acaaf66dff9153fc190a9a8e67a8198005a6",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "b110c4ff4bcbd84efb106ba0999118e74963f3b46e868a6740885814977b2d37",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -15347,7 +15344,7 @@
     "head_date": "2026-07-30T20:29:55Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -15428,7 +15425,7 @@
     "head_date": "2023-10-06T02:46:27Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -15483,7 +15480,7 @@
     "commit": "c01177221c31b8e5fbc062778fc8254aeb541638",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "d92d09c2de03b12176bcd35331cd13d6b75547ec2fc3c9e6656e3aa01958e038",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -15503,7 +15500,7 @@
     "head_date": "2025-03-08T18:14:34Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -15555,7 +15552,7 @@
     "commit": "2b95c2c866399ca1914b4da486fe52808f7a9c60",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "1261ba73267ff38fab56776c405c52fef61fdc6fc94ec05810e784fd20d196ba",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -15575,7 +15572,7 @@
     "head_date": "2025-04-19T08:47:58Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -15629,7 +15626,7 @@
     "commit": "c4827735837ad4c1f5eb542b54f8cb40d76906c6",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "e32d0355419ce29c358db36fcf818ebcb146b58c48238c420af2a62d606291a2",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -15649,7 +15646,7 @@
     "head_date": "2026-06-26T09:45:23Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "masks are drawn in the browser; the node consumes the saved result"
   },
@@ -15752,7 +15749,7 @@
     "head_date": "2026-04-17T17:09:25Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (non-commercial)"
   },
@@ -15817,7 +15814,7 @@
     "commit": "41463715b476aa1d44de617119a68d8841aa04bd",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "c816f5a012e4009fc0d3f278ce3a2b4d0119327cfa2f5798219f872a24efde63",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -15837,7 +15834,7 @@
     "head_date": "2025-07-07T05:08:35Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "a git+ requirement (silentcipher) needs git at build time; sox needs the SoX binary"
   },
@@ -15891,7 +15888,7 @@
     "commit": "b2139db9a8ffb4707832106a58f519bbd04e6118",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "3721759adf16120d6274cfb96951814fc3b5b01b2944a2b31853f11f07d3d3d7",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -15911,7 +15908,7 @@
     "head_date": "2024-08-12T17:38:01Z",
     "submodules": [],
     "committed_weight_bytes": 1789735,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -15973,7 +15970,7 @@
     "commit": "83199758b1027f70951820ce24265e9d23ef9aab",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "c1d978a60f019b8b0ba6e13ac0a6ea59435101b8a59d9763cd44e5ce4bd76abe",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -15993,7 +15990,7 @@
     "head_date": "2026-11-18T20:33:08Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -16049,7 +16046,7 @@
     "commit": "a58268fe5261d07ffeb93de26cc0d2558a5c0110",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "550725f7b3e8f07796532a7a85f7926a07f9f7e4e4a7027dcc189734a6ef4d42",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -16069,7 +16066,7 @@
     "head_date": "2026-06-02T00:51:40Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -16155,7 +16152,7 @@
     "head_date": "2024-06-28T16:16:51Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -16242,7 +16239,7 @@
     "head_date": "2026-03-06T16:38:50Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -16423,7 +16420,7 @@
     "head_date": "2026-09-02T14:50:04Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -16552,7 +16549,7 @@
     "commit": "4e6379770e7f4fc48651b76d03284a7eee7df8a4",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "3922d46d482bbdd116680bd28cdeea6640ac184ee21020088d8419a1ecc480b4",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -16572,7 +16569,7 @@
     "head_date": "2026-09-14T16:57:42Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -16648,7 +16645,7 @@
     "head_date": "2026-10-28T03:02:39Z",
     "submodules": [],
     "committed_weight_bytes": 4195504,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -16700,7 +16697,7 @@
     "commit": "6804643bff9a20926106427ff08d5b1bd2e49861",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "69ce71404c385905c498645f9c081d5f4c0374f19534a660f2b8f007f28eccb1",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -16720,7 +16717,7 @@
     "head_date": "2026-07-11T18:33:53Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "README: mirror of an upstream that was deleted"
   },
@@ -16773,7 +16770,7 @@
     "commit": "2c4663428ca765daa1dfff4a5c93eeafecc3c037",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "26eb58cc646a54a103416107710e82f6e5382f64021c4d1fad8dded40d028b9d",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -16793,7 +16790,7 @@
     "head_date": "2026-06-22T10:48:39Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -16845,7 +16842,7 @@
     "commit": "d2a3faa7e29f45b8cb03685368c1243f08143910",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "6d2c770d1c791c4ae7e1f9e801aa32f694352918ffacf484dd06810a473fde36",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -16865,7 +16862,7 @@
     "head_date": "2026-09-15T16:36:05Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -16942,7 +16939,7 @@
     "head_date": "2026-08-31T02:32:56Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -17003,7 +17000,7 @@
     "commit": "04ed6f2abcbc34ccce9f3bb12b4e1e5bd286d6f6",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "4069b6f8d513f6e6a76966b0857c20a5452e17c5f2ba5bc35e9a149448391da3",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -17023,7 +17020,7 @@
     "head_date": "2026-11-17T09:33:42Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -17116,7 +17113,7 @@
     "head_date": "2025-09-04T08:19:07Z",
     "submodules": [],
     "committed_weight_bytes": 2048,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -17169,7 +17166,7 @@
     "commit": "99e121e64d374344d0dd2e173ab052ebb737c4b1",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "0c540a8b6db59f70b6b865ec6febf2975cd0206cbe2e34fbbf3300cfb3d18103",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -17189,7 +17186,7 @@
     "head_date": "2026-10-25T19:06:50Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -17247,7 +17244,7 @@
     "commit": "20455e339e326ac1a8aa06f18015685eb68039c9",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "372c29667a65218ec2ec07035930e7e0b22dee063eda0036d097c09d59e32586",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -17267,7 +17264,7 @@
     "head_date": "2026-06-27T17:21:38Z",
     "submodules": [],
     "committed_weight_bytes": 1416,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -17352,7 +17349,7 @@
     "head_date": "2026-01-30T22:11:12Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -17406,7 +17403,7 @@
     "commit": "37e66ae0056470f20eb771d26bd1c62b1add54ae",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "a415e1f06e475861b01cd23a0bd5174621c57ae33931a520c8d7fb46dc477c30",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -17426,7 +17423,7 @@
     "head_date": "2026-09-23T17:14:32Z",
     "submodules": [],
     "committed_weight_bytes": 68656,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "README says it is a temporary copy of another author's node: provenance to confirm"
   },
@@ -17488,7 +17485,7 @@
     "commit": "270afbd7659aec81ba40cd54c65cd4d872394ee4",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "b11b95b02026faa78b25224bab3d9acc9273e4a14f059d8720fa7db3d75997a8",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -17508,7 +17505,7 @@
     "head_date": "2026-10-07T14:34:49Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -17560,7 +17557,7 @@
     "commit": "a44c69b02242e41fbd01e22abe2a492adc853038",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "94bf6db3dcdf958d81346bfe802d062614fa84a415ee5f1d525360c9943174e7",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -17580,7 +17577,7 @@
     "head_date": "2026-08-11T12:37:46Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -17638,7 +17635,7 @@
     "commit": "54f93eb6569fe35c9303e9bceb1c8b66c5722bbf",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "a189601798306c4c27fd2fa612935013b7fb15eace3ba9039e301d6e9e66049e",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -17658,7 +17655,7 @@
     "head_date": "2026-11-14T14:12:01Z",
     "submodules": [],
     "committed_weight_bytes": 541136,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "marked \"under construction\" upstream"
   },
@@ -17864,7 +17861,7 @@
     "commit": "0c9ec19b16dc72334cb8ce82c3774aed183048e4",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "9567a66a60e3e4e0084cc24b50081b7f816a3200e5de4bd6933d1e173e8a10aa",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -17884,7 +17881,7 @@
     "head_date": "2024-06-10T16:38:48Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -17937,7 +17934,7 @@
     "commit": "bf8d032a36f1b78296568cda939418b88f0950b3",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "ddc8c01c2cdf3870f7ffca34118d24ded31048b1e15d6025b243fcb6b7bbea1b",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -17957,7 +17954,7 @@
     "head_date": "2026-09-13T03:21:59Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -18037,7 +18034,7 @@
     "head_date": "2026-09-27T05:17:03Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -18110,7 +18107,7 @@
     "commit": "1d29f4eda7ee00a639014f5e0833d4599276d2c0",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "16d720364d69db65c5db288ac2ce4ea495406d167a642bdba0f797660b777465",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -18130,7 +18127,7 @@
     "head_date": "2026-11-01T00:19:59Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -18219,7 +18216,7 @@
     "head_date": "2026-05-19T10:39:27Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -18283,7 +18280,7 @@
     "commit": "34311aa62ccc148e76466bd04aac5dccb2948c1a",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "807b111f8e87ab0e6ab99424f224d8e223f6ac37bef548e532efeb56244013b9",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -18303,7 +18300,7 @@
     "head_date": "2026-11-12T01:27:11Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -18382,7 +18379,7 @@
     "head_date": "2026-04-15T15:31:01Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -18454,7 +18451,7 @@
     "commit": "ab6395596399d5048639cdab7e44ec9fae857a93",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "07eba860647ff55a854bc8465794d8a9fde33dcdf578eb2e19cdfe843652cd7a",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -18474,7 +18471,7 @@
     "head_date": "2024-03-21T11:41:45Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -18542,7 +18539,7 @@
     "commit": "df3e10e3737ce296f8186c6b91be5a18991e3dce",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "899822f9dae31359fa8afdc5a6325add8e5c7633c0ac140c84026c7e645209bd",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -18562,7 +18559,7 @@
     "head_date": "2026-04-16T21:11:01Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "SoX nodes need the SoX binary"
   },
@@ -18615,7 +18612,7 @@
     "commit": "62c9b2aff0cb5a7c3148369162e054706b35219e",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "8585ae5b0390d0a64b7f9c06474b7a83bd8f48c6f320fd798e05da91474d326c",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -18635,7 +18632,7 @@
     "head_date": "2026-10-21T16:19:22Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -18709,7 +18706,7 @@
     "head_date": "2025-03-18T19:49:32Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -18784,7 +18781,7 @@
     "head_date": "2026-11-05T18:31:57Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "README: copied from a Hugging Face repo",
    "needs_owner": "licence decision 12 (no-licence)"
@@ -18838,7 +18835,7 @@
     "commit": "6ae081af5b3175f99ef7cddebd5dfaf93390ab70",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "60a1fc1a92875eb4dde35bb063ae5b8e04deb5b7fd39f9dd5675a052b8f45329",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -18858,7 +18855,7 @@
     "head_date": "2026-09-11T07:50:16Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -18889,7 +18886,7 @@
      "opencv-python",
      "scipy"
     ],
-    "source": "requirements.txt at 95d909a787c0"
+    "source": "requirements.txt at d424e3bc6241"
    },
    "system_deps": [],
    "model_download": {
@@ -18930,15 +18927,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "95d909a787c0054f76bb68d1c3ef7a7b1ac91a33",
+    "commit": "d424e3bc6241e7751c70bf1f53173cd76703e0e5",
     "version": null,
-    "pinned_at": "2026-11-20",
+    "pinned_at": "2026-11-23",
     "content_sha256": null,
-    "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
+    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "evidence": "pin moved from 95d909a787c0 to d424e3bc6241 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Linux custom-node repositories",
    "description": "Seamless video connection and multi-reference image support for Wan Animate,Scail-2 and Wan Animate2",
@@ -18949,11 +18946,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "95d909a787c0054f76bb68d1c3ef7a7b1ac91a33",
-    "head_date": "2026-09-14T14:46:54Z",
+    "head_commit": "d424e3bc6241e7751c70bf1f53173cd76703e0e5",
+    "head_date": "2026-11-20T07:33:19Z",
     "submodules": [],
     "committed_weight_bytes": 4895338,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "derived from WanVideoWrapper (same layout; registers WanVideoSampler, verified in nodes_sampler.py)"
   },
@@ -19036,7 +19033,7 @@
     "commit": "4fd8825a0aaba3c9336e9f9a7d3e7b96e04660e5",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "58596615eab74fb4728640a9356dfbd5fa23fbb7a3d50abe98ba2057fbe8aa8b",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -19056,7 +19053,7 @@
     "head_date": "2026-10-21T21:31:50Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -19115,7 +19112,7 @@
     "commit": "4579b7d6076b2870998a08f5d37883fbc8261ff2",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "8dc7980153f417df59a721484020145079698de30f141409b991aca6f4ebe641",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -19135,7 +19132,7 @@
     "head_date": "2026-03-31T23:46:59Z",
     "submodules": [],
     "committed_weight_bytes": 25257954,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "notes": "ships 25 MB of files with weight extensions in git",
    "needs_owner": "licence decision 12 (copyleft)"
@@ -19191,7 +19188,7 @@
     "commit": "c1667471203bc3afd0385e0711230ec968ff3dae",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "90c1bc35b4508562aa5b2896b66c04f55fbcf07827cc0c7deb310b3520696bd5",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -19211,7 +19208,7 @@
     "head_date": "2026-10-01T08:12:45Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -19286,7 +19283,7 @@
     "head_date": "2026-11-17T14:35:35Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -19341,7 +19338,7 @@
     "commit": "7048e8423ad7d1a6a52119d0d4870c2b7fc2885f",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "adde1bd28d3de272f0a2e45e687bf7f7e2586cc9aec998b0edb76b61195b684c",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -19361,7 +19358,7 @@
     "head_date": "2026-06-09T15:53:59Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -19413,7 +19410,7 @@
     "commit": "1979e2757002688d2a56ef9e985f9ed4355baf56",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "e451583469c44853f0c2498c053f2d1a74ce839e1d61050f3b893d910c827c63",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -19433,7 +19430,7 @@
     "head_date": "2026-06-14T09:21:14Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -19519,7 +19516,7 @@
     "head_date": "2025-08-21T13:52:03Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   },
@@ -19591,7 +19588,7 @@
     "commit": "c048a74daab866002908e4dd2e01cc79d8f20857",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "9ae6a070b2c421ff41449dc0e03fe998824462923c5a4761495a9c479a0a4969",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -19611,7 +19608,7 @@
     "head_date": "2026-08-06T16:35:47Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -19676,7 +19673,7 @@
     "commit": "ac339561973f0c1e56db2f9d40f11b0fddda6763",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "d1283fd535f75d39d335b2d8d5b90b112796d970a1c3c978ae86faed098de130",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -19696,7 +19693,7 @@
     "head_date": "2026-04-14T02:42:58Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -19766,7 +19763,7 @@
     "commit": "f456539a0dc4323cae3cf62b16723e23802b75a9",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "3f130dae71fc2e15b646cc5d1c45057fda98d7d5aa1e2d813188104c2dc84015",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -19786,7 +19783,7 @@
     "head_date": "2025-09-30T21:05:31Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -19912,7 +19909,7 @@
     "commit": "121606fa1f36c11467f205f348aabc1395bd3de4",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "8d8b21aa3fce7a717799f75e33880ba2ba385d395c560ed8438122d1462db8d8",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -19932,7 +19929,7 @@
     "head_date": "2026-02-24T20:48:34Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    }
   },
   {
@@ -20008,7 +20005,7 @@
     "head_date": "2026-05-20T11:39:39Z",
     "submodules": [],
     "committed_weight_bytes": 0,
-    "probed_at": "2026-11-20"
+    "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
   }

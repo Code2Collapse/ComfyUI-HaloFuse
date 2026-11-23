@@ -368,7 +368,11 @@ def fetch(catalog_dir, profile: str, dest: Path, cache: Path | None = None, open
             if res.strict:
                 raise InstallError(f"{entry['repo']}: {rec['error']}") from exc
         report["packs"].append(rec)
-    _fetch_extras(catalog_dir, dest, report, cache, opener)
+    if profiles["profiles"][profile].get("extras", True) is False:
+        # the production-parity profile stays exactly the production node set (its snapshot describes that image)
+        log(f"{EXTRA_FILE}: not applied to profile {profile} (extras: false)")
+    else:
+        _fetch_extras(catalog_dir, dest, report, cache, opener)
     return report
 
 

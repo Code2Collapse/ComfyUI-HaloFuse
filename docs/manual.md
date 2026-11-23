@@ -155,7 +155,7 @@ palette) works in every mode.
 | **Account** | email and password (section 5.1) |
 | **Queue** | several workflows back to back (section 7.4) |
 | **Recent jobs** | this computer's HaloFuse jobs; open one in the console |
-| **Advanced** | cloud model library path, image affinity, upload guard |
+| **Advanced** | cloud model library path, image affinity, upload guard, automatic uploads, cloud runtime |
 
 While a render runs, the panel shows its state, a cost estimate, **Stop now**, and a button to open it in the
 console.
@@ -199,6 +199,7 @@ They survive extension updates and reinstalls.
 | Cloud model library path | `/models` | your library folder (section 4) | Advanced |
 | Image affinity | Required | wait for a cloud machine that already holds the runtime image (faster start) or start sooner | Advanced |
 | Upload guard (GB) | 50 | largest single model HaloFuse uploads for you | Advanced |
+| Cloud runtime | Original image | *Original image*: the node packs the cloud has always had. *HaloFuse image*: those plus the newer node packs (newer KJNodes, DepthAnythingV2 and many more); first renders on it are not yet verified. The Workflow Check checks nodes against the runtime chosen here. | Advanced |
 | Maximum runtime per job | 6 hours | a longer render is stopped and marked "timed out" | settings file; panel control in development |
 | Maximum cost per job, daily cost cap | off | stop or block renders above an **estimated** cost | settings file; panel control in development |
 | Launch preset | Safe | section 7.6 | settings file; panel control in development |
