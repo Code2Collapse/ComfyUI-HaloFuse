@@ -115,6 +115,19 @@ storage tools your HaloFuse administrator provides (best for very large files).
 
 **Available.** Open the **HaloFuse** tab in ComfyUI's left sidebar.
 
+**Where the panel shows.** ComfyUI **Settings > HaloFuse > Panel location** chooses where the panel lives. The change
+applies at once, without a reload:
+
+| Panel location | What you see |
+|---|---|
+| Sidebar (default) | the **HaloFuse** tab in the left sidebar |
+| Floating window | no sidebar tab; a round bolt button at the right edge of the canvas. Click it to show or hide the panel in its own window, which you can move by its title bar and resize from any edge. Drag the button itself to put it anywhere |
+| Both | the sidebar tab and the bolt button |
+
+The bolt button shows a small blue dot while a render is running. The window's size and position and the button's
+position are remembered by this browser only. The command **HaloFuse: Show or hide the floating panel** (command
+palette) works in every mode.
+
 ![The HaloFuse panel](images/panel.png)
 
 | Control | What it does |
@@ -174,6 +187,7 @@ They survive extension updates and reinstalls.
 | Maximum runtime per job | 6 hours | a longer render is stopped and marked "timed out" | settings file; panel control in development |
 | Maximum cost per job, daily cost cap | off | stop or block renders above an **estimated** cost | settings file; panel control in development |
 | Launch preset | Safe | section 7.6 | settings file; panel control in development |
+| Panel location | Sidebar | where the panel shows: Sidebar, Floating window or Both (section 5) | ComfyUI Settings > HaloFuse (saved by ComfyUI, not in the HaloFuse settings file) |
 
 ## 6. The floating console
 

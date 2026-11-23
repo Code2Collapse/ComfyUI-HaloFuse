@@ -187,6 +187,21 @@ export const HF_CSS = `
   background: var(--hf-bg2); border: 1px solid var(--hf-border); border-radius: 999px; padding: 6px 12px 6px 10px;
   box-shadow: 0 6px 18px rgba(0,0,0,.35); cursor: pointer; max-width: min(420px, calc(100vw - 32px)); font: inherit; }
 .hf-pill[hidden] { display: none; }
+/* floating panel (Panel location = Floating window / Both): launcher button + panel-sized window */
+.hf-launcher { position: fixed; z-index: 999; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--comfy-menu-secondary-bg, #292929); color: var(--fg-color, #e6e6e6); border: 1px solid var(--border-color, #3d3d3d);
+  box-shadow: 0 6px 18px rgba(0,0,0,.35); cursor: grab; touch-action: none; padding: 0; font-size: 18px; }
+.hf-launcher:hover { border-color: var(--p-primary-color, #4f8cff); }
+.hf-launcher:active { cursor: grabbing; }
+.hf-launcher:focus-visible { outline: 2px solid var(--p-primary-color, #4f8cff); outline-offset: 2px; }
+.hf-launcher[aria-pressed="true"] { border-color: var(--p-primary-color, #4f8cff); color: var(--p-primary-color, #4f8cff); }
+.hf-launcher-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #60a5fa; display: none; }
+.hf-launcher[data-busy="1"] .hf-launcher-dot { display: block; }
+@media (prefers-reduced-motion: no-preference) { .hf-launcher[data-busy="1"] .hf-launcher-dot { animation: hf-pulse 1.6s ease-in-out infinite; } }
+@keyframes hf-pulse { 50% { opacity: .35; } }
+.hf-panel-window .hf-tabpanel { overflow: hidden; }
+.hf-panel-window .hf-root { height: 100%; }
+.hf-panel-window .hf-root > .hf-head { display: none; } /* the window title already says HaloFuse */
 .hf-pill .hf-pill-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hf-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
 
