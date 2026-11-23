@@ -2,6 +2,17 @@
 
 ## Unreleased — 2026-11-23
 
+- **The whole error of a failed render is always visible.** The cloud log stream drops and reorders lines, so a
+  failure could end with only "The cloud render failed (exit code 1)". The cloud runner now writes the complete error
+  to `_halofuse/error.json` (node, class and title, the full ComfyUI error message with the memory figures, the full
+  traceback, RAM / GPU memory at the failure, the last 200 lines ComfyUI printed; for a crash also the exit code and
+  signal) and every ComfyUI line to `_halofuse/comfyui.log`; both arrive with the outputs, also for failed jobs. The
+  console's Problems tab leads with a plain-English headline that names the node (for example "Node 1458 (KSampler)
+  ran out of GPU memory"), what happened with the numbers, and concrete next steps (bigger GPU or more system RAM,
+  lower resolution or frames, VAE Decode (Tiled), fewer frames per window), plus *Show node on canvas*, *Copy error*
+  and the complete technical detail in a scrollable block. Error and warning lines wrap instead of being cut. With
+  an older runtime image the error is rebuilt from the runner's complete log file, or from what the live stream
+  delivered (the console says how many lines the cloud dropped). The full report needs the next runtime image.
 - **Missing models are fetched automatically.** A model that is neither on this computer nor in the cloud model library
   no longer just blocks the render: the Workflow Check looks for a public download, in this order - the workflow's own
   links (official templates carry them), the ComfyUI-Manager model list, then Hugging Face by exact file name (known

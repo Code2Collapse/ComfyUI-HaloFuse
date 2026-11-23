@@ -79,6 +79,7 @@ if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
 from hf import classify as hf_classify  # noqa: E402
+from hf import error_report as hf_error_report  # noqa: E402
 from hf import events as hf_events  # noqa: E402
 from hf import housekeeping as hf_housekeeping  # noqa: E402
 from hf import latents as hf_latents  # noqa: E402
@@ -185,6 +186,9 @@ _PREFETCH_STOP = threading.Event()  # set on exit: a running model copy stops be
 _PREFETCH_THREADS = []  # copy workers, joined briefly on exit so a stopped copy can remove its .part file
 _USER_NODES = None   # hf.user_nodes.UserNodes when the job brought a custom node list
 _HOUSEKEEPER = None  # hf.housekeeping.Housekeeper: cleaning between manifest entries (HF_CLEAN_BETWEEN / _UNLOAD_)
+_ERROR_REPORT = None  # hf.error_report.ErrorReport: /output/_halofuse/error.json (L9.338)
+_COMFY_LOG = None     # hf.error_report.ComfyLog: /output/_halofuse/comfyui.log
+_SUBMITTED = None     # the workflow last submitted (node titles for the error report)
 
 
 class _StartupFailedWithUserNodes(Exception):
@@ -238,6 +242,53 @@ def die(code, msg, error=_CLASSIFY_BY_CODE):
         if error:
             _CTX.error(error, exit_code=code, **_wf_fields())
     sys.exit(code)
+
+
+def _runner_dir():
+    return OUTPUT_DIR / hf_outputs.RESERVED_DIR
+
+
+def _finish_error_file(code):
+    """L9.338: the job's result goes into error.json (when the job failed or anything was recorded), so the bridge
+    explains the failure that ENDED the job, not an earlier recovered one. Never raises."""
+    global _ERROR_REPORT
+    try:
+        if _CTX is None or (code == 0 and _ERROR_REPORT is None):
+            return
+        if _ERROR_REPORT is None:
+            _ERROR_REPORT = hf_error_report.ErrorReport(_runner_dir())
+        status = _CTX.final_status(code)
+        error = None if status == "succeeded" else ("cancelled" if status == "cancelled"
+                                                    else (_CTX.last_error or {}).get("code"))
+        _ERROR_REPORT.finish({"exit_code": code, "status": status, "error": error,
+                              "detail": (_CTX.last_error or {}).get("detail") if error else None})
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _error_file(kind, classification, data=None, returncode=None, prompt_id=None):
+    """L9.338: write the complete error into /output/_halofuse/error.json (delivered even when the job fails), so the
+    bridge never depends on the lossy cloud log stream for it. Never raises."""
+    global _ERROR_REPORT
+    try:
+        if _ERROR_REPORT is None:
+            _ERROR_REPORT = hf_error_report.ErrorReport(_runner_dir())
+        sample = peaks = None
+        if _SAMPLER is not None:
+            try:
+                sample = _SAMPLER.sample()
+                peaks = _SAMPLER.peaks()
+            except Exception:  # noqa: BLE001 - a broken probe never hides the error itself
+                pass
+        proc = _CTX.proc if _CTX is not None else None
+        tail = proc.tail() if proc is not None and hasattr(proc, "tail") else ()
+        wf = _wf_fields()
+        entry = hf_error_report.build_entry(kind, classification, data=data, workflow=_SUBMITTED, tail=tail,
+                                            sample=sample, peaks=peaks, returncode=returncode, prompt_id=prompt_id,
+                                            wf=wf.get("wf"), of=wf.get("of"))
+        _ERROR_REPORT.record(entry)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def http_json(path, payload=None, timeout=30):
@@ -695,6 +746,9 @@ def start_comfyui(extra_args=None):
         env.update(_LAUNCH.env)
     _PROC_ARGS = args
     _OOM_BEFORE = _SAMPLER.oom_kill_count() if _SAMPLER is not None else None
+    global _COMFY_LOG
+    if _COMFY_LOG is None:  # created before the pump threads start: they only ever write to it (L9.338)
+        _COMFY_LOG = hf_error_report.ComfyLog(_runner_dir())
     _CTX.phase("comfy_start", "start")
     _mark_discarded_previews(args)
     # stdout/stderr are relayed line by line so ComfyUI's own logs still reach
@@ -705,7 +759,10 @@ def start_comfyui(extra_args=None):
 
 
 def _comfy_line(text):
-    """Every ComfyUI output line goes to the preview relay when it consumes them (R-PREVIEW-01)."""
+    """Every ComfyUI output line goes to the preview relay when it consumes them (R-PREVIEW-01), and to
+    /output/_halofuse/comfyui.log (L9.338: the runner's own capture, independent of the cloud stream)."""
+    if _COMFY_LOG is not None:
+        _COMFY_LOG.write(text)
     consume = getattr(_RELAY, "on_comfy_line", None)
     if consume is not None:
         consume(text)
@@ -738,6 +795,7 @@ def _death(proc):
     class_type = _RELAY.current["class_type"] if _RELAY is not None else None
     if node is not None:
         cls = dict(cls, node=node, class_type=class_type)
+    _error_file("process_died", cls, returncode=proc.returncode)
     return hf_sup.ComfyDied(proc.returncode, cls, node, class_type)
 
 
@@ -754,8 +812,9 @@ def wait_ready(proc):
             if _SAMPLER is not None and _OOM_BEFORE is not None:
                 now = _SAMPLER.oom_kill_count()
                 delta = None if now is None else now - _OOM_BEFORE
-            die(6, f"ComfyUI exited during startup (code {proc.returncode})",
-                hf_classify.classify_exit(proc.returncode, oom_kill_delta=delta, tail=proc.tail(), during="startup"))
+            cls = hf_classify.classify_exit(proc.returncode, oom_kill_delta=delta, tail=proc.tail(), during="startup")
+            _error_file("startup_failed", cls, returncode=proc.returncode)
+            die(6, f"ComfyUI exited during startup (code {proc.returncode})", cls)
         try:
             stats = http_json("/system_stats", timeout=5)
             names = ", ".join(d.get("name", "?") for d in stats.get("devices", []))
@@ -799,6 +858,8 @@ def _after_ready(stats):
 
 
 def submit(workflow, targets=None):
+    global _SUBMITTED
+    _SUBMITTED = workflow
     payload = {"prompt": workflow, "client_id": CLIENT_ID}
     if targets:
         payload["partial_execution_targets"] = targets
@@ -810,7 +871,9 @@ def submit(workflow, targets=None):
         body = err.read().decode("utf-8", errors="replace")
         log(f"ComfyUI rejected the workflow (HTTP {err.code}):")
         _raw(body)
-        raise WorkflowFailure(3, "workflow validation failed", hf_classify.classify_rejection(err.code, body))
+        cls = hf_classify.classify_rejection(err.code, body)
+        _error_file("validation_failed", cls)
+        raise WorkflowFailure(3, "workflow validation failed", cls)
     except (urllib.error.URLError, OSError) as err:
         proc = _CTX.proc
         if proc is not None and proc.poll() is not None:
@@ -828,10 +891,11 @@ def submit(workflow, targets=None):
         # with only part of the graph run (often ending in exit 5, no output).
         _log_node_errors(node_errors)
         if os.environ.get("ALLOW_PARTIAL_OUTPUTS", "") not in ("1", "true", "yes"):
+            cls = hf_classify.classify_node_errors(node_errors)
+            _error_file("validation_failed", cls)
             raise WorkflowFailure(
                 3, f"{len(node_errors)} node(s) failed validation; their outputs "
-                   "would be skipped (set ALLOW_PARTIAL_OUTPUTS=1 to run the rest anyway)",
-                hf_classify.classify_node_errors(node_errors))
+                   "would be skipped (set ALLOW_PARTIAL_OUTPUTS=1 to run the rest anyway)", cls)
         log("ALLOW_PARTIAL_OUTPUTS set: running the outputs that validated")
     log(f"workflow queued, prompt_id={prompt_id}")
     if _RELAY is not None:
@@ -909,9 +973,10 @@ def wait_done(proc, prompt_id):
                 _CTX.timed_out = True
                 if _CTX.manifest_total:
                     _interrupt_comfyui(prompt_id)  # the next entry must not queue behind a runaway prompt
-                raise WorkflowFailure(4, f"job exceeded JOB_TIMEOUT_SECONDS={JOB_TIMEOUT}",
-                                      {"code": "timeout", "message": hf_classify.message_for("timeout"),
-                                       "detail": f"JOB_TIMEOUT_SECONDS={JOB_TIMEOUT}"})
+                cls = {"code": "timeout", "message": hf_classify.message_for("timeout"),
+                       "detail": f"JOB_TIMEOUT_SECONDS={JOB_TIMEOUT}"}
+                _error_file("timeout", cls, prompt_id=prompt_id)
+                raise WorkflowFailure(4, f"job exceeded JOB_TIMEOUT_SECONDS={JOB_TIMEOUT}", cls)
             if proc.poll() is not None:
                 raise _death(proc)
             try:
@@ -931,10 +996,12 @@ def wait_done(proc, prompt_id):
                         event = item[0]
                         data = item[1] if len(item) > 1 else {}
                         if event in ("execution_error", "execution_interrupted"):
-                            log(f"{event}:")
-                            _raw(json.dumps(data, indent=2))
                             cls = (hf_classify.classify_execution_error(data) if event == "execution_error"
                                    else hf_classify.classify_interrupted(data))
+                            # L9.338: ONE line (a lossy stream cannot split it); the complete error is in error.json
+                            log(f"{event}: {hf_error_report.oneline(data, cls)}")
+                            if event == "execution_error":
+                                _error_file("execution_error", cls, data=data, prompt_id=prompt_id)
                     _collect_temp(prompt_id, entry)
                     raise WorkflowFailure(1, "workflow execution failed", cls or {
                         "code": "execution_error", "message": hf_classify.message_for("execution_error")})
@@ -966,6 +1033,7 @@ def _unresponsive(proc, silent):
     class_type = _RELAY.current["class_type"] if _RELAY is not None else None
     if node is not None:
         cls = dict(cls, node=node, class_type=class_type)
+    _error_file("unresponsive", cls, returncode=proc.returncode)
     return hf_sup.ComfyDied(proc.returncode, cls, node, class_type)
 
 
@@ -1542,8 +1610,10 @@ def main():
         raise
     except BaseException:
         if _CTX is not None:
-            _CTX.error({"code": "runner_error", "message": hf_classify.message_for("runner_error"),
-                        "detail": traceback.format_exc()[-8000:]})
+            cls = {"code": "runner_error", "message": hf_classify.message_for("runner_error"),
+                   "detail": traceback.format_exc()[-8000:]}
+            _CTX.error(cls)
+            _error_file("runner_error", dict(cls, detail=traceback.format_exc()))
         _finish(1)
         raise
     _finish(0)
@@ -1551,6 +1621,9 @@ def main():
 
 def _finish(code):
     _stop_background()
+    if _COMFY_LOG is not None:
+        _COMFY_LOG.close()
+    _finish_error_file(code)
     if _CTX is not None:
         _CTX.finish(code)
     if _HEARTBEAT is not None:

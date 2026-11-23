@@ -997,11 +997,19 @@ def job_summary(rec: dict, store: JobStore | None = None) -> dict:
         "cost": {"rate_per_hour_usd": costmod.rate_per_hour(cost.get("rate_per_hour_usd")), "amount_usd": amount,
                  "basis": "actual" if cost.get("actual_usd") is not None else costmod.BASIS},
         "delivery": rec.get("delivery"), "diagnosis": rec.get("diagnosis"),
+        "error_report": _light_report(rec.get("error_report")),
         "error": ({"code": rec["error"].get("code"), "message": rec["error"].get("message")}
                   if isinstance(rec.get("error"), dict) else None),
         "log_total": total,
         "preview_mode": rec.get("preview_mode"), "preview_method": rec.get("preview_method"),
     }
+
+
+def _light_report(report) -> dict | None:
+    """The error report without its (possibly long) technical text, for job lists."""
+    if not isinstance(report, dict):
+        return None
+    return {k: v for k, v in report.items() if k != "technical"}
 
 
 def job_detail(rec: dict, store: JobStore | None = None) -> dict:
@@ -1017,6 +1025,9 @@ def job_detail(rec: dict, store: JobStore | None = None) -> dict:
         "fingerprint": rec.get("fingerprint") or {},
         "settings_snapshot": {"render_repeats": rec.get("render_repeats")},
     })
+    if isinstance(rec.get("error_report"), dict):
+        from .error_report import from_record  # L9.338: complete technical text only in the detail view
+        out["error_report"] = from_record(rec["error_report"])
     from . import delivery  # lazy: delivery imports lifecycle
     out["outputs"] = delivery.outputs(rec["job_id"], store, limit=1000) if rec.get("job_id") else []
     return out
