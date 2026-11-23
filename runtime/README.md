@@ -53,7 +53,9 @@ ComfyUI starts, and the argument list never goes through a shell), `HF_RESTART_P
 restart per manifest entry), `once`, `twice`, `off`), `HF_UNRESPONSIVE_SECONDS` (default 300: a live ComfyUI that
 stops answering for this long is stopped and restarted; `0` disables), `HF_OOM_LADDER` (out-of-memory recovery steps;
 `off` disables), `HF_PREVIEW` (live previews, experimental), `HF_HEALTH_FILE` (runner heartbeat read by the Docker
-HEALTHCHECK) and `HF_ALLOW_CPU=1` (adds `--cpu` only when no NVIDIA GPU is visible; used by the image smoke test).
+HEALTHCHECK), `HF_ALLOW_CPU=1` (adds `--cpu` only when no NVIDIA GPU is visible; used by the image smoke test),
+`HF_CLEAN_BETWEEN` (default `1`: clean between the workflows of one job) and `HF_UNLOAD_BETWEEN` (default `0`:
+`1` unloads the models after every workflow).
 
 ## What the 0.4.0 runner adds
 
@@ -66,6 +68,11 @@ HEALTHCHECK) and `HF_ALLOW_CPU=1` (adds `--cpu` only when no NVIDIA GPU is visib
   `HF_RESTART_POLICY=off` keeps the previous behaviour.
 - **Model prefetch only when it helps.** Models are copied from the model mount to local disk only when the mount is
   remote and the destination is a real disk (not a RAM-backed `/tmp`); a stopped job never waits for a copy.
+- **Cleaning between workflows.** Between two workflows of one job the runner removes ComfyUI's temporary files
+  (already copied to `_halofuse/previews`), staged inputs only finished workflows named, the pip cache this job's
+  custom-node install created and, on a low disk, this job's partial model downloads. Loaded models and prefetched
+  model files stay. ComfyUI's memory is freed only when host RAM is critically low (that also unloads the models,
+  and the log says so) or when `HF_UNLOAD_BETWEEN=1`. Every step is a `[runner] housekeeping:` line.
 - **Clean stops.** On SIGTERM the runner interrupts ComfyUI, keeps the partial outputs, prints a final `cancelled`
   summary and exits within 10 seconds.
 - **Run events and telemetry.** Progress, node timing, GPU and memory samples and previews are emitted as bounded

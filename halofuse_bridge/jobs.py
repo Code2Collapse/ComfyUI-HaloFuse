@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from . import cost as costmod
-from . import lifecycle
+from . import lifecycle, warm_machine
 from .job_store import HaloFuseError, JobStore
 from .provider.backend import SubmitSpec
 
@@ -300,6 +300,12 @@ def _job_env(settings: dict, base: dict, *, max_runtime_s: int, preview_mode: st
     from . import user_nodes
 
     env.update(user_nodes.job_env(settings))   # the artist's own custom nodes (empty when not supported)
+    # Housekeeping between the workflows of one job (runner hf/housekeeping.py; default: clean on, models kept).
+    # Only a non-default choice is sent; images without housekeeping ignore both variables.
+    if settings.get("clean_between_renders") is False:
+        env["HF_CLEAN_BETWEEN"] = "0"
+    if settings.get("unload_models_between_renders") is True:
+        env["HF_UNLOAD_BETWEEN"] = "1"
     try:
         from . import presets  # type: ignore[attr-defined]  # WS4
     except ImportError:
@@ -409,25 +415,79 @@ def submit_render(workflow: dict, *, instance_type: str | None = None, render_re
     store.write_file(job_id, "workflow.json", wf_text)
     store.append_event(job_id, "note", text=f"Render created on {sku} ({repeats} render repeat(s), "
                                             f"maximum runtime {max_rt} s).")
-    backend = None
+    def send(handle):
+        backend = None
+        try:
+            backend = lifecycle.open_backend(settings)
+            _record_rate(store, job_id, backend, sku)
+            return stage_and_submit(
+                backend, settings=settings, instance_type=sku, files={"workflow.json": wf_text},
+                workflows_for_inputs=[workflow],
+                env=_job_env(settings, _build_env(settings, repeats), max_runtime_s=max_rt,
+                             preview_mode=preview_mode, nonce=nonce, preview_method=preview_method),
+                tags=build_tags(store, job_id),
+                max_wall_clock_s=max_rt + WALL_CLOCK_MARGIN_S, instance_handle=handle)
+        finally:
+            if backend is not None:
+                lifecycle.close_backend(backend)
+
     try:
-        backend = lifecycle.open_backend(settings)
-        _record_rate(store, job_id, backend, sku)
-        ref = stage_and_submit(
-            backend, settings=settings, instance_type=sku, files={"workflow.json": wf_text},
-            workflows_for_inputs=[workflow],
-            env=_job_env(settings, _build_env(settings, repeats), max_runtime_s=max_rt, preview_mode=preview_mode,
-                         nonce=nonce, preview_method=preview_method),
-            tags=build_tags(store, job_id),
-            max_wall_clock_s=max_rt + WALL_CLOCK_MARGIN_S)
+        where, handle = warm_machine.route(job_id, sku, store=store, settings=settings)
+    except Exception as exc:  # noqa: BLE001 - session affinity "required" and no warm machine
+        err = lifecycle.as_halofuse_error(exc)
+        lifecycle._fail_without_cloud(store, job_id, err.code, err.message)
+        raise err from None
+    if where == "wait":  # the warm machine is starting: submit when it is ready (the record shows why it waits)
+        threading.Thread(target=_send_when_warm, args=(store, job_id, sku, settings, send, policy, start_watcher),
+                         daemon=True, name=f"halofuse-warm-wait-{job_id[:8]}").start()
+        return store.get(job_id)
+    try:
+        ref = send(handle)
     except Exception as exc:  # noqa: BLE001
         err = lifecycle.as_halofuse_error(exc)
         lifecycle._fail_without_cloud(store, job_id, err.code, err.message)
         raise err from None
-    finally:
-        if backend is not None:
-            lifecycle.close_backend(backend)
-    return _attach_cloud_job(store, job_id, ref, sku, policy=policy, start_watcher=start_watcher)
+    return _attach_cloud_job(store, job_id, ref, sku, policy=policy, start_watcher=start_watcher, warm=bool(handle))
+
+
+def _cancel_requested(store: JobStore, job_id: str) -> bool:
+    rec = store.get(job_id) or {}
+    return (rec.get("cancel") or {}).get("state") == "cancel_requested"
+
+
+def _cancel_unsubmitted(store: JobStore, job_id: str) -> None:
+    """Stop was pressed while the render waited for the warm machine: it never reached the cloud (nothing billed)."""
+    def fn(r):
+        r["cancel"].update(state="cancel_confirmed", confirmed_at=time.time())
+        r["outcome"] = "cancelled"
+    store.mutate(job_id, fn)
+    store.append_event(job_id, "cancel", text="Stopped before it was sent to the cloud; nothing was billed.",
+                       data={"state": "cancel_confirmed"})
+    if store.get(job_id).get("state") not in ("finalizing",):
+        lifecycle.transition(store, job_id, "finalizing", note="cancelled")
+    lifecycle.transition(store, job_id, "cancelled")
+
+
+def _send_when_warm(store: JobStore, job_id: str, sku: str, settings: dict, send, policy, start_watcher) -> None:
+    """Deferred submit of a render that waits for the warm machine. Never raises (the record carries any failure)."""
+    try:
+        handle = warm_machine.wait_ready(store=store, should_stop=lambda: _cancel_requested(store, job_id))
+        if _cancel_requested(store, job_id):
+            _cancel_unsubmitted(store, job_id)
+            return
+        if handle is None:
+            if str(settings.get("session_affinity") or "preferred").lower() == "required":
+                lifecycle._fail_without_cloud(store, job_id, "session_failed",
+                                              "The warm cloud machine did not start, so this render was not sent.")
+                return
+            store.append_event(job_id, "note", level="warning", data={"code": "warm_unavailable"},
+                               text="The warm machine did not start; this render runs on its own machine.")
+        ref = send(handle)
+    except Exception as exc:  # noqa: BLE001
+        err = lifecycle.as_halofuse_error(exc)
+        lifecycle._fail_without_cloud(store, job_id, err.code, err.message)
+        return
+    _attach_cloud_job(store, job_id, ref, sku, policy=policy, start_watcher=start_watcher, warm=bool(handle))
 
 
 def _record_rate(store: JobStore, job_id: str, backend, sku: str) -> None:
@@ -443,15 +503,20 @@ def _record_rate(store: JobStore, job_id: str, backend, sku: str) -> None:
     store.update(job_id, cost={"rate_per_hour_usd": rate})
 
 
-def _attach_cloud_job(store: JobStore, job_id: str, ref, sku: str, *, policy=None, start_watcher=True) -> dict:
+def _attach_cloud_job(store: JobStore, job_id: str, ref, sku: str, *, policy=None, start_watcher=True,
+                      warm: bool = False) -> dict:
     cid = getattr(ref, "job_id", None)
 
     def fn(r):
         r["cloud"]["job_ids"].append(cid)
         r["cloud"]["current_job_id"] = cid
         r["cloud"]["status"] = getattr(ref, "status", None)
+        if warm:
+            r["cloud"]["instance_handle_set"] = True
         r["submitted_at"] = time.time()
     rec = store.mutate(job_id, fn)
+    if warm:
+        warm_machine.attach(job_id, store)
     store.append_event(job_id, "submit", text="Submitted to the HaloFuse cloud.",
                        data={"cloud_job_id": cid, "instance_type": sku})
     if (rec.get("cancel") or {}).get("state") == "cancel_requested" and rec["cancel"].get("mode") == "now":

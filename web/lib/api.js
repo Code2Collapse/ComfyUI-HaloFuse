@@ -115,6 +115,11 @@ export function createApi(fetchImpl) {
         rate_per_hour_usd: toNumber(d?.rate_per_hour_usd ?? d?.ratePerHourUsd) };
     },
     costSummary: () => get("/halofuse/cost/summary"),
+    // warm cloud machine (owner 2026-11-23): status, start, shut down, check
+    getWarm: () => get("/halofuse/warm"),
+    startWarm: (instanceType) => post("/halofuse/warm/start", instanceType ? { instance_type: instanceType } : {}),
+    shutdownWarm: () => post("/halofuse/warm/shutdown"),
+    checkWarm: () => post("/halofuse/warm/check"),
     submitJob: (body) => post("/halofuse/jobs", body),
     listJobs: ({ active, limit } = {}) => get(`/halofuse/jobs${query({ active: active ? 1 : undefined, limit })}`),
     getJob: (id) => get(J(id)),
