@@ -79,6 +79,19 @@ Queue chunks run several workflows in one cloud job; the log marks each with
 `[runner] workflow M/T started|succeeded|failed`. A failed workflow never removes earlier results. With the 0.4.0
 runtime image, a crash restarts ComfyUI once and the rest of the chunk still runs.
 
+### 3.2a Live preview (experimental)
+
+| What you see | Likely cause | What to do |
+|---|---|---|
+| *Live preview is off for this render.* | the render was started with another preview mode | choose **Live preview** before rendering |
+| *Waiting for the first preview…* for the whole render, then *This render sent no previews.* | the cloud runtime image predates live preview (no preview producer) | ask your administrator for the new runtime image (with live preview) |
+| the frame dims, *Waiting for the next preview (the cloud log can drop lines).* | frames are sent at most every 2 s and the cloud log can drop lines | nothing; the next frame replaces it. The full-quality last frame is delivered with the outputs |
+| *The cloud dropped N log lines; some previews are missing.* | the cloud log stream dropped lines | nothing; the outputs and the delivered logs are complete |
+| *Detailed preview unavailable for this model; showing the fast preview.* | no decoder for this model family in the cloud model library | upload the matching decoder from `models/vae_approx`, or use Fast |
+| **Detailed** greyed out in the panel | no decoder file in the local `models/vae_approx` folder | put the decoder files there, or use Fast |
+| *No seed in this workflow can be changed safely.* | the workflow has no number-valued seed input that ComfyUI marks as a seed (a seed fed by a link, or a node not installed locally) | change the seed in the graph and render again; nothing was stopped |
+| *The old render was stopped, but the new one could not start: …* | the stop went through, the new submission failed | read the reason; render again from the panel |
+
 ### 3.3 After the render
 
 | Code | Likely cause | What to do |
@@ -137,6 +150,19 @@ credentials.
   delete the extension folder.
 - **Cloud runtime.** The cloud renders on the runtime image built from `runtime/`. Publishing a new image is an
   administrator task ([runtime/README.md](../runtime/README.md)); the 0.4.0 image has not been built yet.
+
+### 5a. Live preview storage and limits
+
+- Frames are written into `output/HaloFuse/<job id>/previews/live_<n>_<kind>_<node>.<ext>` while the job runs; their
+  metadata is in `output/HaloFuse/<job id>/live_previews.jsonl`. Only JPEG, PNG and WebP bytes are accepted (checked
+  by their content, never by a name or type the cloud sends), at most 256 KB each, one per second per job (bursts of
+  six), at most 300 files per job; 24 frames plus the newest frame per node and every mask/intermediate/result
+  picture stay after the job ends. The job log never holds frame bytes; a cloud line that fails validation is stored
+  shortened.
+- Preview files are served with `X-Content-Type-Options: nosniff` and a sandboxing Content-Security-Policy.
+- Reading preview files straight from cloud storage during a run (instead of from the log stream) is built but
+  switched off (`live_preview_files` in the settings file, default `false`); it stays off until it has been measured
+  that the cloud makes output files visible while a job runs.
 
 ## 6. Known limitations
 

@@ -203,9 +203,47 @@ They survive extension updates and reinstalls.
 
   ![The Telemetry tab with simulated values](images/console-telemetry.png)
 
+- **Live tab** (*experimental; needs the new HaloFuse runtime image (with live preview)*). See section 6.1. While a
+  render runs, the console opens on this tab.
 - **Problems tab.** Errors and warnings of the job, with the diagnosis (section 10).
 - **Summary tab.** Status, HaloFuse job id, cloud job id, ComfyUI prompt ids, GPU, times, cost estimate and the
   outputs that reached your computer.
+
+### 6.1 Live view: watch a cloud render and stop it early
+
+**Experimental.** It needs the new HaloFuse runtime image (with live preview) and has not yet been verified on a real
+cloud render. Choose **Live preview** before you render (section 7.2).
+
+What you see while the render runs:
+
+- **The current frame** of the sampler, large, with a thin step bar (`12/30`) on it. Under it: the node that is
+  running, the step and an estimate of the time left (when the cloud runner can make a defensible one), which step
+  preview is used (section 7.7), and how old the frame is (*Frame from 2 s ago*).
+- **Masks and intermediate images.** Preview Image and mask preview nodes, and finished results (a video shows four
+  of its frames in one picture), appear as small buttons as soon as their node finishes. Click a mask to see it over
+  the image of the same render: **Overlay** (a tinted mask over the image), **Mask only** or **Image only**. A mask is
+  never shown as a plain grey picture.
+- **Recent frames.** A strip of the last 30 frames. Click one to hold it; **Back to live** resumes.
+- **Honest gaps.** A preview is sent at most every 2 seconds and the cloud log can drop lines. When no new frame
+  arrives for 6 seconds the frame dims and the line says *Waiting for the next preview (the cloud log can drop
+  lines).* When the cloud reports dropped lines, the number is shown. A video render shows the first frame of the
+  clip while it samples.
+
+When it looks wrong:
+
+- **Stop now** stops the cloud job (the same stop as in section 7.5); the button says *Stopping…* until the cloud
+  answers.
+- **Stop and try a new seed** stops the job and starts the same workflow again on the same GPU with the same preview
+  settings, with new values only for seed inputs: inputs ComfyUI itself marks as seeds (they have a
+  *control after generate* setting) and that hold a number, not a link. Nothing else is changed. The panel lists
+  every change (*Node 3 (KSampler) seed 1234 → 98765*). If no seed can be changed safely, nothing is stopped and
+  the panel says *No seed in this workflow can be changed safely. Change it in the graph and render again.*
+
+The panel's job card shows the same current frame with its step bar, and both buttons.
+
+Where previews go: the frames are written into `output/HaloFuse/<job id>/previews/` while the job runs (at most 300
+files per job; when the job ends the last 24 frames, the newest frame of every node and every mask, intermediate and
+result picture are kept). The job log keeps only a small record of each preview, never the picture itself.
 
 ## 7. Rendering
 
@@ -235,7 +273,7 @@ finds this before a GPU starts.)
 | **No preview** | renders without previews in the panel; outputs are still saved | available |
 | **Workflow check** | checks nodes, models, input files and values against the cloud runtime; no GPU is started and nothing is billed | available; packs not in the recorded node list are reported as *not verified*, never as missing |
 | **Quick draft** | renders a reduced copy (smaller size, fewer steps or frames); your graph is never changed and the draft workflow can be inspected | available; sizes, steps, batch and frame counts stay on each widget's own step grid (e.g. Wan 4n+1 lengths) |
-| **Live preview** | asks the cloud runner for latent previews while it renders | **experimental**, needs the 0.4.0 runtime image, not verified end to end |
+| **Live preview** | shows the render while it runs: step frames, masks, intermediate images and results, with **Stop now** and **Stop and try a new seed** (section 6.1); choose the step preview below the mode (section 7.7) | **experimental**, needs the new HaloFuse runtime image (with live preview), not verified on a real cloud render |
 
 ### 7.3 Render repeats
 
@@ -274,6 +312,8 @@ including gaps, so run queues back to back.
 - **Cost** is an **estimate**: the hourly price times the billed time. The panel and the console summary show it.
   Optional per-job and daily caps use the same estimate.
 - How quickly a stop ends billing on the cloud side has not been measured yet.
+- **Stop and try a new seed** (live view and job card, section 6.1) stops the job and renders it again with new
+  seed values only.
 
 ### 7.6 Launch presets
 
@@ -289,6 +329,21 @@ options from a fixed allowlist are accepted; anything else is rejected before th
 
 With the 0.4.0 runtime image the cloud runner also restarts ComfyUI once after a crash, so one failed workflow in a
 queue chunk no longer stops the rest of the chunk.
+
+### 7.7 Step preview (Off, Fast, Detailed)
+
+**Experimental**, shown under **Preview** when Live preview is chosen. It sets how the cloud ComfyUI turns each
+sampler step into a picture, for this render only:
+
+| Choice | What you see | Needs |
+|---|---|---|
+| **Off** | no step frames; masks, intermediate images and results still arrive | nothing |
+| **Fast** (default) | a blurry colour approximation of each step | nothing |
+| **Detailed** | a picture close to the final image; may slow sampling slightly (not measured yet) | the small preview decoder files in your local `models/vae_approx` folder; HaloFuse uploads them to your cloud model library with your consent, like any model (section 8) |
+
+**Detailed** is greyed out, with the reason, when `models/vae_approx` on this computer holds no decoder file. When
+the cloud ComfyUI cannot use a decoder for the model in your workflow, the live view says *Detailed preview
+unavailable for this model; showing the fast preview.* Frames are re-encoded in the cloud to at most 24 KB each.
 
 ## 8. Pre-render model check and upload
 

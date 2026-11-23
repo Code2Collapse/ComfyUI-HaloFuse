@@ -23,7 +23,8 @@ authoring locally and the cloud does the heavy lifting.
 | **Render queue** on one warm cloud machine: reorder, remove, pause, resume; survives a restart | available |
 | **Plain-language diagnosis** of a failed render with a next step | available |
 | Pre-render **model check** with consented upload of missing models | available |
-| Progress timeline, per-node timing, GPU telemetry, OOM recovery, launch presets, live previews (experimental) | needs the 0.4.0 runtime image ([why](#the-cloud-runtime)) |
+| Progress timeline, per-node timing, GPU telemetry, OOM recovery, launch presets | needs the 0.4.0 runtime image ([why](#the-cloud-runtime)) |
+| Live view of a cloud render (step frames, masks as overlays, results), per-render step preview Off / Fast / Detailed, **Stop now** and **Stop and try a new seed** from the preview (experimental) | needs the new runtime image (with live preview); not verified on a real cloud render ([manual 6.1](docs/manual.md)) |
 | **Automatic delivery of every output** (video, audio, EXR, masks, nested folders) into `output/HaloFuse/<job id>/outputs/`, size + SHA-256 checked, resumable, with **Retry** and **Recover outputs** | available (partial outputs after a stop need the runtime image) |
 | **Workflow Check** (nodes, models, input files, values, GPU memory; no GPU started) and **Quick Draft** (a reduced copy; your graph is never changed) | available (checked against a recorded node list until a runtime image publishes its own) |
 | **Node profiles** and the optimised runtime build | in development |
