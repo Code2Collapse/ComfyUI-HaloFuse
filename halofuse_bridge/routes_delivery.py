@@ -131,13 +131,25 @@ def _list_previews(job_id: str, since: int, limit: int) -> dict:
                 if len(entries) >= 5000:
                     break
         entries.sort()
+        owners = _preview_owners(job_id) if entries else {}
         for i, (mtime, name, size) in enumerate(entries):
             mime = _MIME.get(os.path.splitext(name)[1].lower()) or mimetypes.guess_type(name)[0] or                 "application/octet-stream"
+            node_id, mask = owners.get(name, (None, False))
             delivered.append({"seq": base + 1 + i, "name": name, "kind": _PREVIEW_KIND.get(mime.split("/")[0], "image"),
-                              "mime": mime, "ts": mtime, "size": size, "source": "delivered"})
+                              "mime": mime, "ts": mtime, "size": size, "source": "delivered", "node_id": node_id,
+                              "mask": bool(mask)})
     every = [r for r in live + delivered if r["seq"] >= since]
     page = every[:limit]
     return {"previews": page, "next": page[-1]["seq"] + 1 if page else since, "total": len(live) + len(delivered)}
+
+
+def _preview_owners(job_id: str) -> dict:
+    """{delivered preview name: (node_id, mask)} from the job's node board; {} when it cannot be read."""
+    try:
+        from . import node_board
+        return node_board.board_for(job_id, default_store()).preview_owners()
+    except Exception:  # noqa: BLE001 - labels are a display hint; the listing never fails on them
+        return {}
 
 
 async def get_previews(request):

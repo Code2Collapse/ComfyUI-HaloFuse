@@ -264,6 +264,26 @@ class LivePreviewSink:
         self._records = [by_seq[s] for s in sorted(by_seq)]
 
 
+# ---- does the job's runtime relay previews at all ----------------------------------------------------------------
+
+UNSUPPORTED_NOTE = ("Live preview needs the HaloFuse cloud runtime. This render used the Original cloud image, which "
+                    "sends no live previews.")
+
+
+def runtime_support(runtime_name) -> dict:
+    """{"state": "yes" | "no" | "unknown", "note": str | None} for a runtime contract name (job record `runtime`).
+
+    "halofuse": every HaloFuse runtime image relays previews (runtime/runner/hf/previews.py, since the first image;
+    images built from now on also list "live_preview/1" in their node snapshot's runner_capabilities). "legacy": the Original image, built before
+    HaloFuse, has no live relay. Any other value (a job submitted before the record kept its runtime, a recovered
+    job) is "unknown": the Live tab then shows no runtime label at all."""
+    if runtime_name == "legacy":
+        return {"state": "no", "note": UNSUPPORTED_NOTE}
+    if runtime_name == "halofuse":
+        return {"state": "yes", "note": None}
+    return {"state": "unknown", "note": None}
+
+
 # ---- registry ------------------------------------------------------------------------------------------------------
 
 _SINKS: dict[str, LivePreviewSink] = {}

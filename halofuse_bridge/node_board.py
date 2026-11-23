@@ -492,6 +492,26 @@ class NodeBoard:
                     "notes": notes, "organized": {"folder": org.get("folder"), "files": org.get("files"),
                                                   "method": org.get("method")} if org else None}
 
+    def preview_owners(self) -> dict:
+        """{delivered preview file name: (node_id, mask)} for the runner preview files this job's log attributes to
+        a node (the Live tab labels delivered thumbnails with it). `mask` follows the section's live records, as in
+        the per-node view."""
+        self.refresh()
+        out = {}
+        with self._lock:
+            for nid, sec in self.sections.items():
+                masky = any(r.get("mask") for r in sec["live"])
+                names = list(sec["path_previews"])
+                for item in sec["ui_temp"]:
+                    if item.get("prompt_id"):
+                        name = _delivered_preview_name(f"_halofuse/previews/{item['prompt_id'][:8]}_{nid}_"
+                                                       f"{item['filename']}")
+                        if name:
+                            names.append(name)
+                for name in names:
+                    out.setdefault(name, (str(nid), masky))
+        return out
+
     def _out_ref(self, key: str, entry: dict) -> dict:
         parts = tuple(str(entry.get("local") or "").split("/"))
         return {"filename": parts[-1], "subfolder": "/".join((brand.OUTPUT_DIRNAME, self.job_id, *parts[:-1])),

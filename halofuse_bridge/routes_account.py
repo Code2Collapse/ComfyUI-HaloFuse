@@ -146,6 +146,12 @@ def _settings_payload() -> dict:
     from . import user_nodes
 
     out["user_nodes_supported"], out["user_nodes_note"] = user_nodes.runtime_support(prefs)
+    # live preview: the panel names the runtime only when the chosen one really lacks it (None = unknown)
+    from . import live_previews
+
+    live = live_previews.runtime_support(prefs.get("runtime_image"))
+    out["live_preview_supported"] = {"yes": True, "no": False}.get(live["state"])
+    out["live_preview_note"] = live["note"]
     return out
 
 

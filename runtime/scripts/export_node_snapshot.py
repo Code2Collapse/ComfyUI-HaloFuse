@@ -42,7 +42,9 @@ INDEX_SCHEMA = "halofuse.node_snapshot_index/1"
 # What the runner built into the same image can do (the bridge reads it from the snapshot). The runner and this
 # script come from the same commit, so a snapshot that names a capability describes an image whose runner has it.
 # user_nodes/1 = the artist's own custom nodes installed at job start (runner/hf/user_nodes.py CAPABILITY).
-RUNNER_CAPABILITIES = ["user_nodes/1"]
+# live_preview/1: the runner relays sampler frames, temp/mask previews and output thumbnails (hf/previews.py) and
+# reports preview_decoder_failed / no_step_previews marks when a model family has no working preview decoder.
+RUNNER_CAPABILITIES = ["user_nodes/1", "live_preview/1"]
 MAX_ERROR = 300
 CORE_MODULES = ("nodes", "comfy_extras", "comfy_api_nodes", "comfy_api")
 FILE_EXT = re.compile(

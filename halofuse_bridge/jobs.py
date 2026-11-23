@@ -412,6 +412,9 @@ def submit_render(workflow: dict, *, instance_type: str | None = None, render_re
                    "max_job_cost_usd": cap},
         "workflow_name": _workflow_name(workflow_name), "auto_preview": auto_added or None,
         "ignore_cache": settings.get("ignore_cache") is True,
+        # the runtime contract this render ran on (provider/image_contract.py name): the Live tab tells whether that
+        # image relays live previews at all (live_previews.runtime_support)
+        "runtime": settings.get("runtime_image") or None,
     })
     job_id = rec["job_id"]
     _write_ui_workflow(store, job_id, ui_workflow)

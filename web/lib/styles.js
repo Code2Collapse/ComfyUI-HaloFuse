@@ -108,7 +108,7 @@ export const HF_CSS = `
 .hf-win-title { font-weight: 650; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; outline: none; }
 .hf-win-job { color: var(--hf-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
 .hf-win-head .hf-btn { cursor: pointer; }
-.hf-tabs { display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--hf-border); background: var(--hf-bg); overflow-x: auto; }
+.hf-tabs { flex: none; display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--hf-border); background: var(--hf-bg); overflow-x: auto; }
 .hf-tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--hf-muted);
   padding: 7px 10px 6px; font: inherit; cursor: pointer; white-space: nowrap; }
 .hf-tab[aria-selected="true"] { color: var(--hf-fg); border-bottom-color: var(--hf-accent); }
@@ -246,6 +246,14 @@ export const HF_CSS = `
 .hf-live-thumb { appearance: none; padding: 0; width: 56px; height: 56px; flex: none; border: 1px solid var(--hf-border); border-radius: 4px;
   background: #111; overflow: hidden; cursor: pointer; }
 .hf-live-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hf-live-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.hf-live-thumb.hf-live-video { position: relative; }
+.hf-live-thumb.hf-live-video::after { content: "▶"; position: absolute; right: 3px; bottom: 2px; font-size: 10px; color: #fff;
+  text-shadow: 0 0 2px #000; }
+.hf-live-missing { color: var(--hf-muted); font-size: 12px; text-align: center; padding: 24px; max-width: 42ch; min-height: 120px;
+  display: flex; align-items: center; justify-content: center; }
+.hf-live-missing.hf-live-missing-sm { min-height: 0; width: 100%; height: 100%; padding: 2px; font-size: 10px; max-width: none;
+  border: 1px dashed var(--hf-border); box-sizing: border-box; border-radius: 3px; }
 .hf-live-thumb.hf-on { border-color: var(--hf-accent); box-shadow: 0 0 0 1px var(--hf-accent); }
 .hf-live-thumb.hf-live-mask { border-style: dashed; }
 .hf-live-modes { border: 1px solid var(--hf-border); border-radius: 4px; margin: 0; padding: 4px 8px 6px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; }

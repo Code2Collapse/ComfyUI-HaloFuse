@@ -11,7 +11,7 @@ export const PREVIEW_MODES = [
   ["none", "No preview", "Renders without previews in this panel. Outputs are still saved to the output folder."],
   ["check", "Workflow check", "Checks nodes, models, input files and values against the cloud runtime. No GPU is started and nothing is billed."],
   ["draft", "Quick draft", "Renders a reduced copy (smaller size, fewer steps or frames). Your graph is not changed; the draft workflow can be inspected."],
-  ["live", "Live preview (experimental)", "Shows the render while it runs (step previews, masks, results) so you can stop it early. Needs the new HaloFuse runtime image; not yet verified end to end. Final outputs are unaffected."],
+  ["live", "Live preview (experimental)", "Shows the render while it runs (step previews, masks, results) so you can stop it early. Needs the HaloFuse cloud runtime (the Original image sends no live previews); not yet verified on a real cloud render. Final outputs are unaffected."],
 ];
 // Step preview method of a live render (the "model preview override", C-4 6a): ComfyUI --preview-method.
 export const PREVIEW_METHODS = [
