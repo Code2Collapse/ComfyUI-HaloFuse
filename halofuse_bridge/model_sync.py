@@ -48,7 +48,7 @@ CLOUD_MODEL_SUBDIRS = [
     # Custom-node folders: the runner links any extra top-level folder
     # under MODEL_BASE_DIR into ComfyUI's models/ directory, so models
     # uploaded here are found in the cloud.
-    "detection", "sams",
+    "detection", "sams", "depthanything",
 ]
 
 # class_type -> {input_field: folder_paths key}. Extend with one-line entries.
@@ -102,6 +102,30 @@ MODEL_FILE_NODES: dict[str, dict[str, str]] = {
 }
 
 
+# Nodes that download their own weights at run time (owner 2026-11-23: these were reported as "model folder could not
+# be determined"). Read in the upstream code on 2026-11-23:
+#   folder: the models/ sub-folder the node reads before it downloads. A copy in the cloud model library under that
+#           folder is used there (the runner links extra library folders into ComfyUI's models/), and a copy on this
+#           computer can be uploaded into it. None: the node keeps its downloads in a folder of its own, so a library
+#           copy would never be read - nothing to check or upload.
+#   fields: the widgets that name the file; None = every widget whose value has a model file extension.
+NODE_DOWNLOADED_MODELS: dict[str, dict] = {
+    # kijai/ComfyUI-DepthAnythingV2 nodes.py (553187872eeb, 2026-03-06): models_dir/depthanything/<model>, else
+    # huggingface_hub.snapshot_download("Kijai/DepthAnythingV2-safetensors") into that folder.
+    "DownloadAndLoadDepthAnythingV2Model": {"folder": "depthanything", "fields": ("model",)},
+    # Fannovel16/comfyui_controlnet_aux (e8665ca8e408, 2026-10-11) util.custom_hf_download: the file is fetched from
+    # the Hub into the pack's own ckpts/<repo>/ folder (annotator_ckpts_path), never from models/.
+    "DWPreprocessor": {"folder": None, "fields": ("bbox_detector", "pose_estimator")},
+    "AnimalPosePreprocessor": {"folder": None, "fields": ("bbox_detector", "pose_estimator")},
+    "DepthAnythingPreprocessor": {"folder": None, "fields": ("ckpt_name",)},
+    "DepthAnythingV2Preprocessor": {"folder": None, "fields": ("ckpt_name",)},
+}
+# Packs whose nodes all download their weights that way; the class list comes from the runtime node snapshot.
+NODE_DOWNLOAD_PACKS: dict[str, dict] = {
+    "Fannovel16/comfyui_controlnet_aux": {"folder": None, "fields": None},
+}
+
+
 class _ModelRef(NamedTuple):
     node_id: str
     class_type: str
@@ -150,8 +174,21 @@ def _resolve_local(ref: _ModelRef) -> Path | None:
         path = folder_paths.get_full_path(ref.folder, ref.name)
     except Exception:  # noqa: BLE001 - an unknown folder key must not sink the check
         _log.warning("folder_paths could not resolve %s/%s", ref.folder, ref.name)
-        return None
-    return Path(path) if path else None
+        path = None
+    if path:
+        return Path(path)
+    if ref.folder in _NODE_FOLDERS:
+        # A node-read folder (models/depthanything) is not a folder_paths key: the node opens models_dir/<folder>.
+        models_dir = getattr(folder_paths, "models_dir", None)
+        name_parts = str(ref.name).split("/")
+        if isinstance(models_dir, str) and not any(p in ("", ".", "..") for p in name_parts):
+            candidate = Path(models_dir, ref.folder, *name_parts)
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+_NODE_FOLDERS = frozenset(r["folder"] for r in NODE_DOWNLOADED_MODELS.values() if r.get("folder"))
 
 
 def _upload_guard_bytes(settings: dict) -> int | None:
@@ -294,7 +331,7 @@ def check_models(workflows: list[dict], settings: dict | None = None, *, node_de
 
 def _empty_result() -> dict:
     return {"present": [], "uploadable": [], "over_limit": [], "missing": [], "uploading": [], "invalid": [],
-            "unverified": []}
+            "unverified": [], "auto_download": []}
 
 
 def over_limit_message(size: int, guard: int) -> str:
@@ -316,7 +353,12 @@ def classify_models(refs: list, settings: dict, be) -> dict:
     alone suffices when there is no local copy to compare). A name match with a size mismatch is uploadable with
     size_mismatch=True (overwrite on upload). Files in flight from an earlier consent land in "uploading" so no
     second PUT is ever offered. A name that could escape the library folder lands in "invalid" and is never sent to
-    the service (TM-011); a reference whose folder could not be determined lands in "unverified"."""
+    the service (TM-011); a reference whose folder could not be determined lands in "unverified". A file the node
+    downloads itself in the cloud (ref.downloads, NODE_DOWNLOADED_MODELS) lands in "auto_download" when the library
+    and this computer have no copy - information, never a block. Every item that needs the artist says what to do
+    ("message")."""
+    from .workflow_analysis import node_download_message, unknown_folder_message
+
     result = _empty_result()
     assets_path = (settings.get("assets_library_path") or "").rstrip("/")
     space = settings.get("assets_library_space") or None
@@ -325,9 +367,13 @@ def classify_models(refs: list, settings: dict, be) -> dict:
     for ref in refs:
         item = {"node_id": ref.node_id, "class_type": ref.class_type, "field": ref.field, "folder": ref.folder,
                 "name": ref.name, "size": None}
+        downloads = bool(getattr(ref, "downloads", False))
         if ref.folder is None:
-            item["message"] = (f"{ref.name}: the model folder could not be determined from the node definition, so "
-                               "it was not checked.")
+            if downloads:
+                item["message"] = node_download_message(ref.node_id, ref.class_type, ref.name, None)
+                result["auto_download"].append(item)
+                continue
+            item["message"] = unknown_folder_message(ref.node_id, ref.class_type, ref.name)
             result["unverified"].append(item)
             continue
         item["remote_rel"] = f"{assets_path}/{ref.folder}/{ref.name}"
@@ -361,6 +407,9 @@ def classify_models(refs: list, settings: dict, be) -> dict:
         if entry is not None and (local_size is None or remote_size == local_size):
             item["size"] = remote_size if remote_size is not None else local_size
             result["present"].append(item)
+        elif local is None and downloads:
+            item["message"] = node_download_message(ref.node_id, ref.class_type, ref.name, ref.folder)
+            result["auto_download"].append(item)
         elif local is None:
             result["missing"].append(item)
         elif guard is not None and local_size > guard:

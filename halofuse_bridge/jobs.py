@@ -55,6 +55,11 @@ def _normalize_model_paths(prompt: dict) -> None:
     # A model the library holds in another sub-folder of the same model folder (model_sync library search).
     from . import model_sync
     model_sync.apply_relocations(prompt)
+    # Input files: the cloud reads each one under the name it is staged as (forward slashes, no annotation, output /
+    # temp files under their staging folder). Staging plans the rewritten value to the same local file, so this
+    # may run before _stage_input_files on the same dict (submit_render and the render queue do).
+    from .workflow_analysis import rewrite_input_values
+    rewrite_input_values(prompt)
 
 
 def _batch_count(settings: dict) -> int:

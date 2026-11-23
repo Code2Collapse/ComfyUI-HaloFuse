@@ -12,6 +12,7 @@ The hand-written tables (`jobs.INPUT_FILE_NODES`, `model_sync.MODEL_FILE_NODES`)
 
 Public interface:
     plan_inputs(workflow, input_dir, *, node_defs=None, require_exists=False) -> list[StagedInput]  (hook H-a)
+    rewrite_input_values(workflow, *, node_defs=None) -> int      (the cloud workflow names the staged files)
     discover_models(workflow, *, node_defs=None, index=None) -> list[ModelRef]
     load_snapshot(profile=None, root=None) -> Snapshot | None
     preflight(workflows, *, snapshot=..., node_defs=None, input_dir=None, index=None, library=None) -> dict (C-4 s5)
@@ -108,8 +109,10 @@ class ModelRef:
     field: str
     folder: str | None          # canonical cloud folder, None when it cannot be determined
     name: str                   # forward-slash relative name, as the cloud workflow references it
-    source: str                 # "discovered" (local file lists), "table" (fallback map), "heuristic"
+    source: str                 # "discovered" (local file lists), "table" (fallback map), "heuristic",
+                                # "node_download" (model_sync.NODE_DOWNLOADED_MODELS)
     local: bool = False         # a local file was found for it
+    downloads: bool = False     # the node downloads the file itself in the cloud when it is not there
 
     def key(self) -> tuple:
         return (self.folder, self.name)
@@ -364,18 +367,56 @@ def _check_under(input_dir: Path, rel: str) -> tuple[Path | None, str | None]:
     return resolved, None
 
 
-def _annotated_name(value: str) -> tuple[str | None, str | None]:
-    """ComfyUI annotations: 'x [input]' -> x; '[output]' / '[temp]' -> (None, kind)."""
-    for kind in ("output", "temp"):
-        if value.endswith(f" [{kind}]"):
-            return None, kind
-    if value.endswith(" [input]"):
-        return value[: -len(" [input]")], None
+# ComfyUI's annotated file names (folder_paths.annotated_filepath, read in ComfyUI 0.39.0): a value ending in
+# "[output]" / "[input]" / "[temp]" loses that suffix plus the space before it (9 / 8 / 7 characters) and is
+# resolved against that folder; any other value is resolved against the input folder (get_annotated_filepath's
+# default). LoadImage, LoadImageOutput, VHS_LoadVideo(FFmpeg) and LoadVideo all load through this.
+_ANNOTATIONS = (("[output]", "output", 9), ("[input]", "input", 8), ("[temp]", "temp", 7))
+# The cloud job has one input folder. A file the workflow takes from the local output / temp folder is staged into
+# it under this reserved sub-folder, and the cloud workflow names it there (rewrite_input_values). The mapping is
+# reversible - planning the rewritten value finds the same local file - so submit can rewrite before it stages.
+STAGED_FOLDERS = {"output": "halofuse-output", "temp": "halofuse-temp"}
+_FROM_COMFY = object()     # plan_inputs default: take the output / temp folder from ComfyUI's folder_paths
+
+
+def _split_annotation(value: str) -> tuple[str, str | None]:
+    """(name, folder kind or None) exactly as ComfyUI's folder_paths.annotated_filepath splits it."""
+    for suffix, kind, cut in _ANNOTATIONS:
+        if value.endswith(suffix):
+            return value[:-cut], kind
     return value, None
 
 
+def _source_of(value: str) -> tuple[str, str, str] | None:
+    """(folder kind, path relative to that folder, staged path relative to the cloud input folder) for a file
+    widget value, or None when the value could point anywhere else (X2: see safe_relative_path)."""
+    name, kind = _split_annotation(value)
+    rel = safe_relative_path(name)
+    if rel is None:
+        return None
+    if kind in ("output", "temp"):
+        return kind, rel, f"{STAGED_FOLDERS[kind]}/{rel}"
+    head, _, rest = rel.partition("/")
+    for staged_kind, folder in STAGED_FOLDERS.items():
+        if head == folder and rest:
+            return staged_kind, rest, rel      # a value rewritten by rewrite_input_values
+    return "input", rel, rel
+
+
+def _comfy_dir(kind: str) -> Path | None:
+    """ComfyUI's output / temp folder, None outside ComfyUI."""
+    try:
+        import folder_paths  # ComfyUI-provided
+        getter = {"output": folder_paths.get_output_directory, "temp": folder_paths.get_temp_directory}[kind]
+        value = getter()
+    except Exception:  # noqa: BLE001 - outside ComfyUI (tests, tools)
+        return None
+    return Path(value) if isinstance(value, str) and value else None
+
+
 def _input_file_fields(class_type: str, inputs: dict, defs: NodeDefs) -> list[tuple[str, str]]:
-    """[(field, how)] of the node's widgets that name a file in the input folder.
+    """[(field, how)] of the node's widgets that name a file the node loads from ComfyUI's input folder (or, with
+    an annotation, from the output / temp folder).
 
     how = "upload_hint" (a combo with an image/video/audio upload hint in its node definition) or "table" (the
     fallback list, for loaders that upload from their own JS without a hint, e.g. VideoHelperSuite)."""
@@ -385,9 +426,8 @@ def _input_file_fields(class_type: str, inputs: dict, defs: NodeDefs) -> list[tu
         if spec.kind != "COMBO" or not isinstance(inputs.get(name), str):
             continue
         if any(spec.extra.get(h) for h in UPLOAD_HINTS):
-            folder = spec.extra.get("image_folder")
-            if folder not in (None, "input"):
-                continue  # LoadImageOutput etc.: the file lives in output/temp, not in the input folder
+            # LoadImageOutput (image_folder "output") lists "name [output]" values; core loads every one of them
+            # through get_annotated_filepath, so the annotation - not the hint - says which folder holds the file.
             fields.append((name, "upload_hint"))
     listed = FALLBACK_INPUT_FILE_NODES.get(class_type, [])
     for name in listed:
@@ -396,11 +436,62 @@ def _input_file_fields(class_type: str, inputs: dict, defs: NodeDefs) -> list[tu
     return fields
 
 
+_UPLOAD_ACTION = "pick the file with the node's upload button, which copies it into the ComfyUI input folder"
+_NEAR_MISS_MAX_DIRS = 200
+
+
+def _near_miss(kind: str, rel: str, dirs: dict) -> str | None:
+    """Why a missing input file is missing, when a quick bounded look finds it elsewhere (never an absolute path):
+    in the output folder, under another upper/lower case, or in a sub-folder of the input folder."""
+    if kind != "input":
+        return None
+    base = dirs.get("input")
+    out = dirs.get("output")
+    try:
+        in_output = _check_under(out, rel)[0] if out is not None else None
+        if in_output is not None and in_output.is_file():
+            return (f"It is in the ComfyUI output folder, not in the input folder: {_UPLOAD_ACTION} "
+                    "(or copy it into the input folder), then run the check again.")
+        parent_rel, _, file_name = rel.rpartition("/")
+        parent = base.resolve().joinpath(*parent_rel.split("/")) if parent_rel else base.resolve()
+        if parent.is_dir() and not _is_link(parent):
+            for entry in os.scandir(parent):
+                if entry.name.lower() == file_name.lower() and entry.name != file_name and entry.is_file():
+                    other = f"{parent_rel}/{entry.name}" if parent_rel else entry.name
+                    return (f"The input folder has '{_short(other)}' (different upper/lower case): pick that "
+                            "entry in the node, then run the check again.")
+        if not parent_rel:
+            subs = sorted(e.name for e in os.scandir(base.resolve())
+                          if e.is_dir(follow_symlinks=False) and not _is_link(Path(e.path)))[:_NEAR_MISS_MAX_DIRS]
+            for sub in subs:
+                if (base.resolve() / sub / file_name).is_file():
+                    return (f"The input folder has it as '{_short(sub + '/' + file_name)}': pick that entry in the "
+                            "node, then run the check again.")
+    except OSError:
+        return None
+    return None
+
+
+def _missing_message(kind: str, rel: str, dirs: dict) -> str:
+    text = f"'{_short(rel)}' is not in the ComfyUI {kind} folder."
+    hint = _near_miss(kind, rel, dirs)
+    if hint:
+        return f"{text} {hint}"
+    if kind == "input":
+        return f"{text} Upload it: {_UPLOAD_ACTION}, then run the check again."
+    return (f"{text} Copy it into the ComfyUI input folder and pick it in the node again (the node's upload "
+            "button does both), then run the check again.")
+
+
 def plan_inputs(workflow: dict, input_dir: Path, *, node_defs: NodeDefs | None = None,
-                require_exists: bool = False) -> list[StagedInput]:
+                require_exists: bool = False, output_dir=_FROM_COMFY, temp_dir=_FROM_COMFY) -> list[StagedInput]:
     """Hook H-a (REQUESTS R-WS2-03): the input files *workflow* references, as copies to stage into the job input.
 
-    Never reads outside *input_dir*: a value that is absolute, has a drive letter or UNC prefix, contains `..`, or
+    A value is resolved exactly as ComfyUI resolves it (folder_paths.get_annotated_filepath): "name [output]" /
+    "name [temp]" in the output / temp folder, anything else ("name", "name [input]", "sub/name", "sub\\name") in
+    the input folder. Output / temp files are staged under STAGED_FOLDERS (rewrite_input_values renames the value in
+    the cloud workflow to match); *output_dir* / *temp_dir* default to ComfyUI's folders.
+    Never reads outside those folders: a value that is absolute, has a drive letter or UNC prefix, contains `..`, or
     resolves (through a link) outside the folder is refused (X2), as is any link inside it. Refusals are collected
     and raised together as InputPlanError (a ValueError) before anything is read or copied.
     A referenced file that does not exist is refused with *require_exists* (what the Workflow Check uses: G2, verify
@@ -412,7 +503,9 @@ def plan_inputs(workflow: dict, input_dir: Path, *, node_defs: NodeDefs | None =
         raise InputPlanError([Problem("bad_workflow", "the workflow is not an API-format graph")])
     defs = node_defs if node_defs is not None else NodeDefs(local_node_defs(_class_types(workflow)),
                                                             _default_snapshot())
-    input_dir = Path(input_dir)
+    dirs = {"input": Path(input_dir),
+            "output": _comfy_dir("output") if output_dir is _FROM_COMFY else (Path(output_dir) if output_dir else None),
+            "temp": _comfy_dir("temp") if temp_dir is _FROM_COMFY else (Path(temp_dir) if temp_dir else None)}
     problems: list[Problem] = []
     planned: dict[str, StagedInput] = {}
     for node_id, node in _nodes(workflow):
@@ -420,49 +513,88 @@ def plan_inputs(workflow: dict, input_dir: Path, *, node_defs: NodeDefs | None =
         inputs = node["inputs"]
         for field_name, _how in _input_file_fields(class_type, inputs, defs):
             value = inputs[field_name]
-            name, kind = _annotated_name(value)
-            if name is None:
-                _log.warning("node %s (%s) field %r: %s file annotation; not staged", node_id, class_type,
-                             field_name, kind)
-                continue
-            rel = safe_relative_path(name)
-            if rel is None:
+            source = _source_of(value)
+            if source is None:
                 problems.append(Problem("input_path_blocked",
                                         "only files inside the ComfyUI input folder can be sent (absolute paths, "
-                                        "drive letters, network paths and '..' are not allowed)",
+                                        f"drive letters, network paths and '..' are not allowed): {_UPLOAD_ACTION}",
                                         node_id, class_type, field_name))
                 continue
-            path, reason = _check_under(input_dir, rel)
+            kind, rel, dest_rel = source
+            base = dirs[kind]
+            if base is None:
+                if require_exists:
+                    problems.append(Problem("input_missing", f"'{_short(rel)}' is in the ComfyUI {kind} folder, "
+                                            f"which {brand.PRODUCT} cannot read here: copy the file into the ComfyUI "
+                                            "input folder and pick it in the node again", node_id, class_type,
+                                            field_name))
+                else:
+                    _log.warning("node %s (%s) field %r: the %s folder is unknown; not staged", node_id, class_type,
+                                 field_name, kind)
+                continue
+            path, reason = _check_under(base, rel)
             if path is None:
-                problems.append(Problem("input_path_blocked", f"the input file {reason}", node_id, class_type,
+                problems.append(Problem("input_path_blocked", f"the file {reason}: copy the file itself into the "
+                                        "ComfyUI input folder and pick it in the node", node_id, class_type,
                                         field_name))
                 continue
             if path.is_dir():
                 for member in sorted(path.iterdir(), key=lambda p: p.name):
                     if _is_link(member):
                         problems.append(Problem("input_path_blocked",
-                                                f"'{rel}/{member.name}' is a link; links are never followed",
-                                                node_id, class_type, field_name))
+                                                f"'{rel}/{member.name}' is a link; links are never followed: copy "
+                                                "the file itself into the folder", node_id, class_type, field_name))
                         continue
                     if member.is_file():
-                        dest = f"{rel}/{member.name}"
+                        dest = f"{dest_rel}/{member.name}"
                         planned.setdefault(dest, StagedInput(node_id, class_type, field_name, member, dest,
                                                              member.stat().st_size))
                 continue
             if not path.is_file():
                 if require_exists:
-                    problems.append(Problem("input_missing",
-                                            f"'{_short(rel)}' is not in the ComfyUI input folder",
-                                            node_id, class_type, field_name))
+                    problems.append(Problem("input_missing", _missing_message(kind, rel, dirs), node_id, class_type,
+                                            field_name))
                 else:
-                    planned.setdefault(rel, StagedInput(node_id, class_type, field_name, path, rel, None))
+                    planned.setdefault(dest_rel, StagedInput(node_id, class_type, field_name, path, dest_rel, None))
                 continue
-            planned.setdefault(rel, StagedInput(node_id, class_type, field_name, path, rel, path.stat().st_size))
+            planned.setdefault(dest_rel, StagedInput(node_id, class_type, field_name, path, dest_rel,
+                                                     path.stat().st_size))
     if problems:
         for p in problems:
             _log.warning("input refused: node %s (%s) %r [%s]", p.node_id, p.class_type, p.input, p.code)
         raise InputPlanError(problems)
     return list(planned.values())
+
+
+def cloud_input_values(workflow: dict, *, node_defs: NodeDefs | None = None) -> dict[tuple[str, str], str]:
+    """{(node_id, field): value} for each input-file widget the cloud must read under another name than the local
+    value: the staged path plan_inputs gives it (forward slashes on the Linux runtime, no annotation, output / temp
+    files under STAGED_FOLDERS). Pure: no filesystem access. Blocked values (X2) are left alone - plan_inputs
+    refuses them before anything is sent."""
+    if not isinstance(workflow, dict):
+        return {}
+    defs = node_defs if node_defs is not None else NodeDefs(local_node_defs(_class_types(workflow)),
+                                                            _default_snapshot())
+    out: dict[tuple[str, str], str] = {}
+    for node_id, node in _nodes(workflow):
+        for field_name, _how in _input_file_fields(node["class_type"], node["inputs"], defs):
+            value = node["inputs"][field_name]
+            source = _source_of(value)
+            if source is not None and source[2] != value:
+                out[(node_id, field_name)] = source[2]
+    return out
+
+
+def rewrite_input_values(workflow: dict, *, node_defs: NodeDefs | None = None) -> int:
+    """Rename input-file values in *workflow* (in place) to the names plan_inputs stages them under, so the cloud
+    loads exactly the staged file. Idempotent. Returns the number of values changed."""
+    changes = cloud_input_values(workflow, node_defs=node_defs)
+    for (node_id, field_name), value in changes.items():
+        node = workflow.get(node_id)
+        if node is None:                    # API ids are strings, but a caller may have built int keys
+            node = next(n for k, n in workflow.items() if str(k) == node_id)
+        node["inputs"][field_name] = value
+    return len(changes)
 
 
 def _local_path_widgets(class_type: str, inputs: dict, defs: NodeDefs) -> list[str]:
@@ -545,9 +677,11 @@ def discover_models(workflow: dict, *, node_defs: NodeDefs | None = None,
                     index: ModelIndex | None = None) -> list[ModelRef]:
     """Every model file the workflow references, deduplicated on (folder, name).
 
-    A widget value is a model reference when (1) the local model index lists it (its folder comes from the folder
-    that lists it: discovered), else (2) the fallback table names the node + field (table), else (3) it is a combo
-    or unknown-definition value with a model file extension (heuristic; folder None unless the table knows it).
+    A widget value is a model reference when (0) the node downloads its own weights (model_sync
+    NODE_DOWNLOADED_MODELS / NODE_DOWNLOAD_PACKS: node_download, with the models/ sub-folder the node reads first or
+    None), else (1) the local model index lists it (its folder comes from the folder that lists it: discovered),
+    else (2) the fallback table names the node + field (table), else (3) it is a combo or unknown-definition value
+    with a model file extension (heuristic; folder None unless the table knows it).
     Input-file widgets (upload hints) are never model references."""
     from .model_sync import MODEL_FILE_NODES  # fallback table; model_sync never imports this module at load
 
@@ -559,6 +693,7 @@ def discover_models(workflow: dict, *, node_defs: NodeDefs | None = None,
         class_type, inputs = node["class_type"], node["inputs"]
         specs = defs.specs(class_type)
         table = MODEL_FILE_NODES.get(class_type, {})
+        rule = node_download_rule(class_type, defs)
         upload_fields = {f for f, _ in _input_file_fields(class_type, inputs, defs)}
         for field_name, value in inputs.items():
             if not isinstance(value, str) or field_name in upload_fields:
@@ -566,7 +701,11 @@ def discover_models(workflow: dict, *, node_defs: NodeDefs | None = None,
             name = _norm(value)
             spec = specs.get(field_name)
             candidates = index.folders_for(name)
-            if candidates:
+            if (rule is not None and name.lower().endswith(MODEL_EXTS)
+                    and (rule.get("fields") is None or field_name in rule["fields"])):
+                ref = ModelRef(node_id, class_type, field_name, rule.get("folder"), name, "node_download", False,
+                               True)
+            elif candidates:
                 ref = ModelRef(node_id, class_type, field_name, _pick_folder(candidates, table.get(field_name)),
                                name, "discovered", True)
             elif field_name in table and name.lower().endswith(MODEL_EXTS):
@@ -579,6 +718,20 @@ def discover_models(workflow: dict, *, node_defs: NodeDefs | None = None,
                 seen.add(ref.key())
                 refs.append(ref)
     return refs
+
+
+def node_download_rule(class_type: str, defs: NodeDefs | None = None) -> dict | None:
+    """The model_sync download rule ({"folder", "fields"}) of a node that fetches its own weights, by class name,
+    else by the pack the runtime snapshot says the class comes from; None for every other node."""
+    from .model_sync import NODE_DOWNLOAD_PACKS, NODE_DOWNLOADED_MODELS
+
+    rule = NODE_DOWNLOADED_MODELS.get(class_type)
+    snapshot = defs.snapshot if defs is not None else None
+    if rule is None and snapshot is not None:
+        pack = snapshot.pack_of.get(class_type)
+        if isinstance(pack, dict):
+            rule = NODE_DOWNLOAD_PACKS.get(pack.get("repo"))
+    return rule
 
 
 def allowed_cloud_folders(index: ModelIndex | None = None) -> set[str]:
@@ -683,21 +836,29 @@ def _check_values(node_id, class_type, inputs, cloud_specs, blocking) -> None:
             if isinstance(value, (str, int, float)) and value not in spec.options and not looks_like_file:
                 sample = ", ".join(str(o) for o in spec.options[:8])
                 blocking.append(Problem("invalid_value", f"'{_short(value, 60)}' is not one of: {sample}"
-                                        + (" ..." if len(spec.options) > 8 else ""), node_id, class_type, name))
+                                        + (" ..." if len(spec.options) > 8 else "")
+                                        + ". Pick one of these values in the node.", node_id, class_type, name))
         elif spec.kind in ("INT", "FLOAT") and isinstance(value, (int, float)) and not isinstance(value, bool):
             lo, hi = spec.extra.get("min"), spec.extra.get("max")
             if isinstance(lo, (int, float)) and value < lo:
-                blocking.append(Problem("invalid_value", f"{value} is below the minimum {lo}", node_id, class_type,
-                                        name))
+                blocking.append(Problem("invalid_value", f"{value} is below the minimum {lo}: set {lo} or more",
+                                        node_id, class_type, name))
             elif isinstance(hi, (int, float)) and value > hi:
-                blocking.append(Problem("invalid_value", f"{value} is above the maximum {hi}", node_id, class_type,
-                                        name))
+                blocking.append(Problem("invalid_value", f"{value} is above the maximum {hi}: set {hi} or less",
+                                        node_id, class_type, name))
+
+
+def _node_label(node_id, class_type) -> str:
+    """'Node 12 (DWPreprocessor)': warnings and notes are shown without the node column, so they name it."""
+    if node_id is None:
+        return str(class_type or "")
+    return f"Node {node_id} ({class_type})" if class_type else f"Node {node_id}"
 
 
 def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "default",
               node_defs: NodeDefs | None = None, input_dir: Path | None = None, index: ModelIndex | None = None,
               library: LibraryCheck | None = None, models_check: "ModelsCheck | None" = None,
-              extra_refs: Iterable[ModelRef] = ()) -> dict:
+              extra_refs: Iterable[ModelRef] = (), output_dir=_FROM_COMFY, temp_dir=_FROM_COMFY) -> dict:
     """Workflow Check: validate *workflows* without starting any paid compute.
 
     Blocking: unknown node classes (with the node list), classes from a pack that failed / is not installed in the
@@ -707,18 +868,23 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
     *library(ref)* returns the cloud size, True/False (present without size / absent) or raises; None skips the cloud
     check (reported as a warning). *models_check(refs)* (the bridge uses model_sync.classify_models) replaces
     *library* with the full model-sync classification (sizes, upload limit, uploads in flight).
-    Returns the C-4 section 5 shape (no host or URL in any field)."""
+    An input file missing on a node that feeds no output is a warning, not a block: core never loads it, and submit
+    skips a missing file (the same rule as required inputs, _needed_nodes).
+    Models the node downloads itself in the cloud are listed in `notes` (information, nothing to do).
+    Every message says what to do. Returns the C-4 section 5 shape (no host or URL in any field)."""
     started = time.perf_counter()
     if snapshot == "default":
         snapshot = _default_snapshot()
     blocking: list[Problem] = []
     warnings: list[Problem] = []
+    notes: list[Problem] = []
     models: dict[str, list] = {"missing": [], "uploadable": [], "over_limit": [], "uploading": [], "present": [],
-                               "unverified": []}
+                               "unverified": [], "auto_download": []}
     checked = {"nodes": 0, "models": 0, "inputs": 0}
     if snapshot is None:
         warnings.append(Problem("no_snapshot", "No runtime profile snapshot is installed, so node availability in "
-                                               "the cloud was not verified."))
+                                               "the cloud was not verified. Nothing to do; if a node is missing in "
+                                               "the cloud, the render stops with its name."))
     all_types: set[str] = set()
     for wf in workflows:
         all_types |= _class_types(wf)
@@ -732,7 +898,7 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
             continue
         if "nodes" in wf and "links" in wf:
             blocking.append(Problem("ui_format", f"workflow {wf_no} is in the editor (UI) format; HaloFuse needs the "
-                                                 "API format the panel sends"))
+                                                 "API format the panel sends: send it from the panel"))
             continue
         node_ids = {str(k) for k in wf}
         unknown: list[tuple[str, str]] = []
@@ -742,7 +908,9 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
             skipped = len([1 for _ in _nodes(wf)]) - len(needed)
             if skipped > 0:
                 warnings.append(Problem("unused_nodes", f"{skipped} node(s) feed no output (Save / Preview), so they "
-                                                        "will not run and were not checked"))
+                                                        "will not run and were not checked. Nothing to do, unless "
+                                                        "one of them should run: connect it to a Save or Preview "
+                                                        "node."))
         for node_id, node in _nodes(wf):
             checked["nodes"] += 1
             class_type, inputs = node["class_type"], node["inputs"]
@@ -754,10 +922,14 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
                     reason = _short((pack or {}).get("error") or status, 200)
                     blocking.append(Problem("node_unavailable",
                                             f"{class_type} comes from {pack.get('repo')}, which is {status.replace('_', ' ')} "
-                                            f"in the '{snapshot.profile}' runtime ({reason})", node_id, class_type))
+                                            f"in the '{snapshot.profile}' runtime ({reason}). Replace or remove the "
+                                            "node, or ask your administrator to fix the pack in the runtime.",
+                                            node_id, class_type))
                 elif status == "unverified":
-                    warnings.append(Problem("node_unverified", f"{class_type}: availability in the "
-                                                               f"'{snapshot.profile}' runtime is not verified yet",
+                    warnings.append(Problem("node_unverified", f"{_node_label(node_id, class_type)}: availability "
+                                                               f"in the '{snapshot.profile}' runtime is not verified "
+                                                               "yet. Nothing to do; if the node is missing there, the "
+                                                               "render stops with its name.",
                                             node_id, class_type))
             node_def = defs.node_def(class_type)
             if node_def and node_def.get("output_node"):
@@ -772,29 +944,41 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
             specs = defs.specs(class_type)
             for name, spec in specs.items():
                 if spec.required and spec.kind not in DYNAMIC_INPUT_KINDS and not _input_present(name, inputs):
-                    blocking.append(Problem("missing_input", "required input is not set", node_id, class_type, name))
+                    blocking.append(Problem("missing_input", "required input is not set: connect it or give it a "
+                                                             "value", node_id, class_type, name))
             for name, value in inputs.items():
                 if _is_link_value(value) and str(value[0]) not in node_ids:
                     blocking.append(Problem("broken_link", f"connected to node {value[0]}, which is not in the "
-                                                           "workflow", node_id, class_type, name))
+                                                           "workflow: connect the input again", node_id, class_type,
+                                            name))
             cloud_def = defs.cloud_def(class_type)
             if cloud_def is not None:
                 _check_values(node_id, class_type, inputs, parse_input_specs(cloud_def), blocking)
         if unknown:
             listed = ", ".join(f"{ct} (node {nid})" for nid, ct in unknown[:20])
             for nid, ct in unknown:
-                blocking.append(Problem("unknown_node", f"{ct} is not available in the '{snapshot.profile}' runtime",
-                                        nid, ct))
+                blocking.append(Problem("unknown_node", f"{ct} is not available in the '{snapshot.profile}' runtime: "
+                                                        "replace or remove the node, or ask your administrator to "
+                                                        "add its pack to the runtime", nid, ct))
             warnings.append(Problem("unknown_nodes_summary", f"Nodes not in the runtime: {listed}"))
         if not has_output and all(defs.node_def(n["class_type"]) for _, n in _nodes(wf)):
             blocking.append(Problem("no_output", f"workflow {wf_no} has no output node (Save / Preview), so it "
-                                                 "would produce nothing"))
+                                                 "would produce nothing: add a Save or Preview node"))
         if input_dir is not None:
             try:
-                staged = plan_inputs(wf, input_dir, node_defs=defs, require_exists=True)
+                staged = plan_inputs(wf, input_dir, node_defs=defs, require_exists=True, output_dir=output_dir,
+                                     temp_dir=temp_dir)
                 checked["inputs"] += len(staged)
             except InputPlanError as exc:
-                blocking.extend(exc.problems)
+                for p in exc.problems:
+                    if p.code == "input_missing" and needed is not None and p.node_id not in needed:
+                        # core never loads it and submit skips a missing file: not worth stopping the render for
+                        warnings.append(Problem("input_missing_unused",
+                                                f"{_node_label(p.node_id, p.class_type)} feeds no output, so it will "
+                                                f"not run: {p.message} Nothing to do unless the node should run.",
+                                                p.node_id, p.class_type, p.input))
+                    else:
+                        blocking.append(p)
         for ref in discover_models(wf, node_defs=defs, index=index):
             model_refs.setdefault(ref.key(), ref)
     for ref in extra_refs:  # files the job needs beyond the graph (live preview decoders, C-4 6a)
@@ -802,8 +986,8 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
 
     checked["models"] = len(model_refs)
     if models_check is not None:
-        _apply_models_check(list(model_refs.values()), models_check, models, blocking, warnings)
-        return _report(blocking, warnings, models, checked, snapshot, started)
+        _apply_models_check(list(model_refs.values()), models_check, models, blocking, warnings, notes)
+        return _report(blocking, warnings, models, checked, snapshot, started, notes)
     library_error = None
     for ref in model_refs.values():
         item = {"node_id": ref.node_id, "class_type": ref.class_type, "field": ref.field, "folder": ref.folder,
@@ -818,34 +1002,71 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
             models["present"].append(item)
         elif ref.local:
             models["uploadable"].append(item)
-            warnings.append(Problem("model_not_in_library", f"{ref.name} is on this computer but not in the cloud "
-                                                            "model library yet", ref.node_id, ref.class_type,
-                                    ref.field))
+            warnings.append(Problem("model_not_in_library", model_not_in_library_message(ref.name), ref.node_id,
+                                    ref.class_type, ref.field))
+        elif ref.downloads:
+            item["message"] = node_download_message(ref.node_id, ref.class_type, ref.name, ref.folder)
+            models["auto_download"].append(item)
+            notes.append(Problem("model_downloaded_by_node", item["message"], ref.node_id, ref.class_type, ref.field))
         elif ref.folder is None:
             models["unverified"].append(item)
-            warnings.append(Problem("model_unverified", f"{ref.name}: model folder unknown, so it could not be "
-                                                        "checked", ref.node_id, ref.class_type, ref.field))
+            warnings.append(Problem("model_unverified", unknown_folder_message(ref.node_id, ref.class_type, ref.name),
+                                    ref.node_id, ref.class_type, ref.field))
         elif library is None or library_error is not None:
             models["unverified"].append(item)
             warnings.append(Problem("model_unverified", f"{ref.name} is not on this computer and the cloud library "
-                                                        "was not checked", ref.node_id, ref.class_type, ref.field))
+                                                        "was not checked. Run the check again when the service is "
+                                                        "reachable.", ref.node_id, ref.class_type, ref.field))
         else:
             models["missing"].append(item)
-            blocking.append(Problem("missing_model", f"{ref.name} ({ref.folder}) is neither on this computer nor in "
-                                                     "the cloud model library", ref.node_id, ref.class_type, ref.field))
+            blocking.append(Problem("missing_model", missing_model_message(ref.name, ref.folder), ref.node_id,
+                                    ref.class_type, ref.field))
     if library_error is not None:
         warnings.append(Problem("library_unavailable", library_error))
     elif library is None and model_refs:
-        warnings.append(Problem("library_not_checked", "The cloud model library was not checked."))
-    return _report(blocking, warnings, models, checked, snapshot, started)
+        warnings.append(Problem("library_not_checked", "The cloud model library was not checked. Run the check "
+                                                       "again when the service is reachable."))
+    return _report(blocking, warnings, models, checked, snapshot, started, notes)
+
+
+# ---- artist-facing model messages: each one says what to do (shared with model_sync.classify_models) ----------
+
+def node_download_message(node_id, class_type, name: str, folder: str | None) -> str:
+    label = _node_label(node_id, class_type)
+    if folder is None:
+        return f"{label}: {name} - nothing to do: the node downloads it in the cloud when the render runs."
+    return (f"{label}: {name} is not in the cloud model library ({folder}) - nothing to do: the node downloads it "
+            f"in the cloud when the render runs. To save that download time on every render, put the file in "
+            f"ComfyUI's models/{folder} folder on this computer; it is then uploaded once.")
+
+
+def unknown_folder_message(node_id, class_type, name: str) -> str:
+    return (f"{_node_label(node_id, class_type)}: {name} - the model folder could not be determined, so it was not "
+            "checked. Nothing to do if the node downloads its own models; otherwise put the file in its ComfyUI "
+            "models folder on this computer and run the check again, so it is found and uploaded.")
+
+
+def missing_model_message(name: str, folder: str | None) -> str:
+    return (f"{name} ({folder}) is neither on this computer nor in the cloud model library: put it in ComfyUI's "
+            f"models/{folder} folder on this computer (it is then uploaded) or ask your administrator to add it to "
+            "the cloud model library, then run the check again.")
+
+
+def model_not_in_library_message(name: str, size_mismatch: bool = False) -> str:
+    if size_mismatch:
+        return (f"{name} differs from the cloud library copy: this computer's file is uploaded before the render "
+                "starts (or you are asked first when automatic upload is off).")
+    return (f"{name} is on this computer but not in the cloud model library yet: it is uploaded before the render "
+            "starts (or you are asked first when automatic upload is off). Nothing else to do.")
 
 
 ModelsCheck = Callable[[list], dict]
 
 
 def _apply_models_check(refs: list, models_check: "ModelsCheck", models: dict, blocking: list,
-                        warnings: list) -> None:
+                        warnings: list, notes: list | None = None) -> None:
     """Merge a model_sync.classify_models-style result (sizes, upload guard, in-flight uploads) into the report."""
+    notes = notes if notes is not None else warnings
     try:
         result = models_check(refs) if refs else {}
     except Exception as exc:  # noqa: BLE001 - branded text only; the check degrades to a warning
@@ -857,31 +1078,34 @@ def _apply_models_check(refs: list, models_check: "ModelsCheck", models: dict, b
         models.setdefault(key, [])
         models[key].extend(items)
     for item in result.get("missing", []):
-        blocking.append(Problem("missing_model", f"{item['name']} ({item['folder']}) is neither on this computer nor "
-                                                 "in the cloud model library", item.get("node_id"),
-                                item.get("class_type"), item.get("field")))
+        blocking.append(Problem("missing_model", missing_model_message(item["name"], item["folder"]),
+                                item.get("node_id"), item.get("class_type"), item.get("field")))
     for item in result.get("invalid", []):
         blocking.append(Problem("model_path_blocked", f"'{_short(item['name'], 80)}' is not a valid model library "
-                                                      "path", item.get("node_id"), item.get("class_type"),
-                                item.get("field")))
-    for item in result.get("uploadable", []):
-        text = ("differs from the cloud library copy" if item.get("size_mismatch")
-                else "is on this computer but not in the cloud model library yet")
-        warnings.append(Problem("model_not_in_library", f"{item['name']} {text}", item.get("node_id"),
+                                                      "path: pick the model again in the node", item.get("node_id"),
                                 item.get("class_type"), item.get("field")))
+    for item in result.get("uploadable", []):
+        warnings.append(Problem("model_not_in_library",
+                                model_not_in_library_message(item["name"], bool(item.get("size_mismatch"))),
+                                item.get("node_id"), item.get("class_type"), item.get("field")))
     for item in result.get("over_limit", []):
         warnings.append(Problem("model_over_upload_limit", item.get("message") or f"{item['name']} is larger than "
                                 "the upload limit", item.get("node_id"), item.get("class_type"), item.get("field")))
     for item in result.get("unverified", []):
         warnings.append(Problem("model_unverified", item.get("message") or f"{item['name']} could not be checked",
                                 item.get("node_id"), item.get("class_type"), item.get("field")))
+    for item in result.get("auto_download", []):
+        notes.append(Problem("model_downloaded_by_node", item.get("message") or node_download_message(
+            item.get("node_id"), item.get("class_type"), item["name"], item.get("folder")),
+            item.get("node_id"), item.get("class_type"), item.get("field")))
 
 
-def _report(blocking, warnings, models, checked, snapshot, started) -> dict:
+def _report(blocking, warnings, models, checked, snapshot, started, notes=()) -> dict:
     return {
         "ok": not blocking,
         "blocking": [p.to_dict() for p in blocking],
         "warnings": [p.to_dict() for p in warnings],
+        "notes": [p.to_dict() for p in notes],      # information only: nothing for the artist to do
         "models": models,
         "checked": checked,
         "profile": snapshot.profile if isinstance(snapshot, Snapshot) else None,
@@ -892,7 +1116,8 @@ def _report(blocking, warnings, models, checked, snapshot, started) -> dict:
 
 __all__ = [
     "FALLBACK_INPUT_FILE_NODES", "InputPlanError", "InputSpec", "MODEL_EXTS", "ModelIndex", "ModelRef", "NodeDefs",
-    "Problem", "Snapshot", "StagedInput", "allowed_cloud_folders", "cloud_folder", "discover_models",
-    "load_snapshot", "local_model_index", "local_node_defs", "parse_input_specs", "plan_inputs", "preflight",
+    "Problem", "STAGED_FOLDERS", "Snapshot", "StagedInput", "allowed_cloud_folders", "cloud_folder",
+    "cloud_input_values", "discover_models", "load_snapshot", "local_model_index", "local_node_defs",
+    "node_download_rule", "parse_input_specs", "plan_inputs", "preflight", "rewrite_input_values",
     "safe_relative_path",
 ]
