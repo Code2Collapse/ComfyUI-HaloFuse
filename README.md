@@ -137,3 +137,5 @@ in [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
   window opens when chosen, and Workflow Check reads input files the way ComfyUI does.
 - Advanced > Cloud runtime: Original image (default) or HaloFuse image (the newer node packs); the Workflow Check
   follows the choice.
+- My custom nodes (panel): add your own node packs (GitHub or Comfy Registry), pinned and licence-checked; they install in
+  each cloud job once the next HaloFuse image is out. `runtime/scripts/add_node.py` adds a pack to the image in one command.
