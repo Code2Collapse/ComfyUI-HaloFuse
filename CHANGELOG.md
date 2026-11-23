@@ -2,6 +2,20 @@
 
 ## Unreleased — 2026-11-23
 
+- **The console always has something to show.** Opening it loads the last job's saved log (also after a reload), and
+  a new **Activity** tab lists every failure the panel hit with its time: a blocked Workflow Check (one line per
+  problem), a refused submit, a model upload error, a sign-in error. A submit that failed after its job was created now
+  opens that job's log. Before, the console said "No job attached" after any failed or finished render.
+- **The floating window appears.** Choosing "Floating window" opens it straight away and it comes back after a reload
+  if it was open (before, only a small bolt button appeared). The console opened from the floating panel now comes to
+  the front instead of opening behind it. A window saved off-screen comes back on screen.
+- **Workflow Check reads input files the way ComfyUI does.** Files marked [output] or [temp] are sent to the cloud
+  (they used to pass the check and then fail there), Windows sub-folder names like `shots\plate.mov` reach the cloud
+  under the name the file was sent with, and a missing file on a node that feeds no output is a warning, not a block.
+  When a file is in the output folder, the message says so.
+- **Models the nodes download themselves are not reported as unknown.** ControlNet-aux annotators (yolox, dw-ll,
+  depth_anything) and Depth Anything V2 show as "nothing to do: the node downloads it in the cloud"; an uploaded copy in
+  `depthanything/` is used. Every check message now ends with what to do.
 - **Workflow Check no longer reports false "required input is not set".** Core's Math Expression node (and any node
   with growing inputs: a, b, c ...) stores its inputs under names like `values.a`; the check now reads them the way
   ComfyUI does. A node that feeds no Save / Preview output is no longer checked either: ComfyUI never runs it (the

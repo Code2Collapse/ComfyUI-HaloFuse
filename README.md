@@ -133,3 +133,5 @@ in [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
 - The sidebar panel scrolls.
 - Models are found anywhere in the cloud library by name and size, and missing models upload by themselves (same
   folders as on this computer; switch off under Advanced). Details: CHANGELOG.md.
+- Later the same day: the console always shows the last job and every failure (new Activity tab), the floating
+  window opens when chosen, and Workflow Check reads input files the way ComfyUI does.
