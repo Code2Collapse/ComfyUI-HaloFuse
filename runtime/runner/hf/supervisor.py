@@ -6,8 +6,14 @@
 - `RunContext`: phase timing, per-entry outcomes, the last classified error, restart count, cancellation flag
   set by the signal handler, and the single `final` event.
 - `install_signal_handlers`: SIGTERM/SIGINT (+SIGBREAK on Windows) only set a flag; the runner's loops act on it.
+- `Heartbeat`: a small JSON file (pid, time, runner state) the Docker HEALTHCHECK reads (scripts/healthcheck.py).
+
+ComfyUI runs in its own process group (POSIX session). Stopping it stops the whole group, and after a death the
+leftover group members are killed too, so no child of a custom node keeps GPU or host memory into a restarted
+ComfyUI or keeps the container alive after the job.
 """
 import collections
+import json
 import os
 import re
 import signal
@@ -36,12 +42,13 @@ class ComfyDied(Exception):
 
 
 class ComfyProcess:
-    def __init__(self, cmd, cwd, env, emitter, on_node_import=None, tail_lines=200):
+    def __init__(self, cmd, cwd, env, emitter, on_node_import=None, tail_lines=200, on_line=None):
         self.cmd = list(cmd)
         self.cwd = cwd
         self.env = env
         self.em = emitter
         self.on_node_import = on_node_import
+        self.on_line = on_line  # every ComfyUI line, unchanged (R-PREVIEW-01: preview fallback detection)
         self._tail = collections.deque(maxlen=tail_lines)
         self._threads = []
         self.proc = None
@@ -73,6 +80,11 @@ class ComfyProcess:
                     text = text[:-1]
                 self._tail.append(text)
                 self.em.line(hf_events.escape_child_line(text), stream=stream)
+                if self.on_line is not None:
+                    try:
+                        self.on_line(text)
+                    except Exception:  # noqa: BLE001 - a consumer error never stops the relay
+                        pass
                 if not marked and text.startswith(NODE_IMPORT_MARK):
                     marked = True
                     if self.on_node_import:
@@ -97,10 +109,41 @@ class ComfyProcess:
         return self.proc.returncode
 
     def terminate(self):
-        self.proc.terminate()
+        """SIGTERM to ComfyUI's whole process group (Windows: the whole tree, forcibly)."""
+        self._signal_tree(getattr(signal, "SIGTERM", None))
 
     def kill(self):
-        self.proc.kill()
+        """SIGKILL to ComfyUI's whole process group (Windows: the whole tree)."""
+        self._signal_tree(getattr(signal, "SIGKILL", None))
+
+    def reap_tree(self):
+        """After ComfyUI itself died: kill what is left of its process group / tree. Never raises."""
+        if self.proc is None:
+            return
+        if os.name == "nt":
+            for child in _windows_children(self.proc.pid):
+                _taskkill(child)
+            return
+        try:
+            os.killpg(self.proc.pid, signal.SIGKILL)
+        except (OSError, AttributeError):
+            pass
+
+    def _signal_tree(self, sig):
+        if self.proc is None:
+            return
+        if os.name == "nt":
+            if self.proc.poll() is None:
+                _taskkill(self.proc.pid)
+            self.reap_tree()
+            return
+        try:
+            os.killpg(self.proc.pid, sig)  # pgid == pid: started with start_new_session
+        except (OSError, AttributeError):
+            try:
+                self.proc.send_signal(sig)
+            except OSError:
+                pass
 
     def wait(self, timeout=None):
         return self.proc.wait(timeout=timeout)
@@ -113,6 +156,73 @@ class ComfyProcess:
 
     def tail(self):
         return list(self._tail)
+
+
+def _taskkill(pid):
+    try:
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def _windows_children(pid):
+    """Pids whose parent is `pid` (orphans keep their ParentProcessId on Windows). Test platform only."""
+    cmd = ("Get-CimInstance Win32_Process -Filter 'ParentProcessId=%d' | ForEach-Object { $_.ProcessId }" % int(pid))
+    try:
+        res = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
+                             capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [int(t) for t in res.stdout.split() if t.isdigit()]
+
+
+class Heartbeat:
+    """Writes {"pid", "ts", "state", "port", "exit_code"} to `path` (atomic replace) every `interval` seconds and on
+    every state change. I/O errors are ignored: the heartbeat must never break a job."""
+
+    def __init__(self, path, interval=5.0, port=None):
+        self.path = Path(path)
+        self.interval = max(0.2, float(interval))
+        self.port = port
+        self.state = "starting"
+        self.exit_code = None
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread = None
+
+    def start(self):
+        self._write()
+        self._thread = threading.Thread(target=self._loop, name="hf-heartbeat", daemon=True)
+        self._thread.start()
+        return self
+
+    def set_state(self, state):
+        with self._lock:
+            self.state = state
+        self._write()
+
+    def stop(self, state="finished", exit_code=None):
+        self._stop.set()
+        with self._lock:
+            self.state = state
+            self.exit_code = exit_code
+        self._write()
+
+    def _loop(self):
+        while not self._stop.wait(self.interval):
+            self._write()
+
+    def _write(self):
+        with self._lock:
+            record = {"pid": os.getpid(), "ts": time.time(), "state": self.state, "port": self.port,
+                      "exit_code": self.exit_code}
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = self.path.with_name(self.path.name + ".tmp")
+                tmp.write_text(json.dumps(record), encoding="utf-8")
+                os.replace(tmp, self.path)
+            except OSError:
+                pass
 
 
 def install_signal_handlers(ctx):
@@ -150,6 +260,7 @@ class RunContext:
         self.outputs = 0
         self.output_bytes = 0
         self.timed_out = False
+        self.consecutive_deaths = 0  # ComfyUI deaths since the last succeeded entry (crash-loop breaker)
         self.peaks = lambda: {}
         self.proc = None
 

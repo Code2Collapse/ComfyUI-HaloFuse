@@ -127,6 +127,7 @@ export function createApi(fetchImpl) {
     recoverJob: (id) => post(`/halofuse/recovery/${enc(id)}`),
     preflight: (body) => post("/halofuse/preflight", body),
     draft: (body) => post("/halofuse/draft", body),
+    library: () => get("/halofuse/library"),
     startModelUpload: (files) => post("/halofuse/models/upload", { files }),
     getModelUpload: (id) => get(`/halofuse/models/upload/${enc(id)}`),
     listModelUploads: () => get("/halofuse/models/uploads"),

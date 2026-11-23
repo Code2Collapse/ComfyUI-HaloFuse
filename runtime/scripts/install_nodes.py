@@ -12,6 +12,10 @@ Two steps, so the Dockerfile can cache them in separate layers:
   install_nodes.py deps --profile P --custom-nodes DIR --report FILE [--catalog-dir catalog]
       pip-installs each fetched pack's requirements.txt.
 
+  install_nodes.py check-extras [--catalog-dir catalog]
+      Validates catalog/extra_nodes.txt offline (syntax, packs the catalog keeps out of cloud images, refused
+      repositories). CI runs it before any build.
+
 Failure handling
   * strict profiles (`default`, the production image) fail the build on any
     error, exactly like the previous installer.
@@ -173,6 +177,12 @@ def _archive(entry, cache: Path | None, opener) -> bytes:
 
 EXTRA_FILE = "extra_nodes.txt"
 GITHUB_COMMIT_API = "https://api.github.com/repos/{repo}/commits/{ref}"
+GITHUB_REPO_API = "https://api.github.com/repos/{repo}"
+# SHA-256 of lowercase owner/repo; names are deliberately not written in public files.
+REFUSED_REPO_SHA256 = frozenset({"cd86c77eade6596dffd7d42838ae75189b4ec746dcbf4cde1f5d0d7bb85cabc3"})
+_PERMISSIVE = {"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Unlicense", "0BSD", "Zlib", "CC0-1.0",
+               "BSL-1.0", "Python-2.0"}
+_COPYLEFT = {"MPL-2.0", "EPL-2.0"}
 _EXTRA_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]{0,99})/([A-Za-z0-9._-]{1,100})(?:@([A-Za-z0-9._/+-]{1,200}))?$")
 
 
@@ -191,6 +201,69 @@ def parse_extra_nodes(path) -> list:
             raise InstallError(f"{EXTRA_FILE} line {i}: expected owner/repo or owner/repo@ref, got {line!r}")
         out.append((f"{m.group(1)}/{m.group(2)}", m.group(3)))
     return out
+
+
+def _refused(repo: str) -> bool:
+    return hashlib.sha256(repo.lower().encode("utf-8")).hexdigest() in REFUSED_REPO_SHA256
+
+
+def _extra_lines(path) -> list:
+    """[(line number, repo, ref)] of the active lines (parse_extra_nodes keeps its (repo, ref) contract)."""
+    p = Path(path)
+    if not p.is_file():
+        return []
+    numbered = [i for i, raw in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+                if raw.split("#", 1)[0].strip()]
+    return [(n, repo, ref) for n, (repo, ref) in zip(numbered, parse_extra_nodes(p))]
+
+
+def check_extras(catalog_dir) -> list:
+    """Offline problems in extra_nodes.txt: syntax, refused repositories, catalog packs that never go to the cloud."""
+    try:
+        lines = _extra_lines(Path(catalog_dir) / EXTRA_FILE)
+    except InstallError as exc:
+        return [str(exc)]
+    catalog = json.loads((Path(catalog_dir) / "catalog.json").read_text(encoding="utf-8"))
+    by_repo = {e["repo"].lower(): e for e in catalog.get("entries", [])}
+    problems = []
+    for n, repo, _ref in lines:
+        if _refused(repo):
+            problems.append(f"{EXTRA_FILE} line {n}: this repository is not allowed in a HaloFuse image")
+            continue
+        e = by_repo.get(repo.lower())
+        if e is None:
+            continue
+        comp = e.get("compatibility") or {}
+        if e.get("install_target") != "cloud" or comp.get("compatible") is not True:
+            problems.append(f"{EXTRA_FILE} line {n}: {e['repo']} is {e.get('install_target')} in the catalog "
+                            f"({comp.get('notes') or e.get('category')}); it is never installed in a cloud image")
+    return problems
+
+
+def licence_class(spdx) -> str:
+    if spdx is None:
+        return "no-licence"
+    s = str(spdx)
+    if "-NC" in s.upper():
+        return "non-commercial"
+    if s in _PERMISSIVE:
+        return "permissive"
+    if s.startswith("AGPL-"):
+        return "network-copyleft"
+    if s.startswith(("GPL-", "LGPL-")) or s in _COPYLEFT:
+        return "copyleft"
+    return "unknown"
+
+
+def _extra_licence(repo: str, opener) -> dict:
+    """Licence of an extra pack from GitHub metadata; a failed lookup is recorded as unknown, never fatal."""
+    try:
+        meta = json.loads(opener(GITHUB_REPO_API.format(repo=repo)))
+    except Exception:  # noqa: BLE001 - optional metadata
+        return {"spdx": None, "class": "unknown"}
+    lic = meta.get("license") if isinstance(meta, dict) else None
+    spdx = lic.get("spdx_id") if isinstance(lic, dict) else None
+    return {"spdx": spdx, "class": licence_class(spdx)}
 
 
 def _resolve_commit(repo: str, ref, opener) -> str:
@@ -220,6 +293,12 @@ def _fetch_extras(catalog_dir, dest: Path, report: dict, cache, opener) -> None:
             fake = {"repo": repo, "url": f"https://github.com/{repo}", "install": {"method": "git-archive"},
                     "pin": {"commit": commit}}
             log(f"fetch extra {repo} -> {folder} @ {commit}")
+            rec["license"] = _extra_licence(repo, opener)
+            if rec["license"]["class"] != "permissive":
+                # listing a pack in extra_nodes.txt is the owner's decision: installed, but flagged for the record
+                report.setdefault("flagged", []).append(
+                    {"repo": repo, "flag": f"extra pack licence {rec['license']['class']} "
+                                           f"({rec['license']['spdx'] or 'none'})"})
             blob = _archive(fake, cache, opener)
             with tempfile.TemporaryDirectory(dir=dest.parent) as tmp:
                 staged = Path(tmp) / folder
@@ -250,6 +329,9 @@ def _load(catalog_dir) -> tuple[dict, dict]:
 def fetch(catalog_dir, profile: str, dest: Path, cache: Path | None = None, opener=urlopen_bytes,
           require_hashes: bool = False) -> dict:
     catalog, profiles = _load(catalog_dir)
+    problems = check_extras(catalog_dir)  # before any download
+    if problems:
+        raise InstallError("; ".join(problems))
     res = hf_catalog.resolve(catalog, profiles, profile)
     if res.target != "cloud":
         raise InstallError(f"profile {profile} is a local profile; it is never installed into an image")
@@ -374,7 +456,18 @@ def main(argv=None) -> int:
     d.add_argument("--report", required=True)
     h = sub.add_parser("content-hash")
     h.add_argument("folder")
+    c = sub.add_parser("check-extras")
+    c.add_argument("--catalog-dir", default=default_catalog)
     args = ap.parse_args(argv)
+    if args.cmd == "check-extras":
+        problems = check_extras(args.catalog_dir)
+        for prob in problems:
+            log(f"ERROR: {prob}")
+        if problems:
+            return 1
+        n = len(_extra_lines(Path(args.catalog_dir) / EXTRA_FILE))
+        log(f"{EXTRA_FILE} OK: {n} line(s)")
+        return 0
     try:
         if args.cmd == "fetch":
             rep = fetch(args.catalog_dir, args.profile, Path(args.dest),

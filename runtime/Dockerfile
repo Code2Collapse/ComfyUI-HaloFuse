@@ -8,10 +8,15 @@
 #   default  = exactly the 31 packs of the image in production before the catalog (saved workflows keep working)
 #   core | image | video | audio | depth-segmentation | vfx | prompting-utilities | research-experimental | full
 #   docker buildx build --build-arg PROFILE=video -t halofuse-runtime:video .
+# Optional attention layer: --build-arg ATTENTION=sage (SageAttention 1.0.6; launch preset "sage"; experimental).
 #
 # Layer order (least to most frequently changing): base -> tini -> node sources -> node dependencies ->
-# OpenCV/onnxruntime normalisation -> Haar cascades -> bytecode -> snapshot -> runner.
-# BuildKit cache mounts keep downloaded archives and pip wheels between builds; they never enter the image.
+# OpenCV/onnxruntime normalisation -> attention -> Haar cascades -> bytecode -> snapshot -> runner.
+# Only the scripts a layer needs are copied before it, so editing the healthcheck, snapshot or smoke scripts never
+# re-runs the dependency layers. BuildKit cache mounts keep downloaded archives and pip wheels between builds; they
+# never enter the image.
+# Stages after `runtime` (smoke, smoke-artifact) only test the image: `--target smoke-artifact` boots the real
+# entrypoint (tini + runner) on CPU without network and fails the build when ComfyUI or a strict pack crashes.
 
 # Base pinned by digest: the moving cu130-slim-v2 tag silently changed ComfyUI between rebuilds. The ComfyUI
 # version inside this pin is recorded by the snapshot step (/etc/halofuse/node_snapshot.json, comfyui_version);
@@ -65,8 +70,7 @@ open('/usr/local/bin/tini', 'wb').write(data); os.chmod('/usr/local/bin/tini', 0
 RUN rm -rf "$COMFYUI_DIR/custom_nodes/ComfyUI-Manager"
 
 COPY catalog/catalog.json catalog/profiles.json /opt/halofuse/catalog/
-COPY scripts/hf_catalog.py scripts/install_nodes.py scripts/export_node_snapshot.py \
-     scripts/install_haarcascades.py scripts/healthcheck.py /opt/halofuse/scripts/
+COPY scripts/hf_catalog.py scripts/install_nodes.py scripts/install_haarcascades.py /opt/halofuse/scripts/
 COPY --from=fetch /build/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
 COPY --from=fetch /build/install_report.json /etc/halofuse/install_report.json
 
@@ -176,6 +180,23 @@ import matplotlib.font_manager as fm
 fm.fontManager
 PY
 
+# Optional attention backend (D2). Only one prebuilt wheel fits this base (torch 2.13 / CUDA 13 / Python 3.13):
+# SageAttention 1.0.6, a pure-Python Triton implementation (Apache-2.0 upstream), hash-pinned. SageAttention 2.x
+# publishes no Linux wheels and FlashAttention 2.8.3 wheels stop at torch 2.8 / CUDA 12, so neither is installable
+# without compiling (no compiler in this image). ATTENTION=none (default) leaves the image unchanged.
+ARG ATTENTION=none
+# The pip cache is a BuildKit cache mount (never a layer), as in the other pip steps.
+# hadolint ignore=DL3042
+RUN --mount=type=cache,id=halofuse-pip,target=/root/.cache/pip \
+    if [ "$ATTENTION" = "sage" ]; then \
+      echo "sageattention==1.0.6 --hash=sha256:fafc66569bed62a16839e820c2612141b5a20accf55b876d941bab9c0ac5d888" \
+        > /tmp/attention-requirements.txt \
+      && python3.13 -m pip install --no-deps --require-hashes -r /tmp/attention-requirements.txt \
+      && python3.13 -c "import triton; from sageattention import sageattn; print('attention layer: sage', flush=True)" \
+      && rm -f /tmp/attention-requirements.txt; \
+    elif [ "$ATTENTION" = "none" ]; then echo "attention layer: none"; \
+    else echo "unknown ATTENTION=$ATTENTION (none or sage)"; exit 1; fi
+
 # OpenCV 5 wheels no longer ship the Haar cascade XML files. EasyColorCorrector and WAS load them from
 # cv2.data.haarcascades and silently detect nothing without them. Vendored copies (OpenCV 4.12.0, licence notice in
 # catalog/vendor/opencv-haarcascades/NOTICE.md) are checksum-verified, copied, and must load (no network: X13).
@@ -194,6 +215,7 @@ RUN python3.13 -m compileall -q -j 0 "$COMFYUI_DIR/custom_nodes" > /tmp/compilea
 FROM nodes AS snapshot
 ARG PROFILE=default
 ARG SNAPSHOT_BOOT=1
+COPY scripts/export_node_snapshot.py /opt/halofuse/scripts/
 RUN mkdir -p /out && if [ "$SNAPSHOT_BOOT" = "1" ]; then \
       python3.13 /opt/halofuse/scripts/export_node_snapshot.py export --boot \
         --comfyui-dir "$COMFYUI_DIR" --python python3.13 --profile "$PROFILE" \
@@ -213,12 +235,18 @@ COPY --from=snapshot /out/node_snapshot.json /node_snapshot.json
 # ------------------------------------------------------------------------------------------------ runtime
 FROM nodes AS runtime
 ARG PROFILE=default
+ARG ATTENTION=none
 COPY --from=snapshot /out/node_snapshot.json /etc/halofuse/node_snapshot.json
+COPY scripts/healthcheck.py /opt/halofuse/scripts/
 ENV HF_PROFILE=${PROFILE} \
     HF_IMAGE_REF=halofuse-runtime:${PROFILE} \
-    HF_NODE_SNAPSHOT_PATH=/etc/halofuse/node_snapshot.json
+    HF_NODE_SNAPSHOT_PATH=/etc/halofuse/node_snapshot.json \
+    HF_ATTENTION=${ATTENTION} \
+    HF_HEALTH_FILE=/tmp/halofuse-health.json
 
 COPY runner/ /runner/
+# Cold start: the runner's own bytecode is compiled once here (the build context carries no __pycache__).
+RUN python3.13 -m compileall -q /runner
 
 # D3 / R-WS4-3: every flag the runner's launch allowlist (and its presets) uses must exist in the pinned ComfyUI's
 # cli_args.py, so a base-image bump cannot silently break a preset. `python -m hf.launch` exits 1 listing the missing
@@ -228,13 +256,30 @@ RUN cd /runner && python3.13 -m hf.launch /runner/launch_allowlist.json "$COMFYU
 # The runner is PID 1's only child; tini forwards SIGTERM (no -g: the runner interrupts ComfyUI itself and collects
 # partial outputs before exiting, C-3).
 STOPSIGNAL SIGTERM
-# API readiness (loopback /system_stats). A batch job reports "starting" until the runner has booted ComfyUI.
+# Health = the runner's heartbeat (HF_HEALTH_FILE) is fresh, and ComfyUI answers /system_stats whenever the runner
+# says it is up. Restarts after a crash, prefetch and shutdown are healthy as long as the runner is alive.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=900s --retries=3 \
     CMD ["python3.13", "/opt/halofuse/scripts/healthcheck.py"]
-# tini is the ENTRYPOINT and the runner the CMD. A bridge written for this image submits command
+# tini is the ENTRYPOINT and the runner the CMD. -s registers tini as a child subreaper, so zombies are still reaped
+# when the platform injects its own init and tini is not PID 1. A bridge written for this image submits command
 # ["python3.13", "/runner/halofuse_run.py"] (bridges pin the image they were written for by digest, together with its
 # command): with Docker CMD semantics that becomes `tini -- python3.13 /runner/...`; with entrypoint-override
 # semantics it is the runner alone (as before, the runner handles SIGTERM itself). Which one the platform uses is
 # provider probe P6.
-ENTRYPOINT ["/usr/local/bin/tini", "--"]
+ENTRYPOINT ["/usr/local/bin/tini", "-s", "--"]
 CMD ["python3.13", "/runner/halofuse_run.py"]
+
+# ------------------------------------------------------------------------------------------------ smoke
+# Must not crash: run the real entrypoint (tini + runner) on CPU with no network and a model-free 3-entry manifest
+# (ok / unknown node / ok). Fails the build when ComfyUI does not boot, the runner hangs or exits wrongly, or a pack of
+# a strict profile does not import. A second boot with --disable-partner-nodes is timed for comparison. Never part
+# of the runtime image; `--target smoke-artifact` exports the report.
+FROM runtime AS smoke
+COPY scripts/smoke_run.py /opt/halofuse/scripts/
+RUN --network=none mkdir -p /out && python3.13 /opt/halofuse/scripts/smoke_run.py \
+      --tini /usr/local/bin/tini --runner /runner/halofuse_run.py --comfyui-dir "$COMFYUI_DIR" --python python3.13 \
+      --install-report /etc/halofuse/install_report.json --out /out/smoke_report.json --timeout 900 \
+      --compare-args=--disable-partner-nodes
+
+FROM scratch AS smoke-artifact
+COPY --from=smoke /out/smoke_report.json /smoke_report.json
