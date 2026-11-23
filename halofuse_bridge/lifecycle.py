@@ -27,6 +27,7 @@ from .provider import BackendError
 from .provider.redact import redact
 
 _log = logging.getLogger(__name__)
+_REJECTED_EVENT_KEEP = 300  # characters of an unvalidated [hf] line kept in the log
 
 __all__ = [
     "HaloFuseError", "IllegalTransition", "JOB_STATES", "TERMINAL_STATES", "TRANSITIONS", "QUEUE_TRANSITIONS",
@@ -496,6 +497,9 @@ class JobWatcher:
         if isinstance(parsed, dict) and parsed.get("t"):
             self._handle_run_event(parsed)
             return
+        if line.startswith("[hf]") and len(line) > _REJECTED_EVENT_KEEP:
+            # an event line that failed validation (foreign nonce, oversize): never store its payload (frame bytes)
+            line = f"{line[:_REJECTED_EVENT_KEEP]}…[rejected event, {len(line) - _REJECTED_EVENT_KEEP} characters omitted]"
         source = "runner" if line.startswith("[runner]") else "comfyui"
         level = "error" if stream == "stderr" and _ERRORISH_RE.search(line) else "info"
         self.store.append_event(self.job_id, "line", text=line, source=source, level=level,
@@ -514,9 +518,21 @@ class JobWatcher:
 
     def _handle_run_event(self, ev: dict) -> None:
         t = str(ev.get("t"))
-        text = ev.get("text") or ev.get("message") or json.dumps(ev, ensure_ascii=False, default=str)[:2000]
+        data = ev
+        if t == "preview":
+            # live preview (C-4 6a): the frame goes to the job's previews/ folder now; the log keeps the record only
+            try:
+                from . import live_previews
+                rec = live_previews.sink_for(self.job_id, self.store).accept(ev)
+            except Exception:  # noqa: BLE001 - a preview never breaks the watcher
+                rec = None
+            data = {k: v for k, v in ev.items() if k not in ("data", "text")}
+            data["preview"] = rec
+            if rec is None:
+                data["stored"] = False
+        text = ev.get("text") or ev.get("message") or json.dumps(data, ensure_ascii=False, default=str)[:2000]
         level = "error" if t == "error" else "info"
-        self.store.append_event(self.job_id, t, text=str(text), source="runner", level=level, data=ev,
+        self.store.append_event(self.job_id, t, text=str(text), source="runner", level=level, data=data,
                                 node_id=ev.get("node_id") or ev.get("node"), phase=ev.get("phase"))
         if t == "fingerprint":
             self.store.update(self.job_id, fingerprint={k: v for k, v in ev.items() if k not in ("t", "v", "ts")})
@@ -745,6 +761,11 @@ class JobWatcher:
             store.append_event(job_id, "error", text=message, level="error", data={"code": info["error_code"]})
             self._diagnose(job)
         transition(store, job_id, "finalizing", note=outcome)
+        try:
+            from . import live_previews
+            live_previews.finish(job_id, store)  # before delivery writes into the same previews/ folder
+        except Exception:  # noqa: BLE001 - cleanup failure never changes the outcome
+            _log.debug("HaloFuse live preview cleanup failed for %s", job_id)
         with _HOOK_LOCK:
             hooks = list(_TERMINAL_HOOKS)
         for name, fn_hook in hooks:

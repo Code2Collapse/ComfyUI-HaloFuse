@@ -105,8 +105,96 @@ async def post_job(request):
         render_repeats=body.get("render_repeats", body.get("batch_count")),
         max_runtime_s=body.get("max_runtime_s"), max_job_cost_usd=body.get("max_job_cost_usd"),
         label=str(body.get("label") or "Render"), client_ref=body.get("client_ref"),
-        preview_mode=body.get("preview_mode")))
+        preview_mode=body.get("preview_mode"), preview_method=body.get("preview_method")))
     return web.json_response({"job": lifecycle.job_summary(rec, default_store())}, status=202)
+
+
+RESEED_REFUSED = "No seed in this workflow can be changed safely. Change it in the graph and render again."
+
+
+def _resubmit(job_id: str, stop_current: bool) -> dict:
+    """Stop and try a new seed (C-4 6a): new seeds first; the old job is stopped only when a new workflow exists."""
+    from . import reseed
+    from . import workflow_analysis as wa
+
+    store = default_store()
+    rec = store.get(job_id)
+    if rec is None:
+        raise HaloFuseError("job_not_found", "This HaloFuse job was not found.", 404)
+    if rec.get("kind") not in ("render", None):
+        raise HaloFuseError("not_supported", "Stop and try a new seed works for single renders, not queues.", 409)
+    try:
+        workflow = json.loads(store.read_file(job_id, "workflow.json"))
+    except (OSError, ValueError):
+        raise HaloFuseError("no_workflow", "The workflow of this render was not kept, so it cannot be rendered "
+                                           "again from here.", 409) from None
+    types = {n.get("class_type") for n in workflow.values() if isinstance(n, dict) and n.get("class_type")}
+    defs = wa.NodeDefs(wa.local_node_defs(types), wa._default_snapshot())
+    node_defs = {ct: defs.node_def(ct) for ct in types if defs.node_def(ct) is not None}
+    result = reseed.reseed(workflow, node_defs)
+    if not result.changes:
+        raise HaloFuseError("reseed_not_possible", RESEED_REFUSED, 422)
+    stopped = None
+    if stop_current and not rec.get("terminal"):
+        lifecycle.request_cancel(job_id, "now", "user")
+        stopped = job_id
+    try:
+        new = jobs.submit_render(
+            result.workflow, instance_type=(rec.get("cloud") or {}).get("instance_type"),
+            render_repeats=rec.get("render_repeats"), preview_mode=rec.get("preview_mode"),
+            preview_method=rec.get("preview_method"), label=f"{rec.get('label') or 'Render'} (new seed)")
+    except Exception as exc:  # noqa: BLE001
+        err = lifecycle.as_halofuse_error(exc)
+        if stopped:
+            raise HaloFuseError(err.code, "The old render was stopped, but the new one could not start: "
+                                + err.message, err.status) from None
+        raise err from None
+    return {"job": lifecycle.job_summary(new, store), "changes": result.changes, "skipped": result.skipped,
+            "stopped": stopped}
+
+
+@_handler
+async def post_job_resubmit(request):
+    job_id = _resolve(request.match_info["job_id"])
+    body = await _json(request) if request.can_read_body else {}
+    if body.get("reseed", True) is not True:
+        raise HaloFuseError("bad_request", "Only a re-render with new seeds is supported.", 400)
+    out = await _run(lambda: _resubmit(job_id, body.get("stop_current", True) is not False))
+    return web.json_response(out, status=202)
+
+
+DECODER_PREFIXES = ("taesd_decoder", "taesdxl_decoder", "taesd3_decoder", "taef1_decoder", "taehv", "lighttaew2_2",
+                    "lighttaew2_1", "lighttaehy1_5", "taeltx_2", "taeh3")
+DETAILED_UNAVAILABLE = ("No preview decoder files in models/vae_approx on this computer. Detailed preview needs them "
+                        "(they are uploaded to the cloud model library with your consent).")
+
+
+def preview_decoders() -> list:
+    """Local small-decoder files ComfyUI uses for `--preview-method taesd` (models/vae_approx)."""
+    try:
+        import folder_paths  # ComfyUI-provided
+        names = folder_paths.get_filename_list("vae_approx") or []
+    except Exception:  # noqa: BLE001 - no folder registered / not inside ComfyUI
+        return []
+    out = []
+    for name in names:
+        base = str(name).replace(chr(92), "/").rsplit("/", 1)[-1]
+        if base.startswith(DECODER_PREFIXES):
+            out.append(str(name))
+    return sorted(out)
+
+
+@_handler
+async def get_preview_methods(request):
+    decoders = await _run(preview_decoders)
+    return web.json_response({
+        "methods": [
+            {"id": "none", "label": "Off", "available": True, "reason": None},
+            {"id": "latent2rgb", "label": "Fast", "available": True, "reason": None},
+            {"id": "taesd", "label": "Detailed", "available": bool(decoders),
+             "reason": None if decoders else DETAILED_UNAVAILABLE},
+        ],
+        "decoders": decoders, "experimental": True})
 
 
 @_handler
@@ -315,6 +403,8 @@ def _table(prefix: str) -> list[tuple[str, str, object]]:
         ("GET", f"{p}/jobs/{{job_id}}/log", get_job_log),
         ("GET", f"{p}/jobs/{{job_id}}/log.txt", get_job_log_txt),
         ("POST", f"{p}/jobs/{{job_id}}/cancel", post_job_cancel),
+        ("POST", f"{p}/jobs/{{job_id}}/resubmit", post_job_resubmit),
+        ("GET", f"{p}/preview_methods", get_preview_methods),
         ("POST", f"{p}/queues", post_queue),
         ("GET", f"{p}/queues", list_queues),
         ("GET", f"{p}/queues/{{queue_id}}", get_queue),

@@ -117,6 +117,24 @@ def _capacity(workflows, models: dict, instance_type, snapshot) -> dict:
     return capacity.assess(work, skus, calibration=capacity.load_calibration(), instance_type=instance_type)
 
 
+PREVIEW_DECODER_MISSING = "Detailed preview will fall back to Fast: no preview decoder files in models/vae_approx."
+
+
+def preview_decoder_refs(preview_method) -> tuple[list, list]:
+    """Detailed live preview (`taesd`) needs the small decoders in the cloud model library: the local
+    models/vae_approx decoder files join the model check (and its upload consent). Returns (refs, warnings)."""
+    if preview_method != "taesd":
+        return [], []
+    from . import routes_jobs
+
+    names = routes_jobs.preview_decoders()
+    if not names:
+        return [], [wa.Problem("preview_decoder_missing", PREVIEW_DECODER_MISSING).to_dict()]
+    refs = [wa.ModelRef(None, "HaloFuse live preview", "decoder", "vae_approx", n.replace(chr(92), "/"), "preview",
+                        True) for n in names]
+    return refs, []
+
+
 def _preflight(body: dict) -> dict:
     workflows = _workflows(body)
     instance_type = body.get("instance_type")
@@ -124,8 +142,10 @@ def _preflight(body: dict) -> dict:
         raise HaloFuseError("bad_request", "instance_type must be text.", 400)
     snapshot = _snapshot(body.get("profile"))
     input_dir = _input_dir()
+    decoder_refs, decoder_warnings = preview_decoder_refs(body.get("preview_method"))
     report = wa.preflight(workflows, snapshot=snapshot, input_dir=input_dir,
-                          models_check=_models_check(_settings()))
+                          models_check=_models_check(_settings()), extra_refs=decoder_refs)
+    report["warnings"].extend(decoder_warnings)
     if input_dir is None:
         report["warnings"].append(wa.Problem("inputs_not_checked", "Input files were not checked.").to_dict())
     if instance_type:

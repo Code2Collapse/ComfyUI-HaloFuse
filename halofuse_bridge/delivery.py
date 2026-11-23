@@ -179,7 +179,10 @@ def _plan_one(rf, is_chunk: bool) -> tuple[str, str]:
         if rest == ("events.jsonl",):
             return "log", f"{LOGS_DIR}/events.runner.jsonl"
         if rest[:1] == ("previews",) and len(rest) > 1:
-            return "preview", f"{PREVIEWS_DIR}/{_preview_name(sanitize_rel_parts(rest[1:]))}"
+            name = _preview_name(sanitize_rel_parts(rest[1:]))
+            if name.lower().startswith("live_"):
+                name = "runner_" + name  # live_* names belong to the bridge's live writer (C-4 6a)
+            return "preview", f"{PREVIEWS_DIR}/{name}"
         return "runner", f"{LOGS_DIR}/runner/" + "/".join(sanitize_rel_parts(rest))
     safe = sanitize_rel_parts(parts)
     if is_chunk and not (len(safe) > 1 and _WF_RE.fullmatch(safe[0])):
@@ -306,6 +309,8 @@ class _Run:
             _log.info("delivery listing for %s failed: %s", self.job_id, err.code)
             self._error(OUTPUTS_DIR, "listing_failed")
             return self._finish(manifest, listing_failed=True)
+        # the runner's live ring (previews/live/) already reached the job folder during the run (C-4 6a)
+        remote = [rf for rf in remote if tuple(rf.rel_parts)[:3] != (RUNNER_DIR, "previews", "live")]
         plan = _assign(remote, manifest, self.is_chunk)
         self.status["files_total"] = len(plan)
         self.status["bytes_total"] = sum(int(rf.size or 0) for rf, *_ in plan)

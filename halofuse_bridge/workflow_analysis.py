@@ -651,7 +651,8 @@ def _check_values(node_id, class_type, inputs, cloud_specs, blocking) -> None:
 
 def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "default",
               node_defs: NodeDefs | None = None, input_dir: Path | None = None, index: ModelIndex | None = None,
-              library: LibraryCheck | None = None, models_check: "ModelsCheck | None" = None) -> dict:
+              library: LibraryCheck | None = None, models_check: "ModelsCheck | None" = None,
+              extra_refs: Iterable[ModelRef] = ()) -> dict:
     """Workflow Check: validate *workflows* without starting any paid compute.
 
     Blocking: unknown node classes (with the node list), classes from a pack that failed / is not installed in the
@@ -742,6 +743,8 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
                 blocking.extend(exc.problems)
         for ref in discover_models(wf, node_defs=defs, index=index):
             model_refs.setdefault(ref.key(), ref)
+    for ref in extra_refs:  # files the job needs beyond the graph (live preview decoders, C-4 6a)
+        model_refs.setdefault(ref.key(), ref)
 
     checked["models"] = len(model_refs)
     if models_check is not None:

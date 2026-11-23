@@ -401,16 +401,37 @@ def validate_extra_env(env) -> bool:
     return True
 
 
+PREVIEW_METHODS = ("none", "latent2rgb", "taesd")
+LIVE_PREVIEW_SIZE = "384"
+
+
 def job_env(name: str = "safe", extra_args=None, extra_env=None, preview: bool = False, nonce: str | None = None,
-            oom_ladder: str | None = None) -> dict:
+            oom_ladder: str | None = None, preview_method: str | None = None) -> dict:
     """The runner environment for one cloud job (C-3 section 7). Raises ValueError for anything the runner would
-    reject, so a misconfigured job is never submitted (and never billed)."""
+    reject, so a misconfigured job is never submitted (and never billed).
+
+    Live preview (C-3 section 11): the step preview method is sent as `--preview-method <m>` (plus
+    `--preview-size 384` unless the artist set one) inside COMFY_EXTRA_ARGS, so the runner's existing launch code
+    applies it; HF_PREVIEW_METHOD tells the runner's relay which method produced the frames. The artist's own
+    `--preview-method` always wins."""
     if name not in PRESETS:
         raise ValueError(f"unknown launch preset {name!r}")
+    if preview_method is not None and preview_method not in PREVIEW_METHODS:
+        raise ValueError(f"preview method must be one of {', '.join(PREVIEW_METHODS)}")
     env = {"HF_PRESET": name}
-    if extra_args:
-        validate_extra_args(list(extra_args))
-        env["COMFY_EXTRA_ARGS"] = json.dumps(list(extra_args))
+    args = list(extra_args or [])
+    method_added = False
+    if preview:
+        if "--preview-method" not in args:
+            args += ["--preview-method", preview_method or "latent2rgb"]
+            method_added = True
+        if "--preview-size" not in args:
+            args += ["--preview-size", LIVE_PREVIEW_SIZE]
+    if args:
+        validate_extra_args(args)
+        env["COMFY_EXTRA_ARGS"] = json.dumps(args)
+    if method_added:
+        env["HF_PREVIEW_METHOD"] = preview_method or "latent2rgb"
     if extra_env:
         validate_extra_env(dict(extra_env))
         env["EXTRA_ENV"] = json.dumps(dict(extra_env))

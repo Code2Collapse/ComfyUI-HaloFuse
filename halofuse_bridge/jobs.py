@@ -284,7 +284,8 @@ def _plan_inputs(workflow: dict, input_dir: Path):
     return list(plan_inputs(workflow, input_dir))
 
 
-def _job_env(settings: dict, base: dict, *, max_runtime_s: int, preview_mode: str | None, nonce: str) -> dict:
+def _job_env(settings: dict, base: dict, *, max_runtime_s: int, preview_mode: str | None, nonce: str,
+             preview_method: str | None = None) -> dict:
     """Env for a cloud job: the base contract + the runner-side runtime backstop + WS4 launch preset (R-WS4-4)."""
     env = dict(base)
     env["JOB_TIMEOUT_SECONDS"] = str(int(max_runtime_s))
@@ -296,7 +297,8 @@ def _job_env(settings: dict, base: dict, *, max_runtime_s: int, preview_mode: st
                                extra_args=settings.get("comfy_extra_args") or None,
                                extra_env=settings.get("extra_env") or None,
                                preview=(preview_mode or settings.get("preview_mode")) == "live", nonce=nonce,
-                               oom_ladder=settings.get("oom_ladder") or None))   # R-WS4-9
+                               oom_ladder=settings.get("oom_ladder") or None,   # R-WS4-9
+                               preview_method=preview_method or settings.get("preview_method") or None))
     return env
 
 
@@ -357,11 +359,13 @@ _CLIENT_REF_LOCK = threading.Lock()
 def submit_render(workflow: dict, *, instance_type: str | None = None, render_repeats=None, max_runtime_s=None,
                   max_job_cost_usd=None, label: str = "Render", client_ref: str | None = None,
                   preview_mode: str | None = None, store: JobStore | None = None, policy: lifecycle.LifecyclePolicy | None = None,
-                  start_watcher: bool = True) -> dict:
+                  start_watcher: bool = True, preview_method: str | None = None) -> dict:
     """Submit one render. Returns the job record. Raises HaloFuseError (branded) on failure."""
     if not isinstance(workflow, dict) or not workflow:
         raise HaloFuseError("bad_request", "No workflow provided.", 400)
     store = lifecycle._store(store)
+    if preview_method not in (None, "", "none", "latent2rgb", "taesd"):
+        raise HaloFuseError("bad_request", "The step preview must be Off, Fast or Detailed.", 400)
     if client_ref:
         with _CLIENT_REF_LOCK:
             known = _CLIENT_REFS.get(client_ref) or store.find_by_client_ref(client_ref)
@@ -381,6 +385,7 @@ def submit_render(workflow: dict, *, instance_type: str | None = None, render_re
     rec = store.create(kind="render", label=label or "Render", fields={
         "client_ref": client_ref, "render_repeats": repeats, "event_nonce": nonce,
         "preview_mode": preview_mode if preview_mode in ("none", "check", "draft", "live", "final") else None,
+        "preview_method": preview_method or settings.get("preview_method") or "latent2rgb",
         "cloud": {"instance_type": sku},
         "workflow": {"sha256": hashlib.sha256(wf_text.encode("utf-8")).hexdigest(), "path": "workflow.json"},
         "limits": {"max_runtime_s": max_rt, "max_wall_clock_s_sent": max_rt + WALL_CLOCK_MARGIN_S,
@@ -401,7 +406,7 @@ def submit_render(workflow: dict, *, instance_type: str | None = None, render_re
             backend, settings=settings, instance_type=sku, files={"workflow.json": wf_text},
             workflows_for_inputs=[workflow],
             env=_job_env(settings, _build_env(settings, repeats), max_runtime_s=max_rt, preview_mode=preview_mode,
-                         nonce=nonce),
+                         nonce=nonce, preview_method=preview_method),
             tags=build_tags(store, job_id),
             max_wall_clock_s=max_rt + WALL_CLOCK_MARGIN_S)
     except Exception as exc:  # noqa: BLE001

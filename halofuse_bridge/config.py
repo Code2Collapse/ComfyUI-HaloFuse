@@ -64,6 +64,10 @@ DEFAULTS = {
     "oom_ladder": "",
     # Panel preview mode (WS6, REQUESTS R-WS6-01).
     "preview_mode": "final",
+    # Live preview step method (C-4 6a): none | latent2rgb (Fast) | taesd (Detailed). Used only in live mode.
+    "preview_method": "latent2rgb",
+    # Transport T2 (file polling) for live previews: off until provider probe P2 (PREVIEW_DESIGN section 1).
+    "live_preview_files": False,
 }
 
 # The only keys the browser may read or write. Never the endpoint, a credential or the runtime image.
@@ -71,13 +75,14 @@ PUBLIC_KEYS = [
     "instance_type", "assets_library_path", "assets_library_space",
     "model_base_dir", "image_affinity", "batch_count", "upload_guard_gb",
     "max_runtime_seconds", "max_job_cost_usd", "daily_spend_cap_usd",
-    "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode",
+    "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode", "preview_method",
 ]
 
 # Public keys whose value may be explicitly cleared with null.
 _NULLABLE_KEYS = ("max_job_cost_usd", "daily_spend_cap_usd")
 _LAUNCH_PRESETS = ("safe", "fast", "max_memory", "debug")
 _PREVIEW_MODES = ("none", "check", "draft", "live", "final")
+PREVIEW_METHODS = ("none", "latent2rgb", "taesd")
 _OOM_LADDER_RE = re.compile(r"^[a-z0-9_,]{0,64}$")
 
 # Keys that are never returned by load_settings() and never written by save_settings().
@@ -285,6 +290,8 @@ def _valid_pref(key: str, value) -> bool:
         return value in _LAUNCH_PRESETS
     if key == "preview_mode":
         return value in _PREVIEW_MODES
+    if key == "preview_method":
+        return value in PREVIEW_METHODS
     if key == "oom_ladder":
         return isinstance(value, str) and bool(_OOM_LADDER_RE.match(value))
     if key == "comfy_extra_args":

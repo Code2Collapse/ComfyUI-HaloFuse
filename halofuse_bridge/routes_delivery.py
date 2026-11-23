@@ -111,23 +111,33 @@ def _previews_dir(job_id: str):
 
 
 def _list_previews(job_id: str, since: int, limit: int) -> dict:
+    """C-4 section 6a: live records from the writer's index (no directory scan while the job runs), then the
+    files delivery brought (one bounded scan, only once the job is terminal or delivery has started), with a seq
+    larger than every live seq so `since` paging stays stable."""
+    from . import live_previews
+
+    sink = live_previews.peek(job_id, default_store())
+    live = sink.index(0, 100000)["previews"]
+    base = max([sink.max_seq] + [r["seq"] for r in live])
+    delivered = []
+    rec = default_store().get(job_id) or {}
     folder = _previews_dir(job_id)
-    entries = []
-    if folder.is_dir():
+    if (rec.get("terminal") or rec.get("delivery")) and folder.is_dir():
+        entries = []
         for p in folder.iterdir():
-            if p.is_file() and _PREVIEW_RE.match(p.name):
+            if p.is_file() and _PREVIEW_RE.match(p.name) and not p.name.startswith(("live_", ".")):
                 st = p.stat()
                 entries.append((st.st_mtime, p.name, st.st_size))
-    entries.sort()
-    previews = []
-    for seq, (mtime, name, size) in enumerate(entries):
-        if seq < since or len(previews) >= limit:
-            continue
-        mime = _MIME.get(os.path.splitext(name)[1].lower()) or mimetypes.guess_type(name)[0] or \
-            "application/octet-stream"
-        previews.append({"seq": seq, "name": name, "kind": _PREVIEW_KIND.get(mime.split("/")[0], "image"),
-                         "mime": mime, "ts": mtime, "size": size})
-    return {"previews": previews, "next": since + len(previews), "total": len(entries)}
+                if len(entries) >= 5000:
+                    break
+        entries.sort()
+        for i, (mtime, name, size) in enumerate(entries):
+            mime = _MIME.get(os.path.splitext(name)[1].lower()) or mimetypes.guess_type(name)[0] or                 "application/octet-stream"
+            delivered.append({"seq": base + 1 + i, "name": name, "kind": _PREVIEW_KIND.get(mime.split("/")[0], "image"),
+                              "mime": mime, "ts": mtime, "size": size, "source": "delivered"})
+    every = [r for r in live + delivered if r["seq"] >= since]
+    page = every[:limit]
+    return {"previews": page, "next": page[-1]["seq"] + 1 if page else since, "total": len(live) + len(delivered)}
 
 
 async def get_previews(request):
@@ -159,7 +169,9 @@ async def get_preview_file(request):
         return missing
     mime = _MIME.get(path.suffix.lower()) or mimetypes.guess_type(name)[0] or "application/octet-stream"
     data = await _run(path.read_bytes)
-    return web.Response(body=data, content_type=mime, headers={"Cache-Control": "no-store"})
+    return web.Response(body=data, content_type=mime, headers={
+        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; sandbox"})
 
 
 _NEW = (
