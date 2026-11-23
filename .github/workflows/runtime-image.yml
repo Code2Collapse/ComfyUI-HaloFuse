@@ -185,6 +185,9 @@ jobs:
       - name: Record build duration and smoke timings (section 10)
         if: always()
         run: |
+          # out/ does not exist when the build failed before exporting anything: create it, so the build error stays
+          # the only error in the run (this step used to add a FileNotFoundError).
+          mkdir -p out
           now=$(date +%s)
           secs=$(( now - ${{ steps.plan.outputs.start }} ))
           echo "total ${secs} s; snapshot + push after smoke: $(( now - ${T_SMOKE:-$now} )) s"

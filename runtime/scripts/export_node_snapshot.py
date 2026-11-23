@@ -44,7 +44,16 @@ CORE_MODULES = ("nodes", "comfy_extras", "comfy_api_nodes", "comfy_api")
 FILE_EXT = re.compile(
     r"\.(safetensors|sft|ckpt|pt|pth|bin|gguf|onnx|pkl|engine|png|jpe?g|webp|gif|bmp|tiff?|exr|hdr|mp4|mov|webm|mkv|"
     r"avi|wav|mp3|flac|ogg|m4a|json|ya?ml|txt|npz|npy|glb|gltf|obj|fbx|ply)$", re.I)
-IMPORT_LINE = re.compile(r"^\s*[\d.]+ seconds( \(IMPORT FAILED\))?: (.+?)\s*$")
+# optional "[INFO]" level prefix (ComfyUI 0.43 logging), matched after strip_ansi()
+IMPORT_LINE = re.compile(r"^\s*(?:\[[A-Z]+\]\s*)?[\d.]+ seconds( \(IMPORT FAILED\))?: (.+?)\s*$")
+# ComfyUI 0.43 colours its log lines even into a pipe (ESC[32m[INFO]ESC[0m ...): strip CSI / 2-byte ESC sequences
+# before matching anything in ComfyUI output.
+ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])")
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_RE.sub("", text)
+
 
 
 # ------------------------------------------------------------------ pure parts
@@ -91,7 +100,7 @@ def parse_import_failures(lines) -> dict:
     """Folders ComfyUI reported as '(IMPORT FAILED)' in its 'Import times for custom nodes' block."""
     failed = {}
     for line in lines:
-        m = IMPORT_LINE.match(line)
+        m = IMPORT_LINE.match(strip_ansi(line))
         if m and m.group(1):
             folder = re.split(r"[\\/]", m.group(2).rstrip("\\/"))[-1]
             failed[folder] = "IMPORT FAILED (see build log)"

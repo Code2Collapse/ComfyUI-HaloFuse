@@ -18,6 +18,14 @@ MAX_LINE_BYTES = 65536
 _LONG_STRING = 4096
 _NONCE_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 _SPOOFABLE = ("[hf]", "[runner]")
+# ComfyUI 0.43 colours its log lines even into a pipe (ESC[32m[INFO]ESC[0m ...): strip CSI / 2-byte ESC sequences
+# before matching anything in ComfyUI output.
+ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])")
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_RE.sub("", text)
+
 
 
 def valid_nonce(value) -> bool:
@@ -26,7 +34,7 @@ def valid_nonce(value) -> bool:
 
 def escape_child_line(line: str) -> str:
     """Neutralise ComfyUI/custom-node output that imitates runner lines (TM-008)."""
-    if line.lstrip().startswith(_SPOOFABLE):
+    if strip_ansi(line).lstrip().startswith(_SPOOFABLE):  # a coloured imitation is caught too
         return "[comfyui] " + line
     return line
 

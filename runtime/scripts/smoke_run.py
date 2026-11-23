@@ -32,10 +32,21 @@ from pathlib import Path
 
 SCHEMA = "halofuse.smoke/1"
 IMPORT_LINE = re.compile(r"([\d.]+) seconds( \(IMPORT FAILED\))?: (.+?)\s*$")
+# ComfyUI 0.43 colours its log lines even into a pipe (ESC[32m[INFO]ESC[0m ...): strip CSI / 2-byte ESC sequences
+# before matching anything in ComfyUI output.
+ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])")
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_RE.sub("", text)
+
 OK_WF = {"1": {"class_type": "EmptyImage", "inputs": {"width": 64, "height": 64, "batch_size": 1, "color": 0}},
          "2": {"class_type": "SaveImage", "inputs": {"images": ["1", 0], "filename_prefix": "halofuse_smoke"}}}
 MISSING_WF = {"1": {"class_type": "HaloFuseSmokeMissingNode", "inputs": {}},
               "2": {"class_type": "SaveImage", "inputs": {"images": ["1", 0], "filename_prefix": "halofuse_smoke"}}}
+# Entry 3 is identical to entry 1 on purpose: ComfyUI serves it from its cache (no new file), which the runner must
+# report as succeeded with the earlier files copied (CI run 45099882256 found it reported no_output).
+MANIFEST = [OK_WF, MISSING_WF, OK_WF]
 EXPECTED_ITEMS = ["succeeded", "failed", "succeeded"]
 
 
@@ -56,11 +67,12 @@ def _events(stdout: str) -> list:
     return out
 
 
-def parse_imports(stdout: str) -> dict:
-    """{folder: (seconds, failed)} from ComfyUI's 'Import times for custom nodes' block."""
+def parse_imports(text: str) -> dict:
+    """{folder: (seconds, failed)} from ComfyUI's 'Import times for custom nodes' block. Pass stdout AND stderr:
+    ComfyUI logs to stderr by default, and the runner relays each stream to its own."""
     found = {}
-    for line in stdout.splitlines():
-        m = IMPORT_LINE.search(line)
+    for line in text.splitlines():
+        m = IMPORT_LINE.search(strip_ansi(line))
         if m:
             folder = re.split(r"[\\/]", m.group(3).rstrip("\\/"))[-1]
             found[folder] = (float(m.group(1)), bool(m.group(2)))
@@ -78,13 +90,20 @@ def _phases(events: list) -> dict:
     return out
 
 
+def _items(final: dict, events: list) -> list:
+    """Final items plus the reason of each entry's last item event (for example "served from ComfyUI's cache")."""
+    reasons = {e.get("wf"): e.get("reason") for e in events if e.get("t") == "item" and e.get("state") != "started"}
+    return [{"wf": i.get("wf"), "status": i.get("status"), "error": i.get("error"), "reason": reasons.get(i.get("wf"))}
+            for i in final.get("items", [])]
+
+
 def run_once(args, work: Path, extra_args: str | None = None) -> dict:
     """Run the runner once in `work`; return what it did (no judgement)."""
     inp, out = work / "input", work / "output"
     inp.mkdir(parents=True, exist_ok=True)
     out.mkdir(parents=True, exist_ok=True)
-    (inp / "halofuse_job.json").write_text(json.dumps({"workflows": [
-        {"workflow": OK_WF}, {"workflow": MISSING_WF}, {"workflow": OK_WF}]}), encoding="utf-8")
+    (inp / "halofuse_job.json").write_text(json.dumps({"workflows": [{"workflow": wf} for wf in MANIFEST]}),
+                                           encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if k not in ("HF_PRESET", "COMFY_EXTRA_ARGS")}
     env.update({
         "INPUT_DIR": str(inp), "OUTPUT_DIR": str(out), "COMFYUI_DIR": str(args.comfyui_dir),
@@ -114,9 +133,8 @@ def run_once(args, work: Path, extra_args: str | None = None) -> dict:
     final = finals[-1] if finals else {}
     files = [p for p in out.rglob("*") if p.is_file() and "_halofuse" not in p.relative_to(out).parts]
     return {"runner_exit": rc, "timed_out": timed_out, "wall_seconds": wall, "final": final,
-            "items": [{"wf": i.get("wf"), "status": i.get("status"), "error": i.get("error")}
-                      for i in final.get("items", [])],
-            "outputs": len(files), "phases": _phases(events), "imports": parse_imports(stdout),
+            "items": _items(final, events),
+            "outputs": len(files), "phases": _phases(events), "imports": parse_imports(stdout + "\n" + stderr),
             "tail": (stdout + stderr).splitlines()[-40:]}
 
 

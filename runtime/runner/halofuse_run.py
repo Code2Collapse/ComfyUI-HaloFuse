@@ -174,6 +174,9 @@ _PROC_ARGS = []      # extra args of the current ComfyUI process
 _FINGERPRINTED = False
 _HEARTBEAT = None    # hf.supervisor.Heartbeat
 _PREVIEW_DISCARD_MARKED = False
+# Manifest mode: prompt fingerprint -> (entry index, files that entry delivered). An identical later entry that
+# ComfyUI serves entirely from its cache writes no file; it gets copies of these (see _cached_success).
+_DELIVERED = {}
 _PREFETCH_STOP = threading.Event()  # set on exit: a running model copy stops between chunks
 _PREFETCH_THREADS = []  # copy workers, joined briefly on exit so a stopped copy can remove its .part file
 
@@ -1084,6 +1087,53 @@ def _collect_new_outputs(before, subdir_name):
     return moved
 
 
+def _prompt_key(workflow):
+    return hashlib.sha256(json.dumps(workflow, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+
+def _fully_cached(entry, workflow):
+    """True when ComfyUI's history says every node of this prompt was served from its cache (execution_cached)."""
+    if not isinstance(entry, dict):
+        return False
+    cached = set()
+    for item in (entry.get("status") or {}).get("messages") or []:
+        if (isinstance(item, (list, tuple)) and len(item) > 1 and item[0] == "execution_cached"
+                and isinstance(item[1], dict)):
+            cached.update(str(n) for n in item[1].get("nodes") or [])
+    nodes = {str(k) for k in workflow}
+    return bool(nodes) and nodes <= cached
+
+
+def _cached_success(idx, total, workflow, entry):
+    """An entry that wrote nothing because ComfyUI served the identical prompt from its cache: copy the files the
+    earlier identical entry delivered into this entry's wf_NN/ (so its item `outputs` matches its folder, which the
+    bridge delivers per wf_NN/). Returns the copies, or [] when this is not that case (then it stays no_output)."""
+    earlier = _DELIVERED.get(_prompt_key(workflow))
+    if earlier is None or not _fully_cached(entry, workflow):
+        return []
+    src_idx, files = earlier
+    src_dir = OUTPUT_DIR / f"wf_{src_idx:02d}"
+    copies = []
+    for f in files:
+        try:
+            rel = Path(f).relative_to(src_dir)
+        except ValueError:
+            continue
+        if not Path(f).is_file():
+            continue
+        dest = OUTPUT_DIR / f"wf_{idx:02d}" / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, dest)
+        copies.append(dest)
+        size = dest.stat().st_size
+        log(f"output: {dest.relative_to(OUTPUT_DIR)} ({size:,} bytes, copy of {Path(f).relative_to(OUTPUT_DIR)})")
+        _CTX.output(dest.relative_to(OUTPUT_DIR).as_posix(), size, hf_outputs.kind_of(dest), **_wf_fields())
+    if copies:
+        log(f"workflow {idx}/{total} succeeded: identical to workflow {src_idx}, served from ComfyUI's cache "
+            f"({len(copies)} file(s) copied)")
+    return copies
+
+
 def run_manifest(proc, entries):
     """Run every manifest entry against the live ComfyUI process.
 
@@ -1101,6 +1151,11 @@ def run_manifest(proc, entries):
     flat /output root. An entry that produced nothing at all (success or
     failure) gets no wf_NN/ folder.
 
+    An entry ComfyUI serves entirely from its cache (identical to an earlier
+    entry: every node listed in execution_cached) writes no file; it succeeds
+    with copies of that earlier entry's files in its own wf_NN/ and an item
+    reason naming the cache. Anything else that writes nothing is no_output.
+
     Returns the job's overall exit code: 0 if every entry succeeded, 1 if any
     failed (including "ran clean but produced no files").
     """
@@ -1115,6 +1170,7 @@ def run_manifest(proc, entries):
         failure = None
         died = None
         cancelled = False
+        last_entry = None
         try:
             if batch_count > 1:
                 log(f"workflow {idx}/{total}: batch render, {batch_count} "
@@ -1125,7 +1181,7 @@ def run_manifest(proc, entries):
                     n_seeds = randomize_seeds(workflow)
                     log(f"workflow {idx}/{total}: render {b + 1}/{batch_count} "
                         f"(randomised {n_seeds} seed input(s))")
-                execute(workflow, targets)
+                last_entry = execute(workflow, targets)
         except WorkflowFailure as exc:
             failure = exc
         except hf_sup.ComfyDied as exc:
@@ -1190,6 +1246,14 @@ def run_manifest(proc, entries):
             continue
 
         if not moved:
+            copies = _cached_success(idx, total, workflow, last_entry)
+            if copies:
+                src_idx = _DELIVERED[_prompt_key(workflow)][0]
+                _CTX.consecutive_deaths = 0
+                _CTX.item(idx, "succeeded", len(copies),
+                          reason=f"served from ComfyUI's cache: identical to workflow {src_idx}; "
+                                 f"its {len(copies)} file(s) were copied")
+                continue
             any_failed = True
             no_output = "workflow completed but wrote nothing to /output — does the workflow contain a save node?"
             log(f"workflow {idx}/{total} failed: workflow completed but wrote "
@@ -1199,6 +1263,7 @@ def run_manifest(proc, entries):
             continue
 
         log(f"workflow {idx}/{total} succeeded ({len(moved)} file(s))")
+        _DELIVERED.setdefault(_prompt_key(workflow), (idx, list(moved)))
         _CTX.consecutive_deaths = 0
         _CTX.item(idx, "succeeded", len(moved))
     _CTX.current_wf = None
