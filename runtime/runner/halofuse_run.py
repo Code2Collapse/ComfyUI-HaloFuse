@@ -87,6 +87,7 @@ from hf import previews as hf_previews  # noqa: E402
 from hf import storage as hf_storage  # noqa: E402
 from hf import supervisor as hf_sup  # noqa: E402
 from hf import telemetry as hf_telemetry  # noqa: E402
+from hf import user_nodes as hf_user_nodes  # noqa: E402
 from hf.comfy_ws import ComfyWS  # noqa: E402
 
 COMFYUI_DIR = Path(os.environ.get("COMFYUI_DIR", "/default-comfyui-bundle/ComfyUI"))
@@ -145,6 +146,8 @@ NVIDIA_SMI = ["nvidia-smi"]
 PROC_ROOT = Path("/proc")
 CGROUP_ROOT = Path("/sys/fs/cgroup")
 NODE_SNAPSHOT_PATH = Path(os.environ.get("HF_NODE_SNAPSHOT_PATH", "/etc/halofuse/node_snapshot.json"))
+# The artist's own custom nodes (HF_USER_NODES, hf/user_nodes.py) are installed here before ComfyUI starts.
+CUSTOM_NODES_DIR = Path(os.environ.get("HF_CUSTOM_NODES_DIR", str(COMFYUI_DIR / "custom_nodes")))
 CLIENT_ID = "halofuse-runner"
 INTERRUPT_GRACE_SECONDS = 5.0
 # Heartbeat for the Docker HEALTHCHECK (scripts/healthcheck.py reads it).
@@ -179,6 +182,11 @@ _PREVIEW_DISCARD_MARKED = False
 _DELIVERED = {}
 _PREFETCH_STOP = threading.Event()  # set on exit: a running model copy stops between chunks
 _PREFETCH_THREADS = []  # copy workers, joined briefly on exit so a stopped copy can remove its .part file
+_USER_NODES = None   # hf.user_nodes.UserNodes when the job brought a custom node list
+
+
+class _StartupFailedWithUserNodes(Exception):
+    """ComfyUI died during start-up while the artist's own packs were installed: start once more without them."""
 
 
 class WorkflowFailure(Exception):
@@ -592,6 +600,57 @@ def stage_input_directory():
     log(f"staged input: {len(files)} file(s), {total:,} bytes -> {STAGED_INPUT_DIR}")
 
 
+def install_user_nodes():
+    """The artist's own custom node packs (HF_USER_NODES), installed before ComfyUI starts. Never fails the job: a
+    pack that cannot be installed is moved to custom_nodes_disabled/ and named in the log."""
+    global _USER_NODES
+    packs, problems = hf_user_nodes.parse(os.environ.get(hf_user_nodes.ENV) or "")
+    for problem in problems:
+        log(f"custom nodes: {problem}")
+    if not packs:
+        return
+    _CTX.phase("user_nodes", "start")
+    _USER_NODES = hf_user_nodes.UserNodes(CUSTOM_NODES_DIR, python=sys.executable,
+                                          cache=os.environ.get(hf_user_nodes.CACHE_ENV) or None, log=log,
+                                          existing=hf_user_nodes.image_packs(NODE_SNAPSHOT_PATH),
+                                          stop=_CTX.cancel.is_set)
+    try:
+        results = _USER_NODES.install(packs)
+    except Exception as err:  # noqa: BLE001 - an extra pack never ends the job
+        log(f"custom nodes: the install step stopped ({type(err).__name__}: {err}); the job continues")
+        results = []
+    done = sum(1 for r in results if r["status"] == "installed")
+    _CTX.phase("user_nodes", "end", detail=f"{done} of {len(packs)} installed")
+
+
+def _ready_with_user_nodes(proc, args=None):
+    """wait_ready(); when ComfyUI died during start-up with the artist's packs installed, they are all moved aside
+    and ComfyUI starts once more without them (the job is never lost to an extra pack)."""
+    try:
+        return wait_ready(proc)
+    except _StartupFailedWithUserNodes:
+        proc.reap_tree()
+        _USER_NODES.disable_all("ComfyUI did not start with your custom nodes, so they are disabled for this job")
+        _CTX.proc = start_comfyui(args)
+        return wait_ready(_CTX.proc)
+
+
+def _check_user_nodes(workflows):
+    """After ComfyUI is ready: user packs that did not import are moved aside, and the workflow's node classes that
+    ComfyUI still lacks are named (instead of a bare 'node type not found' later)."""
+    if _USER_NODES is None:
+        return
+    _USER_NODES.check_imports()
+    try:
+        info = http_json("/object_info", timeout=60)
+    except (urllib.error.URLError, OSError, ValueError):
+        return
+    missing = hf_user_nodes.missing_classes(workflows, info)
+    if missing:
+        shown = ", ".join(missing[:20]) + (f" and {len(missing) - 20} more" if len(missing) > 20 else "")
+        log(f"custom nodes: these node classes of the workflow are missing in this job: {shown}")
+
+
 def resolve_launch():
     """D3: validate HF_PRESET / COMFY_EXTRA_ARGS / EXTRA_ENV against the allowlist before ComfyUI starts."""
     global _LAUNCH, _ALLOW
@@ -648,6 +707,8 @@ def _comfy_line(text):
     consume = getattr(_RELAY, "on_comfy_line", None)
     if consume is not None:
         consume(text)
+    if _USER_NODES is not None:
+        _USER_NODES.on_comfy_line(text)
 
 
 def _mark_discarded_previews(args):
@@ -684,6 +745,9 @@ def wait_ready(proc):
         _CTX.check_cancel()
         if proc.poll() is not None:
             proc.join_output(2.0)
+            if _USER_NODES is not None and _USER_NODES.installed:
+                log(f"ComfyUI exited during startup (code {proc.returncode}) with your custom nodes installed")
+                raise _StartupFailedWithUserNodes()
             delta = None
             if _SAMPLER is not None and _OOM_BEFORE is not None:
                 now = _SAMPLER.oom_kill_count()
@@ -997,7 +1061,7 @@ def _restart_after_death(died):
     _beat("restarting")
     _CTX.proc = start_comfyui(args)
     try:
-        _after_ready(wait_ready(_CTX.proc))
+        _after_ready(_ready_with_user_nodes(_CTX.proc, args))
     except SystemExit:
         _recovery("restart_comfyui", code, _CTX.restarts, "failed")
         raise
@@ -1381,6 +1445,7 @@ def _run():
     _CTX.phase("stage_inputs", "start")
     stage_input_directory()
     _CTX.phase("stage_inputs", "end")
+    install_user_nodes()
     _RELAY = hf_previews.LiveRelay(
         em, output_dir=OUTPUT_DIR, temp_root=COMFY_TEMP_DIR / "temp",
         previews_enabled=(os.environ.get("HF_PREVIEW") or "off").strip().lower() == "live",
@@ -1395,7 +1460,9 @@ def _run():
     _CTX.proc = proc
     exit_code = 0
     try:
-        _after_ready(wait_ready(proc))
+        _after_ready(_ready_with_user_nodes(proc))
+        proc = _CTX.proc
+        _check_user_nodes([entry[0] for entry in manifest] if manifest is not None else [workflow])
         if prefetch is not None and prefetch.is_alive():
             log("waiting for model prefetch to finish before submitting")
             _CTX.phase("prefetch_wait", "start")

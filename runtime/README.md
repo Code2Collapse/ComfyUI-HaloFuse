@@ -89,7 +89,12 @@ version, content hash, licence and status, and named profiles built as separate 
 an exact commit at build time and is optional - one that fails to install is moved aside and the build continues.
 Lines naming a pack the catalog keeps out of cloud images (UI-only packs, ComfyUI-Manager, research repositories) are
 rejected with the catalog's reason (`python scripts/install_nodes.py check-extras` checks the file offline; CI runs
-it). Each extra's licence is recorded in the install report and anything other than a permissive licence is
+it). **One command:** `python scripts/add_node.py <https://github.com/owner/repo | owner/repo[@ref] | registry-id>
+[--profile full]` pins the pack to a commit, reads its licence, appends it to `extra_nodes.txt` and validates the
+catalog (file restored on any problem; `--dry-run` writes nothing); commit the file and CI builds the image. Artists
+can also add packs for their own jobs only (panel: *My custom nodes*, job env `HF_USER_NODES`, installed at job start
+by `runner/hf/user_nodes.py`; the image's node snapshot then names `user_nodes/1`; never the Original image).
+Each extra's licence is recorded in the install report and anything other than a permissive licence is
 flagged: listing a pack there is the owner's decision. The `default` profile is exactly the 31 packs of the original
 image at their original pins (frozen, no extras), so its snapshot describes that image; any install failure fails
 that build. The `full` profile is the HaloFuse image: the 31 original packs at current pins plus every catalog pack

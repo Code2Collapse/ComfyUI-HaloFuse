@@ -39,6 +39,10 @@ import hf_catalog  # noqa: E402
 
 SCHEMA = "halofuse.node_snapshot/1"
 INDEX_SCHEMA = "halofuse.node_snapshot_index/1"
+# What the runner built into the same image can do (the bridge reads it from the snapshot). The runner and this
+# script come from the same commit, so a snapshot that names a capability describes an image whose runner has it.
+# user_nodes/1 = the artist's own custom nodes installed at job start (runner/hf/user_nodes.py CAPABILITY).
+RUNNER_CAPABILITIES = ["user_nodes/1"]
 MAX_ERROR = 300
 CORE_MODULES = ("nodes", "comfy_extras", "comfy_api_nodes", "comfy_api")
 FILE_EXT = re.compile(
@@ -194,6 +198,7 @@ def build_snapshot(catalog: dict, profiles: dict, profile: str, *, object_info: 
         "object_info_status": status,
         "object_info_source": object_info_source,
         "object_info": filtered,
+        "runner_capabilities": list(RUNNER_CAPABILITIES),
     }
 
 
