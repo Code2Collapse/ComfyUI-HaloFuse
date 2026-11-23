@@ -1,6 +1,6 @@
 {
  "schema": "halofuse.node_snapshot_index/1",
- "generated_at": "2026-11-23T11:24:10Z",
+ "generated_at": "2026-11-23T13:52:40Z",
  "catalog_sha256": "dc8ba690dd15997fc5789c329499cbefa520c5a9c3caaa222210dadcc6ac5769",
  "default_profile": "default",
  "profiles": {
@@ -11,6 +11,14 @@
    "comfyui_version": "0.43.0",
    "packs": 31,
    "packs_loaded": 31
+  },
+  "full": {
+   "file": "full.json",
+   "source": "image-build",
+   "object_info_status": "captured",
+   "comfyui_version": "0.46.0",
+   "packs": 148,
+   "packs_loaded": 140
   }
  }
 }

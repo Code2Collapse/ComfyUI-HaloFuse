@@ -34,10 +34,10 @@ class Contract(NamedTuple):
 
 # The HaloFuse image and the snapshot of its node set move TOGETHER (scripts/update_snapshot.py rewrites these two
 # lines after CI pushed an image; the tag prefix is the catalog profile the image was built from).
-# CI build of commit dbd07af (HaloFuse 0.5.0); manifest digest
-# sha256:9e2d98c4a5235bfb1ba68d91750b1222f65f5cf2412fac4f6ac276f3f9e2c695 (checked anonymously pullable 2026-11-23)
-HALOFUSE_IMAGE = "ghcr.io/code2collapse/halofuse-runtime:default-sha-dbd07af093a81a79ee83da552662f67476b17144"
-HALOFUSE_SNAPSHOT_PROFILE = "default"
+# CI build of commit 45bb901 (profile full); manifest digest
+# sha256:e7e4e54fd80af9d04a399a3b8c14f9a18c2a92f4bedd6f3e663a4dbb13f5a1df (checked anonymously pullable 2026-11-23)
+HALOFUSE_IMAGE = "ghcr.io/code2collapse/halofuse-runtime:full-sha-45bb90176055a9da9ebc626114b41bc537759f85"
+HALOFUSE_SNAPSHOT_PROFILE = "full"
 
 CONTRACTS = {
     "legacy": Contract("legacy", "ghcr.io/nithin-ml/spark-fuse-comfyui:sha-70e0ff4b38b431b2c77e90f2936f93d04516ccc9",
