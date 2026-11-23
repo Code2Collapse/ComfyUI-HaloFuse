@@ -77,6 +77,7 @@ const PHASES = {
   starting: "Starting ComfyUI",
   boot: "Runner start",
   stage_inputs: "Staging inputs",
+  user_nodes: "Installing your custom nodes",
   model_paths: "Resolving model paths",
   comfy_start: "Starting ComfyUI",
   prefetch_wait: "Waiting for model prefetch",

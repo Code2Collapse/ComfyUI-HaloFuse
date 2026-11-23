@@ -72,6 +72,9 @@ DEFAULTS = {
     "preview_method": "latent2rgb",
     # Transport T2 (file polling) for live previews: off until provider probe P2 (PREVIEW_DESIGN section 1).
     "live_preview_files": False,
+    # The artist's own custom node packs (owner 2026-11-23): resolved, pinned entries (user_nodes.py), installed at
+    # job start by runtimes that support it. Repository names, ids and pins only: never a URL or a token.
+    "user_nodes": [],
 }
 
 # The only keys the browser may read or write. Never the endpoint or a credential. `runtime_image` is the NAME of a
@@ -82,7 +85,7 @@ PUBLIC_KEYS = [
     "model_base_dir", "image_affinity", "batch_count", "upload_guard_gb", "auto_upload_models",
     "max_runtime_seconds", "max_job_cost_usd", "daily_spend_cap_usd",
     "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode", "preview_method",
-    "runtime_image",
+    "runtime_image", "user_nodes",
 ]
 
 # Public keys whose value may be explicitly cleared with null.
@@ -303,6 +306,10 @@ def _valid_pref(key: str, value) -> bool:
         return value in PREVIEW_METHODS
     if key == "runtime_image":
         return isinstance(value, str) and value in image_contract.CONTRACTS
+    if key == "user_nodes":
+        from . import user_nodes
+
+        return user_nodes.valid_entries(value)
     if key == "oom_ladder":
         return isinstance(value, str) and bool(_OOM_LADDER_RE.match(value))
     if key == "comfy_extra_args":

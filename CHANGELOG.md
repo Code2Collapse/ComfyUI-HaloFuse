@@ -2,6 +2,13 @@
 
 ## Unreleased — 2026-11-23
 
+- **My custom nodes.** A new panel section takes extra custom node packs for your own jobs, one per line
+  (`owner/repo`, `owner/repo@tag`, a GitHub address or a Comfy Registry id). *Check and save* pins each one to an exact
+  version and shows its licence; the list is installed at the start of every job on a HaloFuse image whose runner
+  supports it (not the Original image; the panel says which applies). A pack that fails to install is left out and
+  named in the job log; the job continues. The Workflow Check counts their nodes as available (not verified) and, for a
+  node the runtime lacks, offers *Add <pack> to my custom nodes*. Maintainers add a pack to the image itself with
+  `python runtime/scripts/add_node.py <repo or registry id>`.
 - **The console always has something to show.** Opening it loads the last job's saved log (also after a reload), and
   a new **Activity** tab lists every failure the panel hit with its time: a blocked Workflow Check (one line per
   problem), a refused submit, a model upload error, a sign-in error. A submit that failed after its job was created now

@@ -132,6 +132,8 @@ export function createApi(fetchImpl) {
     preflight: (body) => post("/halofuse/preflight", body),
     draft: (body) => post("/halofuse/draft", body),
     library: () => get("/halofuse/library"),
+    /** Pin the artist's custom node lines and read their licences (nothing is saved). */
+    resolveUserNodes: (lines) => post("/halofuse/user_nodes/resolve", { lines: String(lines ?? "") }),
     startModelUpload: (files) => post("/halofuse/models/upload", { files }),
     getModelUpload: (id) => get(`/halofuse/models/upload/${enc(id)}`),
     listModelUploads: () => get("/halofuse/models/uploads"),

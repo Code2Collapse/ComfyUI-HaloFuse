@@ -17,7 +17,7 @@ from pathlib import Path
 
 from aiohttp import web
 
-from . import capacity, draft, lifecycle, model_library, model_sync, provider
+from . import capacity, draft, lifecycle, model_library, model_sync, provider, user_nodes
 from . import workflow_analysis as wa
 from .job_store import HaloFuseError
 from .routes_account import request_guard
@@ -162,6 +162,8 @@ def _preflight(body: dict) -> dict:
     report = wa.preflight(workflows, snapshot=snapshot, input_dir=input_dir,
                           models_check=_models_check(_settings()), extra_refs=decoder_refs)
     report["warnings"].extend(decoder_warnings)
+    # the artist's own custom nodes count as available (a note); missing classes get an "add this pack" offer
+    user_nodes.apply_to_report(report, workflows, _settings())
     if input_dir is None:
         report["warnings"].append(wa.Problem("inputs_not_checked", "Input files were not checked.").to_dict())
     if instance_type:
@@ -210,6 +212,18 @@ def _latent_checkpoint(body: dict) -> dict:
     if not isinstance(workflow, dict) or not workflow:
         raise HaloFuseError("bad_request", "Send the workflow as an API-format graph.", 400)
     return draft.insert_latent_checkpoints(workflow, snapshot=_snapshot(body.get("profile"))).to_dict()
+
+
+def _resolve_user_nodes(body: dict) -> dict:
+    """Check the artist's custom node lines against the public GitHub / Comfy Registry APIs (nothing is saved)."""
+    text = body.get("lines")
+    if not isinstance(text, str):
+        raise HaloFuseError("bad_request", "Send the custom node lines as text.", 400)
+    if len(text) > user_nodes.MAX_TEXT:
+        raise HaloFuseError("bad_request", f"The list is too long: at most {user_nodes.MAX_PACKS} packs.", 413)
+    out = user_nodes.resolve_text(text)
+    out["supported"], out["note"] = user_nodes.runtime_support(_settings())
+    return out
 
 
 def _library() -> dict:
@@ -321,6 +335,7 @@ _ROUTES = (
     ("POST", "/capacity", _json_handler(_capacity_only)),
     ("POST", "/draft", _json_handler(_draft)),
     ("POST", "/latent_checkpoint", _json_handler(_latent_checkpoint)),
+    ("POST", "/user_nodes/resolve", _json_handler(_resolve_user_nodes)),
     ("POST", "/models/check", post_models_check),
     ("POST", "/models/upload", post_models_upload),
     ("GET", "/models/upload/{upload_id}", get_models_upload),

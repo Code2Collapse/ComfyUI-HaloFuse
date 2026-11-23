@@ -6,6 +6,7 @@
 import { bindH, clear } from "./dom.js";
 import { AccountSection } from "./account_ui.js";
 import { LibrarySection } from "./library_ui.js";
+import { UserNodesSection } from "./user_nodes_ui.js";
 import { PREVIEW_METHODS, PREVIEW_MODES } from "./controller.js";
 import { previewPath } from "./api.js";
 import { LIVE_TEXT, createImageCache } from "./live_preview.js";
@@ -32,6 +33,7 @@ export class Panel {
     this.account = new AccountSection({ doc: this.doc, win: this.win, api: this.api,
       onStatus: (s) => { if (s.credentials_configured && !this.ctl.state.skus.length) this.ctl.loadSkus(); } });
     this.library = new LibrarySection({ doc: this.doc, api: this.api });
+    this.userNodes = new UserNodesSection({ doc: this.doc, api: this.api, save: (prefs) => this.ctl.saveAdvanced(prefs) });
 
     this.skuSel = H("select", { className: "hf-select", id: `hf-sku-${uid}`, onchange: () => this.ctl.setInstanceType(this.skuSel.value) });
     this.rate = H("div", { className: "hf-hint", attrs: { "aria-live": "polite" } });
@@ -107,6 +109,7 @@ export class Panel {
             onclick: () => this.ctl.recover(this.recoverInput.value) }))),
       H("details", { className: "hf-section", ontoggle: (e) => { if (e.target.open) this.library.ensureLoaded(); } },
         H("summary", { text: "Cloud model library" }), this.library.el),
+      H("details", { className: "hf-section" }, H("summary", { text: "My custom nodes" }), this.userNodes.el),
       H("details", { className: "hf-section" }, H("summary", { text: "Advanced" }),
         field("Cloud model library path", lib, libHint), field("Machine placement", affinity),
         field("Largest automatic model upload (GB)", guard),
@@ -132,6 +135,7 @@ export class Panel {
     const st = this.ctl.state;
     const H = this.H;
     this.version.textContent = st.settings?.version ? `v${st.settings.version}` : "";
+    if (st.settings) this.userNodes.setSettings(st.settings);
     if (st.settings && !this._advLoaded) {
       this._advLoaded = true;
       this.adv.lib.value = st.settings.assets_library_path || "";
@@ -216,6 +220,13 @@ export class Panel {
       for (const w of p.warnings || []) list.append(H("div", { className: "hf-item hf-tone-warning" }, H("span", { className: "hf-grow", title: w.message, text: w.message })));
       // information only (e.g. a model the node downloads itself in the cloud): a neutral line, nothing to do
       for (const n of p.notes || []) list.append(H("div", { className: "hf-item hf-tone-neutral" }, H("span", { className: "hf-grow", title: n.message, text: n.message })));
+      // a class the runtime lacks but a Comfy Registry pack provides: one click adds it to My custom nodes
+      for (const a of p.add_packs || []) {
+        list.append(H("div", { className: "hf-item" },
+          H("span", { className: "hf-grow", style: { whiteSpace: "normal" }, text: `${(a.class_types || []).join(", ")} comes from ${a.name}${a.repo ? ` (${a.repo})` : ""}.` }),
+          H("button", { className: "hf-btn", type: "button", text: `Add ${a.name} to my custom nodes`,
+            onclick: () => this.userNodes.addLine(a.line) })));
+      }
       const c = p.checked || {};
       box.append(H("div", { className: "hf-hint", style: { margin: "4px 0" }, text: `Checked ${c.nodes ?? "?"} nodes, ${c.models ?? "?"} models, ${c.inputs ?? "?"} input files${p.profile ? ` against the “${p.profile}” runtime` : ""}.` }), list);
     }

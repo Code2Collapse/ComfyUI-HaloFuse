@@ -225,6 +225,7 @@ class Snapshot:
     pack_of: dict                 # class_type -> pack dict
     packs: list
     catalog_sha256: str | None = None
+    runner_capabilities: frozenset = frozenset()   # what the image's runner can do (e.g. user_nodes/1)
 
     @classmethod
     def from_dict(cls, data: dict) -> "Snapshot":
@@ -240,7 +241,9 @@ class Snapshot:
                    object_info_status=str(data.get("object_info_status") or "not_captured"),
                    object_info=dict(data.get("object_info") or {}),
                    core_classes=frozenset(data.get("core_node_classes") or ()),
-                   pack_of=pack_of, packs=packs, catalog_sha256=data.get("catalog_sha256"))
+                   pack_of=pack_of, packs=packs, catalog_sha256=data.get("catalog_sha256"),
+                   runner_capabilities=frozenset(c for c in (data.get("runner_capabilities") or ())
+                                                 if isinstance(c, str)))
 
     def class_status(self, class_type: str) -> tuple[str, dict | None]:
         """("known" | "failed" | "not_installed" | "unverified" | "unknown", pack)."""

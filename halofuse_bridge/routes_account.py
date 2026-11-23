@@ -142,6 +142,10 @@ def _settings_payload() -> dict:
     out["runtime_image_locked"] = image_contract.env_override() is not None
     # the HaloFuse image is offered once its contract points at an image with its own (larger) node set
     out["runtime_halofuse_ready"] = image_contract.halofuse_ready()
+    # the artist's own custom nodes: only runtimes whose runner installs them (never the Original image)
+    from . import user_nodes
+
+    out["user_nodes_supported"], out["user_nodes_note"] = user_nodes.runtime_support(prefs)
     return out
 
 

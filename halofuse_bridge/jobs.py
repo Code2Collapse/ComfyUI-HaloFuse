@@ -297,6 +297,9 @@ def _job_env(settings: dict, base: dict, *, max_runtime_s: int, preview_mode: st
     """Env for a cloud job: the base contract + the runner-side runtime backstop + WS4 launch preset (R-WS4-4)."""
     env = dict(base)
     env["JOB_TIMEOUT_SECONDS"] = str(int(max_runtime_s))
+    from . import user_nodes
+
+    env.update(user_nodes.job_env(settings))   # the artist's own custom nodes (empty when not supported)
     try:
         from . import presets  # type: ignore[attr-defined]  # WS4
     except ImportError:
