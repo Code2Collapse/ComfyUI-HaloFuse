@@ -48,7 +48,165 @@
     "regiellis/ComfyUI-EasyColorCorrector",
     "ClownsharkBatwing/RES4LYF"
    ],
-   "description": "Exactly the 31 packs of the image the bridge pins today (saved workflows keep working). Licence flags are reported, not applied. Any install failure fails the build, as before."
+   "description": "Exactly the 31 packs of the image the bridge pinned before HaloFuse (saved workflows keep working), frozen at those pins by `pins` so catalog updates never change it; extra_nodes.txt is not applied (`extras: false`), so its snapshot describes that original image. Licence flags are reported, not applied. Any install failure fails the build.",
+   "extras": false,
+   "pins": {
+    "city96/ComfyUI-GGUF": {
+     "commit": null,
+     "version": "1.1.10",
+     "content_sha256": "cb4657cf7202cad94a20347283bd9fbc8ef67127c11eb1c26daa87abc65580ca"
+    },
+    "kijai/comfyui-kjnodes": {
+     "commit": null,
+     "version": "1.3.7",
+     "content_sha256": "51b3dc9e7c3cdd31791f8891b5ad4c37052726359cea262df1cfa74d22988e43"
+    },
+    "Fannovel16/comfyui_controlnet_aux": {
+     "commit": null,
+     "version": "1.1.5",
+     "content_sha256": null
+    },
+    "yolain/ComfyUI-Easy-Use": {
+     "commit": null,
+     "version": "1.3.6",
+     "content_sha256": "f8a8e23e7a5343e4f348abed0ecbf998bf20e3106aa7e39f21ceef0b9124352d"
+    },
+    "pythongosssss/ComfyUI-Custom-Scripts": {
+     "commit": null,
+     "version": "1.2.5",
+     "content_sha256": "4cd5323e8105b0bb05ba4b53169875c9d28e57b0a40e124b7b2f06b9a84b6a9f"
+    },
+    "rgthree/rgthree-comfy": {
+     "commit": null,
+     "version": "1.0.2604070017",
+     "content_sha256": "877423a7f30f352d7acf983446d6a1d015fd210437f83821672c2abcb50b3335"
+    },
+    "chrisgoringe/cg-use-everywhere": {
+     "commit": null,
+     "version": "7.8.0",
+     "content_sha256": "9e9bc2b824b4f2495c331d0674ac456621ab77cc731556559d1bd14b4863df35"
+    },
+    "giriss/comfy-image-saver": {
+     "commit": null,
+     "version": "1.21.0",
+     "content_sha256": "f3adc67c26a13641e9f92b4d01cf96ee078ca5a9f20b4921fe19370cd580a49d"
+    },
+    "Kosinkadink/ComfyUI-VideoHelperSuite": {
+     "commit": null,
+     "version": "1.7.9",
+     "content_sha256": "652ee8b70ae3f115a40a6a8570fd1de9f22401e8883f2b76d7d1c0c18353d915"
+    },
+    "pizurny/ComfyUI-AV-Handles": {
+     "commit": null,
+     "version": "1.4.0",
+     "content_sha256": "a509fca27e002958c50884141a2e10e72f5813205b13894a0704dadc4fb4780e"
+    },
+    "logtd/ComfyUI-Fluxtapoz": {
+     "commit": "17c71bea20e932945e9c1be0586cfd4b7e51cbf6",
+     "version": null,
+     "content_sha256": "a1fbc4b1af47e952d22b37e2f0183773ebfdc41aa1065c108e429ce608fbad06"
+    },
+    "adieyal/comfyui-dynamicprompts": {
+     "commit": "3f2fff32358cf39e21b8b440ca87eac9a8e2bade",
+     "version": null,
+     "content_sha256": "d0151b7b6432191c19a019db208d984daa512d7f88c148b959498a25c79c8af2"
+    },
+    "Suzie1/ComfyUI_Comfyroll_CustomNodes": {
+     "commit": "d78b780ae43fcf8c6b7c6505e6ffb4584281ceca",
+     "version": null,
+     "content_sha256": "7e1c8ca1d155e671d9711302708ebbc471a5ffb96688f6db6bacad378ce92e7c"
+    },
+    "theUpsider/ComfyUI-Logic": {
+     "commit": "214cfba933291be224156d37bc30c25742076b44",
+     "version": null,
+     "content_sha256": "c8b9505bcaf748126cf2e31222abd83ec8f74a544b4a73a4c66c3bc900645bb0"
+    },
+    "M1kep/ComfyLiterals": {
+     "commit": "bdddb08ca82d90d75d97b1d437a652e0284a32ac",
+     "version": null,
+     "content_sha256": "d90e9c75e6331231b4e03a930e30ff78947d022169a47217342302181de16f67"
+    },
+    "MinorBoy/ComfyUI_essentials_mb": {
+     "commit": "09e7dce4aa3d734151b772da4a4b3abe1c62e7e2",
+     "version": null,
+     "content_sha256": "fcba7b5c4854390859213589bdcd5a06e771b79735a86c28256551c49a0e0018"
+    },
+    "kijai/ComfyUI-WanVideoWrapper": {
+     "commit": "088128b224242e110d3906c6750e9a3a348a659b",
+     "version": null,
+     "content_sha256": "d295601908b9d48e57119f0e554e0662b961138a3a40c3c6ccd9f4ca13711924"
+    },
+    "kijai/ComfyUI-WanAnimatePreprocess": {
+     "commit": "0e0b6a2a555625acf4d4aefb780e27d06937132f",
+     "version": null,
+     "content_sha256": "95041a8a303c356296f251237864697f53f0b35bf4a551e7e9267484818fc438"
+    },
+    "kijai/ComfyUI-segment-anything-2": {
+     "commit": "0c35fff5f382803e2310103357b5e985f5437f32",
+     "version": null,
+     "content_sha256": "5392b79ed97b2326e560b62a955b909e2440f6a22007757b0efe3905c061ab9b"
+    },
+    "9nate-drake/Comfyui-SecNodes": {
+     "commit": "af39e6260bc414873fbb2dc8df355904d1609754",
+     "version": null,
+     "content_sha256": "966ccb23bff9740e5fdd079fbabf3a010d6bc2bdea986ccc9e95c681764e22bf"
+    },
+    "Nekodificador/ComfyUI-NKD-Basic-Tools": {
+     "commit": "726d727217a15a469319731d9a17a66159435557",
+     "version": null,
+     "content_sha256": "8d3c96d43984b57e0604c2109f3bd0478c567cf6374f12d865816cd1b39bc757"
+    },
+    "yuvraj108c/ComfyUI-Video-Depth-Anything": {
+     "commit": "a0db08e63d1ea571601c45cde4aaee0acdd0544d",
+     "version": null,
+     "content_sha256": "01ff1e2daddc44190a0809fd57aafd17871c789136d1fd4d3b2075a4dc321eb3"
+    },
+    "drozbay/MaskVidExperiments": {
+     "commit": "c32ed8c17e6fe892a174ebf25fe98b1317de97fb",
+     "version": null,
+     "content_sha256": "1564a0a7de77e8f53405223a7202cb2686502be1254f141283acaf70f403ba87"
+    },
+    "Lightricks/ComfyUI-LTXVideo": {
+     "commit": "220e1d45aa0469f518e982102fca4dca92a61862",
+     "version": null,
+     "content_sha256": "a11e2077b7a7fe65007d2ecd1f82309c1921f5422cae80bab10df880673ed697"
+    },
+    "chflame163/ComfyUI_LayerStyle": {
+     "commit": "51977b27869af9369e3d11a75d6fe8eb706f9821",
+     "version": null,
+     "content_sha256": "b55179fbb225d11035c6e874c88855610460c3d5a114c405f4e6948ac901d0a0"
+    },
+    "1038lab/ComfyUI-QwenVL": {
+     "commit": "1b67b443918801f571714bab636edc1845b7002a",
+     "version": null,
+     "content_sha256": "2c14b91ec9d5649ed9d4f4d568203065a85a77fd6240bf32fc2da03dd1a94334"
+    },
+    "melMass/comfy_mtb": {
+     "commit": "b35b5d8a17c0d59e80a8b3627b679c2c1003d04f",
+     "version": null,
+     "content_sha256": "4e7bdd2ff92299b4335e9d542969b1baa8c5b9dd62e83db4fdcdc7add5c14028"
+    },
+    "akatz-ai/ComfyUI-DepthCrafter-Nodes": {
+     "commit": "f469414d48cd0393ed43ae47af692009ca071706",
+     "version": null,
+     "content_sha256": "3d7cb0d15f68d801fb73b18b27f83a63454e536f8e8223332970d04966d14814"
+    },
+    "ltdrdata/was-node-suite-comfyui": {
+     "commit": "44de705818d4663fefefde57ffe0ea5a9ea39df4",
+     "version": null,
+     "content_sha256": "74a5d62a584a6d00144296e7d1595d7cdf4deff6d57c8d6ed8bf194c29de0e64"
+    },
+    "regiellis/ComfyUI-EasyColorCorrector": {
+     "commit": "fe86b8af5f857f536d6af2d8a62b8c07b1e4b39e",
+     "version": null,
+     "content_sha256": "161ddfe9f7b90abb0ec525756291829b0f7f9353c981f343caf31c0e84fcfffd"
+    },
+    "ClownsharkBatwing/RES4LYF": {
+     "commit": "56e44755d866c87ff9cb4b6608c8e42155db6ecc",
+     "version": null,
+     "content_sha256": "f106133e02857decf9c8c8088cfd4d1e0384eb70ba6eb994499985b3884ce51d"
+    }
+   }
   },
   "core": {
    "target": "cloud",
@@ -89,7 +247,10 @@
   "full": {
    "target": "cloud",
    "rule": "all-compatible-backend",
-   "description": "Every compatible, legally installable backend extension (licence policy applied); exclusions are reported with reasons."
+   "description": "The HaloFuse image: every pack of the `default` image (current pins, same licence exemption, flagged) plus every compatible, legally installable backend extension (licence policy applied); exclusions are reported with reasons.",
+   "include_members_of": [
+    "default"
+   ]
   }
  }
 }
