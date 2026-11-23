@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Image smoke test: boot the REAL runner (through tini in the image) on CPU, offline, with a model-free manifest.
 
-  smoke_test.py --runner /runner/halofuse_run.py --comfyui-dir DIR --install-report FILE --out REPORT.json
+  smoke_run.py --runner /runner/halofuse_run.py --comfyui-dir DIR --install-report FILE --out REPORT.json
                 [--tini /usr/local/bin/tini] [--python python3.13] [--runner-arg X ...] [--work DIR]
                 [--timeout 600] [--compare-args "--flag ..."]
 

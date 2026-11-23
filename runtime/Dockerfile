@@ -275,8 +275,8 @@ CMD ["python3.13", "/runner/halofuse_run.py"]
 # a strict profile does not import. A second boot with --disable-partner-nodes is timed for comparison. Never part
 # of the runtime image; `--target smoke-artifact` exports the report.
 FROM runtime AS smoke
-COPY scripts/smoke_test.py /opt/halofuse/scripts/
-RUN --network=none mkdir -p /out && python3.13 /opt/halofuse/scripts/smoke_test.py \
+COPY scripts/smoke_run.py /opt/halofuse/scripts/
+RUN --network=none mkdir -p /out && python3.13 /opt/halofuse/scripts/smoke_run.py \
       --tini /usr/local/bin/tini --runner /runner/halofuse_run.py --comfyui-dir "$COMFYUI_DIR" --python python3.13 \
       --install-report /etc/halofuse/install_report.json --out /out/smoke_report.json --timeout 900 \
       --compare-args=--disable-partner-nodes
