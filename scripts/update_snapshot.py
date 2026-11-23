@@ -123,13 +123,34 @@ def download_snapshot(run_id, head_sha: str, profile: str, dest: Path, gh=run_gh
     return found[0].read_text(encoding="utf-8")
 
 
+# Keys the Workflow Check never reads (node and input help text). The full image's node list is 16.8 MB pretty-printed
+# with them and 8.3 MB compact without; the pre-push gate refuses files over 10 MB.
+_UNUSED_KEYS = frozenset({"description", "tooltip", "search_aliases"})
+
+
+def _strip_unused(obj):
+    if isinstance(obj, dict):
+        return {k: _strip_unused(v) for k, v in obj.items() if k not in _UNUSED_KEYS}
+    if isinstance(obj, list):
+        return [_strip_unused(v) for v in obj]
+    return obj
+
+
+def compact_snapshot(text: str) -> str:
+    """The snapshot as shipped: help text removed from object_info, compact JSON, one trailing newline."""
+    snap = json.loads(text)
+    if isinstance(snap.get("object_info"), dict):
+        snap["object_info"] = _strip_unused(snap["object_info"])
+    return json.dumps(snap, separators=(",", ":"), ensure_ascii=False) + "\n"
+
+
 def install(text: str, profile: str, snapshot_dir: Path = SNAPSHOT_DIR) -> Path:
     sys.path.insert(0, str(ROOT / "runtime" / "scripts"))
     import export_node_snapshot  # noqa: PLC0415 - runtime tool, stdlib only
 
     snapshot_dir = Path(snapshot_dir)
     target = snapshot_dir / f"{profile}.json"
-    target.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8", newline="\n")
+    target.write_text(compact_snapshot(text), encoding="utf-8", newline="\n")
     old = {}
     if (snapshot_dir / "index.json").is_file():
         old = json.loads((snapshot_dir / "index.json").read_text(encoding="utf-8"))
