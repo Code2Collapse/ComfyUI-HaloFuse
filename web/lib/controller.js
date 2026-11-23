@@ -133,6 +133,20 @@ export class Controller {
     } catch (err) { this.say(err.message, "danger"); }
   }
 
+  /** Owner 2026-11-23: switch the cloud runtime from a Workflow Check offer, then check again against it. */
+  async switchRuntimeAndCheck(runtime) {
+    if (this.state.busy) return;
+    await this.saveAdvanced({ runtime_image: runtime });
+    if (this.state.settings?.runtime_image !== runtime) return;   // refused (e.g. locked by the administrator)
+    this._set({ busy: true });
+    try {
+      const { workflow } = await this._capture();
+      const check = await this._preflight([workflow]);
+      this.say(check?.ok ? "Workflow check passed on the new runtime. Nothing was started."
+        : "Checked again on the new runtime. Nothing was started.", check?.ok ? "success" : "warning");
+    } catch (err) { this.say(err.message, "danger"); } finally { this._set({ busy: false }); }
+  }
+
   // ---------- reattach / recent ----------
 
   async reattach() {

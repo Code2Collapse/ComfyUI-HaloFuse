@@ -481,7 +481,12 @@ def _missing_message(kind: str, rel: str, dirs: dict) -> str:
     if hint:
         return f"{text} {hint}"
     if kind == "input":
-        return f"{text} Upload it: {_UPLOAD_ACTION}, then run the check again."
+        # owner 2026-11-23: say plainly that it is nowhere on this computer (not in the output folder, not under
+        # another case, not in a sub-folder), so ComfyUI here could not load it either - usually a workflow from
+        # another computer
+        return (f"{text} It is not anywhere in this ComfyUI's input or output folders, so ComfyUI on this computer "
+                "could not load it either (the workflow was probably made on another computer). Get the file, then "
+                f"{_UPLOAD_ACTION}, and run the check again.")
     return (f"{text} Copy it into the ComfyUI input folder and pick it in the node again (the node's upload "
             "button does both), then run the check again.")
 

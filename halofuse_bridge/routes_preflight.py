@@ -151,6 +151,44 @@ def preview_decoder_refs(preview_method) -> tuple[list, list]:
     return refs, []
 
 
+RUNTIME_LABELS = {"legacy": "Original image", "halofuse": "HaloFuse image"}
+
+
+def _offer_other_runtimes(report: dict, snapshot) -> None:
+    """Owner 2026-11-23: a node missing from the selected cloud runtime may be in the other one. Name that runtime and
+    the classes it covers (report["runtime_alternatives"]), so the panel offers a one-click switch instead of 'ask
+    your administrator'."""
+    from .provider import image_contract
+
+    missing = sorted({b.get("class_type") for b in report.get("blocking", [])
+                      if b.get("code") == "unknown_node" and b.get("class_type")})
+    if not missing:
+        return
+    current = getattr(snapshot, "profile", None)
+    offers = []
+    for name, contract in image_contract.CONTRACTS.items():
+        profile = contract.snapshot_profile
+        if profile == current:
+            continue
+        try:
+            other = wa.load_snapshot(profile)
+        except ValueError:
+            other = None
+        if other is None:
+            continue
+        covers = [c for c in missing if c in other.object_info]
+        if covers:
+            offers.append({"runtime": name, "label": RUNTIME_LABELS.get(name, name), "covers": covers,
+                           "still_missing": [c for c in missing if c not in covers]})
+    if offers:
+        report["runtime_alternatives"] = offers
+        best = max(offers, key=lambda o: len(o["covers"]))
+        for b in report.get("blocking", []):
+            if b.get("code") == "unknown_node" and b.get("class_type") in best["covers"]:
+                b["message"] = (f"{b['class_type']} is not in the selected cloud runtime, but the {best['label']} has "
+                                f"it: switch under Advanced > Cloud runtime (or use the button below).")
+
+
 def _preflight(body: dict) -> dict:
     workflows = _workflows(body)
     instance_type = body.get("instance_type")
@@ -164,6 +202,7 @@ def _preflight(body: dict) -> dict:
     report["warnings"].extend(decoder_warnings)
     # the artist's own custom nodes count as available (a note); missing classes get an "add this pack" offer
     user_nodes.apply_to_report(report, workflows, _settings())
+    _offer_other_runtimes(report, snapshot)
     if input_dir is None:
         report["warnings"].append(wa.Problem("inputs_not_checked", "Input files were not checked.").to_dict())
     if instance_type:

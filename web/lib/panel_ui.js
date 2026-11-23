@@ -216,10 +216,17 @@ export class Panel {
     const p = st.preflight;
     if (p && (p.blocking?.length || p.warnings?.length || p.notes?.length || st.previewMode === "check")) {
       const list = H("div", { className: "hf-list" });
-      for (const b of p.blocking || []) list.append(H("div", { className: "hf-item hf-tone-danger" }, H("span", { className: "hf-grow", title: b.message, text: `${b.node_id ? `Node ${b.node_id}${b.class_type ? ` (${b.class_type})` : ""}: ` : ""}${b.message}` })));
+      for (const b of p.blocking || []) list.append(H("div", { className: "hf-item hf-tone-danger" }, H("span", { className: "hf-grow", title: b.message, text: `${b.node_id ? `Node ${b.node_id}${b.class_type ? ` (${b.class_type})` : ""}${b.input ? `, input "${b.input}"` : ""}: ` : ""}${b.message}` })));
       for (const w of p.warnings || []) list.append(H("div", { className: "hf-item hf-tone-warning" }, H("span", { className: "hf-grow", title: w.message, text: w.message })));
       // information only (e.g. a model the node downloads itself in the cloud): a neutral line, nothing to do
       for (const n of p.notes || []) list.append(H("div", { className: "hf-item hf-tone-neutral" }, H("span", { className: "hf-grow", title: n.message, text: n.message })));
+      // owner 2026-11-23: nodes the selected runtime lacks but the other cloud image has: one click switches and re-checks
+      for (const r of p.runtime_alternatives || []) {
+        list.append(H("div", { className: "hf-item hf-tone-neutral" },
+          H("span", { className: "hf-grow", text: `The ${r.label} has ${r.covers.join(", ")}.${r.still_missing?.length ? ` Still missing there: ${r.still_missing.join(", ")}.` : ""}` }),
+          H("button", { className: "hf-btn hf-primary", type: "button", text: `Use the ${r.label}`,
+            onclick: () => this.ctl.switchRuntimeAndCheck(r.runtime) })));
+      }
       // a class the runtime lacks but a Comfy Registry pack provides: one click adds it to My custom nodes
       for (const a of p.add_packs || []) {
         list.append(H("div", { className: "hf-item" },

@@ -68,7 +68,10 @@ export const HF_CSS = `
 .hf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---------- compact panel (sidebar tab) ---------- */
-.hf-root { padding: 12px 12px 24px; height: 100%; overflow: auto; overscroll-behavior: contain; background: var(--hf-bg); }
+.hf-root { padding: 12px 12px 24px; height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; background: var(--hf-bg); box-sizing: border-box; }
+/* nothing may widen the panel past the sidebar (a long select option scrolled the whole panel sideways) */
+.hf-root .hf-input, .hf-root .hf-select { max-width: 100%; min-width: 0; box-sizing: border-box; }
+.hf-root .hf-field, .hf-root .hf-section, .hf-root .hf-list { min-width: 0; max-width: 100%; }
 .hf-root h2 { font-size: 15px; margin: 0; font-weight: 650; letter-spacing: .01em; display: flex; align-items: center; gap: 8px; }
 .hf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .hf-version { color: var(--hf-muted); font-size: 11px; }
@@ -87,6 +90,9 @@ export const HF_CSS = `
 .hf-item { display: flex; gap: 6px; align-items: center; border: 1px solid var(--hf-border); border-radius: 6px;
   padding: 4px 6px; font-size: 12px; background: var(--hf-bg2); }
 .hf-item .hf-grow { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* owner 2026-11-23: Workflow Check lines are read in full - wrap, never cut */
+.hf-list .hf-item { align-items: flex-start; flex-wrap: wrap; }
+.hf-list .hf-item .hf-grow { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
 .hf-consent { border: 1px solid var(--hf-warn); border-radius: 8px; padding: 10px; display: grid; gap: 8px; }
 
 /* ---------- floating console ---------- */
