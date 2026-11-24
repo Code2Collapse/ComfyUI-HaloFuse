@@ -54,20 +54,46 @@ def _store(store: JobStore | None) -> JobStore:
     return store or default_store()
 
 
+def _host(settings: dict):
+    """The one-click host on this computer (live_tunnel.py) when its switch is on and no external gateway is set."""
+    if str(settings.get("live_gateway_url") or "").strip():
+        return None
+    from . import live_tunnel
+    return live_tunnel.current()
+
+
 def _secret(settings: dict) -> str:
+    h = _host(settings)
+    if h is not None and h.secret:
+        return h.secret
     return os.environ.get("HALOFUSE_LIVE_SECRET") or str(settings.get("live_gateway_secret") or "")
 
 
 def gateway_url(settings: dict) -> str:
+    h = _host(settings)
+    if h is not None:
+        return (h.public_url() or "").rstrip("/")
     return str(settings.get("live_gateway_url") or "").strip().rstrip("/")
 
 
+def _status_base(settings: dict) -> str:
+    """Where the bridge polls /status: the local gateway directly when it runs here, else the public address."""
+    h = _host(settings)
+    return (h.local_url() if h is not None else None) or gateway_url(settings)
+
+
 def availability(settings: dict) -> str | None:
-    """None when Live ComfyUI can start, else the reason in words (naming the setting to change)."""
+    """None when Live ComfyUI can start, else the reason in words (naming what to do next)."""
+    h = _host(settings)
+    if h is not None:
+        st = h.status()
+        if st["state"] != "ready":
+            return st["message"] or "Live ComfyUI is starting on this computer."
+        return None
     if not settings.get("live_comfy_enabled"):
         # owner 2026-11-24: the old text named a setting that has no switch in the panel
-        return ("Live ComfyUI is not available yet: it needs a HaloFuse relay gateway, which is not set up. "
-                "Your administrator turns it on once the gateway exists; there is no switch for it in this panel.")
+        return ("Live ComfyUI is off. Turn on the Live ComfyUI switch under Advanced: it starts the relay gateway "
+                "on this computer and gives it a secure web address.")
     url = gateway_url(settings)
     if not url:
         return "Live ComfyUI needs a relay gateway: set live_gateway_url to its https:// address."
@@ -250,11 +276,11 @@ def _stop_record(store: JobStore, rec: dict, settings: dict, backend, reason: st
 
 def fetch_status(settings: dict, rec: dict) -> dict | None:
     """The gateway's view of one session (agent connected, last activity). None when unreachable."""
-    url = f"{gateway_url(settings)}/status/{urllib.parse.quote(rec['job_id'])}"
+    url = f"{_status_base(settings)}/status/{urllib.parse.quote(rec['job_id'])}"
     token = proto.mint(_secret(settings), rec["job_id"], "bridge", rec["live"]["user"], BRIDGE_TTL_S, now=_clock())
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 - https enforced by availability()
+        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 - https (or the loopback gateway) only
             return json.loads(resp.read().decode("utf-8"))
     except (OSError, ValueError):
         return None
@@ -380,7 +406,8 @@ def stop_keeper(timeout: float = 5.0) -> None:
 def view(user, *, store: JobStore | None = None, settings: dict | None = None) -> dict:
     """The panel's view: no token, secret, URL, handle or port."""
     store, settings, user = _store(store), _settings(settings), _user(user)
-    out = {"available": availability(settings) is None, "reason": availability(settings), "state": "off"}
+    reason = availability(settings)
+    out = {"available": reason is None, "reason": reason, "state": "off"}
     rec = _record_of(store, user)
     if rec is None:
         return out

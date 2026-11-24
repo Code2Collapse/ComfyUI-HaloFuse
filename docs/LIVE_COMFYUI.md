@@ -1,7 +1,9 @@
 # Live ComfyUI (L9.345)
 
 "Open Live ComfyUI" runs the real, interactive ComfyUI on a cloud GPU and opens it in a new browser tab.
-It is **off by default**. It needs a relay gateway on a public HTTPS address, and the owner decides where that runs.
+It is **off by default**. It needs a relay gateway on a public HTTPS address. The owner chose (2026-11-24) to run the
+gateway on this computer behind a free Cloudflare quick tunnel: one switch, **Advanced > Live ComfyUI**, does it all
+(see "One-click host" below). An external gateway (`live_gateway_url`) still works and wins when it is set.
 
 ## What the cloud can do (checked 2026-11-24)
 
@@ -37,6 +39,31 @@ browser ──HTTPS/WSS──> relay gateway <──WSS (agent dials out)── 
 - **Gateway** (`halofuse_bridge/live_gateway.py`): relays each browser request and WebSocket over the agent's single
   connection. It refuses to start without TLS (`--cert/--key`, or `--behind-tls-proxy`) and without the secret.
 
+## One-click host (`halofuse_bridge/live_tunnel.py`)
+
+- Turning the switch on (POST `/halofuse/live/host {on:true}`, saved as `live_comfy_enabled`) starts the gateway
+  in-process on **127.0.0.1, a free port, plain HTTP**. Plain HTTP is refused on any non-loopback address
+  (`check_bind`; also `live_gateway.py --behind-tunnel`).
+- cloudflared is found on PATH or in `<HaloFuse settings dir>/tools`. If missing, the panel shows
+  **Download cloudflared** (POST `/halofuse/live/host/download`, the only place a download starts): the pinned
+  release `2026.10.7` asset for this OS/arch from github.com/cloudflare/cloudflared/releases, SHA-256 checked against
+  the release checksums (pinned in the module).
+- Quick tunnel: `cloudflared tunnel --no-autoupdate --url http://127.0.0.1:<port>`; the address is the
+  `https://*.trycloudflare.com` URL it prints. It is restarted (backoff 2-30 s) when it dies, and stopped with the
+  bridge. **A quick-tunnel restart gives a new address**: a live session started before it cannot reconnect and
+  ends at its idle timeout; start it again. A new quick address can take tens of seconds before DNS resolves.
+- Named tunnel (fixed address, needs a Cloudflare account): POST `/halofuse/live/tunnel {token, hostname}` keeps the
+  token in the keychain (or env `HALOFUSE_TUNNEL_TOKEN`) and `live_tunnel_hostname` in the settings; cloudflared then
+  runs `tunnel --no-autoupdate run` with the token in its environment (never on the command line).
+  `{clear:true}` goes back to a quick tunnel.
+- The gateway secret is generated on first use (`secrets.token_urlsafe`) and kept in the system keychain; without a
+  keychain it lasts until ComfyUI restarts. No route returns it. The bridge polls `/status` on the loopback gateway.
+- States shown in the panel, each with its next action: off (turn on), needs cloudflared (Download), downloading /
+  starting (wait), ready + address (Open Live ComfyUI), error in words (Try again). The Open button's disabled
+  tooltip names exactly what is missing (switch, cloudflared, address starting, GPU not chosen).
+- The runner needs no change: `GATEWAY_URL` becomes `wss://<name>.trycloudflare.com/agent`; Cloudflare tunnels
+  carry WebSockets.
+
 ## Security
 
 - HMAC-SHA256 tokens (`live_proto.py`), each bound to a role, session, user and expiry:
@@ -66,14 +93,16 @@ browser ──HTTPS/WSS──> relay gateway <──WSS (agent dials out)── 
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `live_comfy_enabled` | false | Turns the button on. |
-| `live_gateway_url` | empty | The gateway's `https://` address. |
-| `HALOFUSE_LIVE_SECRET` | none | The shared secret. Must be 16 characters or more, and the same on the gateway and the bridge. |
+| `live_comfy_enabled` | false | Turns Live ComfyUI on (the Advanced switch writes it). |
+| `live_gateway_url` | empty | An external gateway's `https://` address. Empty = the one-click host on this computer. |
+| `live_tunnel_hostname` | empty | Named tunnel's fixed host name (with a tunnel token). Empty = quick tunnel. |
+| `HALOFUSE_LIVE_SECRET` | none | Only for an external gateway: the shared secret (16+ characters). The one-click host generates its own. |
 | `live_max_runtime_seconds` | 14400 | Maximum runtime per session. |
 
 ## Owner decisions
 
-1. Where the gateway is hosted: a small VPS with TLS, for example. It needs a domain and a certificate. Who pays for it?
+1. Hosting: decided 2026-11-24, this computer + Cloudflare quick tunnel (free, no account). A named tunnel gives a
+   fixed address that survives restarts.
 2. The published image has to be rebuilt so that it contains `/runner/halofuse_live.py`. Until then, a live job fails
    to start.
 3. Whether a live session may instead run on a running warm machine. That would save the cold start, but the machine's
@@ -84,4 +113,8 @@ browser ──HTTPS/WSS──> relay gateway <──WSS (agent dials out)── 
 - Tokens, the gateway relay (HTTP, WebSocket text and binary, isolation, 401 and 502 cases), the agent configuration
   guards, and the session manager (ports, reuse, idle, recovery, max runtime): UNIT TESTED / INTEGRATION TESTED on
   loopback, with a fake ComfyUI and a fake cloud.
-- Real cloud job, real ComfyUI frontend through the relay, the panel button in a browser: NOT RUN.
+- One-click host: tunnel start / URL parse / restart / stop with a fake cloudflared, loopback refusal (must-fail
+  verified), checksum download with a fake opener, panel states: UNIT TESTED. A real cloudflared 2026.10.7 download
+  (checksum matched) and quick tunnel answered the gateway's 401 over public HTTPS (INTEGRATION TESTED, evidence
+  docs/evidence/L9.345-tunnel/ outside this repository).
+- Real cloud job, real ComfyUI frontend through the relay, the panel switch in a browser: NOT RUN.
