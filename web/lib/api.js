@@ -121,6 +121,10 @@ export function createApi(fetchImpl) {
     startLive: (instanceType) => post("/halofuse/live/start", instanceType ? { instance_type: instanceType } : {}),
     openLive: () => post("/halofuse/live/open"),
     stopLive: () => post("/halofuse/live/stop"),
+    // one-click host on this computer (gateway + cloudflared tunnel): switch, status, cloudflared download
+    getLiveRelay: () => get("/halofuse/live/host"),
+    setLiveRelay: (on) => post("/halofuse/live/host", { on: !!on }),
+    downloadCloudflared: () => post("/halofuse/live/host/download"),
     getWarm: () => get("/halofuse/warm"),
     startWarm: (instanceType) => post("/halofuse/warm/start", instanceType ? { instance_type: instanceType } : {}),
     shutdownWarm: () => post("/halofuse/warm/shutdown"),

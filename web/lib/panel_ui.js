@@ -9,7 +9,7 @@ import { LibrarySection } from "./library_ui.js";
 import { UserNodesSection } from "./user_nodes_ui.js";
 import { addPackText } from "./user_nodes_view.js";
 import { WarmSection } from "./warm_ui.js";
-import { LiveSection } from "./live_ui.js";
+import { LiveHostSection, LiveSection } from "./live_ui.js";
 import { PREVIEW_METHODS, PREVIEW_MODES } from "./controller.js";
 import { previewPath } from "./api.js";
 import { LIVE_TEXT, createImageCache } from "./live_preview.js";
@@ -44,6 +44,7 @@ export class Panel {
     // Live ComfyUI (L9.345): its own button next to Render; the Render path is unchanged
     this.live = new LiveSection({ doc: this.doc, win: this.win, api: this.api,
       context: () => ({ instanceType: this.ctl.state.instanceType }) });
+    this.liveHost = new LiveHostSection({ doc: this.doc, win: this.win, api: this.api, onChange: () => this.live.refresh() });
     this.userNodes = new UserNodesSection({ doc: this.doc, api: this.api, save: (prefs) => this.ctl.saveAdvanced(prefs) });
 
     this.skuSel = H("select", { className: "hf-select", id: `hf-sku-${uid}`, onchange: () => this.ctl.setInstanceType(this.skuSel.value) });
@@ -143,6 +144,7 @@ export class Panel {
         H("summary", { text: "Cloud model library" }), this.library.el),
       H("details", { className: "hf-section" }, H("summary", { text: "My custom nodes" }), this.userNodes.el),
       H("details", { className: "hf-section" }, H("summary", { text: "Advanced" }),
+        this.liveHost.el,
         field("Cloud model library path", lib, libHint), field("Machine placement", affinity),
         field("Largest automatic model upload (GB)", guard),
         field("Cloud runtime", runtime, runtimeHint),
@@ -173,6 +175,7 @@ export class Panel {
     container.append(this.el);
     this.account.load();
     this.warm.start();
+    this.liveHost.refresh();
     this.update();
   }
 
@@ -217,6 +220,7 @@ export class Panel {
       }
     }
     this.skuSel.value = st.instanceType;
+    this.live.relabel();
     this.rate.className = `hf-hint${st.skuError ? " hf-tone-danger" : ""}`;
     this.rate.textContent = st.skuError ? st.skuError : st.rateLoading ? "Checking the price…"
       : st.rate != null ? `${fmtUsd(st.rate)} per hour (provider estimate)` : st.instanceType ? "Price not available for this GPU." : "";
@@ -561,5 +565,5 @@ export class Panel {
     this.win.setTimeout(() => this.win.URL.revokeObjectURL(url), 30000);
   }
 
-  destroy() { for (const u of this._unsubs) u(); this.warm.destroy(); this.live.destroy(); this.el.remove(); }
+  destroy() { for (const u of this._unsubs) u(); this.warm.destroy(); this.live.destroy(); this.liveHost.destroy(); this.el.remove(); }
 }

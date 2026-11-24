@@ -10,7 +10,9 @@ gets an HttpOnly cookie holding a "cookie" token bound to that one session; the 
 "bridge" token. Without a valid token nothing is relayed (401). A cookie for one session never reaches another.
 
 Run: ``HALOFUSE_LIVE_SECRET=... python -m halofuse_bridge.live_gateway --host 0.0.0.0 --port 8443 --cert c --key k``
-(or behind a TLS-terminating proxy; plain HTTP is refused unless --insecure-for-tests).
+(or behind a TLS-terminating proxy). Plain HTTP is allowed ONLY on a loopback address (127.0.0.1 / ::1) behind a
+tunnel or proxy (--behind-tunnel / --behind-tls-proxy); a plain-HTTP bind to any other address is refused
+(check_bind). The one-click host (live_tunnel.py) runs this app in-process on 127.0.0.1 behind cloudflared.
 """
 from __future__ import annotations
 
@@ -246,6 +248,23 @@ class Gateway:
         task.cancel()
 
 
+def check_bind(host: str, *, tls: bool) -> None:
+    """Plain HTTP only on loopback (live_tunnel.check_bind)."""
+    try:
+        from .live_tunnel import check_bind as _cb
+    except ImportError:  # pragma: no cover - run as a loose file
+        import ipaddress
+        if not tls and host != "localhost":
+            try:
+                ok = ipaddress.ip_address(host).is_loopback
+            except ValueError:
+                ok = False
+            if not ok:
+                raise ValueError(f"refusing a plain-HTTP gateway on {host}: plain HTTP is allowed on 127.0.0.1 only")
+        return
+    _cb(host, tls=tls)
+
+
 def make_gateway_app(secret, **kw) -> web.Application:
     gw = Gateway(secret, **kw)
     app = web.Application(client_max_size=gw.max_body)
@@ -265,6 +284,7 @@ def main(argv=None) -> int:  # pragma: no cover - operator entry point
     ap.add_argument("--cert")
     ap.add_argument("--key")
     ap.add_argument("--behind-tls-proxy", action="store_true", help="a TLS proxy in front terminates HTTPS")
+    ap.add_argument("--behind-tunnel", action="store_true", help="a tunnel (cloudflared) in front; loopback only")
     args = ap.parse_args(argv)
     secret = os.environ.get("HALOFUSE_LIVE_SECRET", "")
     try:
@@ -277,8 +297,13 @@ def main(argv=None) -> int:  # pragma: no cover - operator entry point
         import ssl
         ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         ssl_ctx.load_cert_chain(args.cert, args.key)
-    elif not args.behind_tls_proxy:
-        print("refusing to start without TLS: pass --cert/--key or --behind-tls-proxy")
+    elif not (args.behind_tls_proxy or args.behind_tunnel):
+        print("refusing to start without TLS: pass --cert/--key, --behind-tls-proxy or --behind-tunnel")
+        return 2
+    try:
+        check_bind(args.host, tls=ssl_ctx is not None)
+    except ValueError as exc:
+        print(str(exc))
         return 2
     web.run_app(make_gateway_app(secret), host=args.host, port=args.port, ssl_context=ssl_ctx)
     return 0

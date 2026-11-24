@@ -484,6 +484,24 @@ def save_settings(values: dict) -> dict:
     return load_settings()
 
 
+LIVE_HOST_KEYS = ("live_comfy_enabled", "live_tunnel_hostname")
+
+
+def save_live_host_settings(values: dict) -> dict:
+    """The Live ComfyUI switch and the named-tunnel hostname (live_tunnel.py). Not web-writable prefs: only the
+    /halofuse/live/host routes write them, each validated here."""
+    raw, ok = _read_raw()
+    if not ok:
+        raw = {}
+    if isinstance(values.get("live_comfy_enabled"), bool):
+        raw["live_comfy_enabled"] = values["live_comfy_enabled"]
+    host = values.get("live_tunnel_hostname")
+    if isinstance(host, str) and len(host) <= 253 and re.match(r"^[A-Za-z0-9.-]*$", host):
+        raw["live_tunnel_hostname"] = host.strip()
+    _atomic_write(settings_path(), raw)
+    return load_settings()
+
+
 def _sync_legacy_switches(values: dict, raw: dict) -> None:
     """An older panel saves only keep_warm / unload_models_between_renders: translate them into the new choices
     (without overriding a new key sent in the same request, and without turning Smart into Always)."""

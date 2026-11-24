@@ -29,6 +29,8 @@ _log = logging.getLogger("halofuse_bridge.credentials")
 SERVICE = "HaloFuse"
 USERNAME = "account"
 HF_TOKEN_USER = "huggingface_token"
+LIVE_SECRET_USER = "live_gateway_secret"
+TUNNEL_TOKEN_USER = "live_tunnel_token"
 HF_TOKEN_RE = re.compile(r"^hf_[A-Za-z0-9]{20,120}$")
 SETTINGS_NAME = "halofuse_settings.json"
 FALLBACK_NAME = "credentials.json"
@@ -491,6 +493,68 @@ class CredentialStore:
             except Exception:  # noqa: BLE001 - "already clear" is success
                 pass
         return self.hf_token_status()
+
+    # ---- Live ComfyUI host (live_tunnel.py, owner 2026-11-24): the gateway secret and the optional tunnel token -----
+    # Keychain only, never in a file, a log or a response.
+
+    def _kc_get(self, user: str) -> str | None:
+        backend = self._secure_backend()
+        if backend is None:
+            raise CredentialError("no_secure_store")
+        try:
+            return backend.get_password(self._service, user) or None
+        except Exception:  # noqa: BLE001
+            raise CredentialError("no_secure_store") from None
+
+    def _kc_set(self, user: str, value: str) -> None:
+        backend = self._secure_backend()
+        if backend is None:
+            raise CredentialError("no_secure_store")
+        try:
+            backend.set_password(self._service, user, value)
+            ok = backend.get_password(self._service, user) == value
+        except Exception:  # noqa: BLE001
+            raise CredentialError("no_secure_store") from None
+        if not ok:
+            raise CredentialError("no_secure_store")
+
+    def live_secret(self, *, create: bool = False) -> str | None:
+        """The Live ComfyUI gateway secret; generated (secrets.token_urlsafe) and stored on first use."""
+        with self._lock:
+            value = self._kc_get(LIVE_SECRET_USER)
+            if value is None and create:
+                import secrets as _secrets
+                value = _secrets.token_urlsafe(32)
+                self._kc_set(LIVE_SECRET_USER, value)
+            if value:
+                from .provider import redact
+                redact.register_secret(value, "token")
+            return value
+
+    def tunnel_token(self) -> str | None:
+        try:
+            value = self._kc_get(TUNNEL_TOKEN_USER)
+        except CredentialError:
+            return None
+        if value:
+            from .provider import redact
+            redact.register_secret(value, "token")
+        return value
+
+    def save_tunnel_token(self, token) -> bool:
+        if not isinstance(token, str) or not re.match(r"^[A-Za-z0-9._=+/-]{20,4096}$", token.strip()):
+            raise CredentialError("invalid_input")
+        self._kc_set(TUNNEL_TOKEN_USER, token.strip())
+        return True
+
+    def clear_tunnel_token(self) -> bool:
+        backend = self._secure_backend()
+        if backend is not None:
+            try:
+                backend.delete_password(self._service, TUNNEL_TOKEN_USER)
+            except Exception:  # noqa: BLE001 - already clear
+                pass
+        return False
 
     # ---- migration (CREDENTIALS_DESIGN s4) --------------------------------------------------------
 
