@@ -8,6 +8,7 @@ import { AccountSection } from "./account_ui.js";
 import { LibrarySection } from "./library_ui.js";
 import { UserNodesSection } from "./user_nodes_ui.js";
 import { WarmSection } from "./warm_ui.js";
+import { LiveSection } from "./live_ui.js";
 import { PREVIEW_METHODS, PREVIEW_MODES } from "./controller.js";
 import { previewPath } from "./api.js";
 import { LIVE_TEXT, createImageCache } from "./live_preview.js";
@@ -39,6 +40,9 @@ export class Panel {
     this.warm = new WarmSection({ doc: this.doc, win: this.win, api: this.api,
       context: () => ({ instanceType: this.ctl.state.instanceType, rate: this.ctl.state.rate }),
       save: (prefs) => this.ctl.saveAdvanced(prefs) });
+    // Live ComfyUI (L9.345): its own button next to Render; the Render path is unchanged
+    this.live = new LiveSection({ doc: this.doc, win: this.win, api: this.api,
+      context: () => ({ instanceType: this.ctl.state.instanceType }) });
     this.userNodes = new UserNodesSection({ doc: this.doc, api: this.api, save: (prefs) => this.ctl.saveAdvanced(prefs) });
 
     this.skuSel = H("select", { className: "hf-select", id: `hf-sku-${uid}`, onchange: () => this.ctl.setInstanceType(this.skuSel.value) });
@@ -123,7 +127,8 @@ export class Panel {
       field("GPU", this.skuSel), this.rate,
       field("Preview", this.modeSel), this.modeHint, this.methodBox,
       field("Render repeats", this.repeats),
-      H("div", { className: "hf-row", style: { margin: "4px 0 6px" } }, this.renderBtn, this.consoleBtn),
+      H("div", { className: "hf-row", style: { margin: "4px 0 6px" } }, this.renderBtn, this.live.button, this.consoleBtn),
+      this.live.el,
       this.message, this.checkBox, this.consentBox, this.jobBox,
       this.warm.el,
       this.account.el,
@@ -554,5 +559,5 @@ export class Panel {
     this.win.setTimeout(() => this.win.URL.revokeObjectURL(url), 30000);
   }
 
-  destroy() { for (const u of this._unsubs) u(); this.warm.destroy(); this.el.remove(); }
+  destroy() { for (const u of this._unsubs) u(); this.warm.destroy(); this.live.destroy(); this.el.remove(); }
 }

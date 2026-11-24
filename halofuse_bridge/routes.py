@@ -43,6 +43,11 @@ from . import routes_warm  # noqa: E402
 
 routes_warm.register(routes, prefix="/halofuse")
 
+# Live ComfyUI (L9.345): an interactive cloud ComfyUI through the relay gateway; off by default.
+from . import routes_live  # noqa: E402
+
+routes_live.register(routes, prefix="/halofuse")
+
 
 # R-WS5-01: the /halofuse/models/* + preflight / draft / capacity / library routes, all through
 # routes_account.request_guard (the old handlers here had no guard).
