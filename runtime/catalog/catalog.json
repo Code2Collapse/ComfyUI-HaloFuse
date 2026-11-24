@@ -20202,6 +20202,109 @@
     "probed_at": "2026-11-24"
    },
    "needs_owner": "licence decision 12 (network-copyleft); owner 2026-11-24 allows this pack (own pack)"
+  },
+  {
+   "repo": "aistudynow/ComfyUI-QwenVL",
+   "url": "https://github.com/aistudynow/ComfyUI-QwenVL",
+   "category": "combined",
+   "backend_frontend": "both",
+   "install_target": "cloud",
+   "install": {
+    "method": "git-archive",
+    "folder": "ComfyUI-QwenVL-aistudynow",
+    "requirement_overrides": [
+     {
+      "name": "flash-attn",
+      "upstream": "flash-attn>=2.3.6; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+      "use": null,
+      "reason": "Optional speed-up (the pack's own notes say so); it compiles from source and failed the image build (CI run 45455106233: Failed to build 'flash-attn'). The pack falls back to standard attention."
+     },
+     {
+      "name": "llama-cpp-python",
+      "upstream": "llama-cpp-python[server]>=0.2.78",
+      "use": null,
+      "reason": "Only its GGUF mode needs it; it compiles from source (CUDA build needs nvcc). The workflow uses the transformers path."
+     }
+    ]
+   },
+   "requirements": {
+    "python": "not declared (runs on the base image's Python 3.13)",
+    "torch": "declares torch; the installer constrains torch/torchvision/torchaudio to the base image build, so it is never replaced",
+    "cuda": "needs a CUDA-matched build of: bitsandbytes",
+    "pip": [
+     "torch>=2.1.0",
+     "transformers>=4.57.0",
+     "huggingface-hub>=0.22.2",
+     "hf_xet>=1.1.5",
+     "accelerate>=0.27.0",
+     "bitsandbytes>=0.42.0",
+     "Pillow>=10.0.0",
+     "opencv-python>=4.8.1.78",
+     "numpy>=1.25.0",
+     "psutil>=5.9.5",
+     "flash-attn>=2.3.6; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+     "llama-cpp-python[server]>=0.2.78",
+     "tqdm>=4.66.0"
+    ],
+    "source": "requirements.txt at 897514ae1d47"
+   },
+   "system_deps": [
+    "CUDA-matched bitsandbytes wheel"
+   ],
+   "model_download": {
+    "behavior": "runtime-download",
+    "evidence": "GitHub code search (default branch): hf_hub_download in py/AILab_HuggingFace_Downloader.py, py/AILab_QwenVL_GGUF.py, py/AILab_QwenVL_GGUF_PromptEnhancer.py; snapshot_download in py/AILab_QwenVL.py, py/AILab_HuggingFace_Downloader.py, py/AILab_QwenVL_GGUF_PromptEnhancer.py",
+    "policy": "the image never downloads models at build time; runtime downloads need network in the job"
+   },
+   "license": {
+    "class": "copyleft",
+    "spdx": "GPL-3.0",
+    "source": "GitHub licence detection (LICENSE file)",
+    "notes": "",
+    "flags": [
+     "copyleft (source obligations if distributed in a published image)"
+    ]
+   },
+   "compatibility": {
+    "compatible": true,
+    "notes": "no blocker found by static inspection; import NOT VERIFIED"
+   },
+   "conflicts": {
+    "conflicts_with": [],
+    "overlaps": [],
+    "notes": ""
+   },
+   "profiles": [
+    "full"
+   ],
+   "enabled_by_default": true,
+   "pin": {
+    "commit": "897514ae1d4711d7e356dcce5953a0c750ffaf68",
+    "version": null,
+    "pinned_at": "2026-11-24",
+    "content_sha256": null,
+    "pin_source": "owner workflow 2026-11-24"
+   },
+   "verified": {
+    "status": "NOT VERIFIED",
+    "evidence": "added 2026-11-24; first build as a catalog entry pending"
+   },
+   "source_list": "owner workflow MM_Kiran.json 2026-11-24",
+   "description": "aistudynow ComfyUI-QwenVL (node aistudynow_QwenVL; used by the owner's MM_Kiran workflow). Installed beside 1038lab/ComfyUI-QwenVL under its own folder.",
+   "upstream": {
+    "reachable": true,
+    "http_status": 200,
+    "canonical_name": "aistudynow/ComfyUI-QwenVL",
+    "archived": false,
+    "fork": false,
+    "default_branch": "main",
+    "head_commit": "897514ae1d4711d7e356dcce5953a0c750ffaf68",
+    "head_date": "2026-04-18T08:17:57Z",
+    "submodules": [],
+    "committed_weight_bytes": 0,
+    "probed_at": "2026-11-24"
+   },
+   "needs_owner": "licence decision 12 (copyleft)"
   }
  ]
 }

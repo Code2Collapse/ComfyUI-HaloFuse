@@ -19,5 +19,3 @@
 # flagged in the install report. Commit = upstream HEAD on 2026-11-23 (unchanged since 2026-03-06).
 kijai/ComfyUI-DepthAnythingV2@553187872eeb1d52e50dc53209fa57e569609a72
 
-# add_node.py 2026-11-24: GPL-3.0 (copyleft); requested 897514ae1d4711d7e356dcce5953a0c750ffaf68
-aistudynow/ComfyUI-QwenVL@897514ae1d4711d7e356dcce5953a0c750ffaf68
