@@ -81,6 +81,9 @@ DEFAULTS = {
     # The artist's own custom node packs (owner 2026-11-23): resolved, pinned entries (user_nodes.py), installed at
     # job start by runtimes that support it. Repository names, ids and pins only: never a URL or a token.
     "user_nodes": [],
+    # Owner 2026-11-24: the Workflow Check adds the pack a missing node needs to user_nodes by itself (public GitHub
+    # repository and a licence the catalog policy installs only; user_nodes.apply_to_report). Off: one click per pack.
+    "auto_add_packs": False,
     # Warm cloud machine (owner 2026-11-23, warm_machine.py): renders start / reuse one held GPU machine that stays on
     # until the artist shuts it down. warm_hold_seconds = how long the cloud keeps it after its last job when
     # HaloFuse is not running (nothing re-arms the hold then): the billing backstop.
@@ -122,7 +125,7 @@ PUBLIC_KEYS = [
     "auto_download_models", "download_ask_above_gb",
     "max_runtime_seconds", "max_job_cost_usd", "daily_spend_cap_usd",
     "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode", "preview_method",
-    "runtime_image", "user_nodes", "ignore_cache", "auto_preview", "organized_output_dir",
+    "runtime_image", "user_nodes", "auto_add_packs", "ignore_cache", "auto_preview", "organized_output_dir",
     "keep_warm", "warm_hold_seconds", "clean_between_renders", "unload_models_between_renders",
     "warm_mode", "warm_idle_timeout_seconds", "memory_behavior", "vram_unload_high_pct", "vram_unload_low_pct",
     "transfer_max_downloads", "transfer_max_uploads",
@@ -349,7 +352,7 @@ def _valid_pref(key: str, value) -> bool:
     if key == "upload_guard_gb":
         return _number(value) and value >= 0
     if key in ("auto_upload_models", "auto_download_models", "keep_warm", "clean_between_renders",
-               "unload_models_between_renders"):
+               "unload_models_between_renders", "auto_add_packs"):
         return isinstance(value, bool)
     if key == "download_ask_above_gb":
         return _number(value) and 0 <= value <= 100000

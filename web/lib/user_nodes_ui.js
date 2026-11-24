@@ -25,11 +25,19 @@ export class UserNodesSection {
       style: { width: "100%", boxSizing: "border-box", fontFamily: "monospace", resize: "vertical" } });
     this.checkBtn = H("button", { className: "hf-btn", type: "button", text: "Check and save",
       title: "Pin each line to an exact version and show its licence, then save the list", onclick: () => this.check() });
+    // owner 2026-11-24: the Workflow Check adds the pack a missing node needs by itself (public GitHub packs whose
+    // licence the image's licence policy allows; the bridge decides, user_nodes.apply_to_report)
+    this.autoBox = H("input", { type: "checkbox", id: `hf-user-nodes-auto-${uid}`,
+      onchange: () => this.save({ auto_add_packs: this.autoBox.checked }) });
     this.status = H("div", { className: "hf-hint", attrs: { role: "status", "aria-live": "polite" } });
     this.list = H("div", { className: "hf-list", attrs: { role: "list" } });
     this.el = H("div", {}, this.note,
       H("label", { className: "hf-field", htmlFor: this.input.id }, H("span", { text: "One pack per line" }), this.input),
-      H("div", { className: "hf-row", style: { margin: "6px 0" } }, this.checkBtn), this.status, this.list);
+      H("div", { className: "hf-row", style: { margin: "6px 0" } }, this.checkBtn),
+      H("label", { className: "hf-row", htmlFor: this.autoBox.id, style: { gap: "6px", margin: "2px 0 6px" },
+        title: "Only public GitHub packs with a licence the HaloFuse image allows; code on this computer is never uploaded" },
+        this.autoBox, H("span", { text: "Always add the packs a workflow needs" })),
+      this.status, this.list);
     this.render();
   }
 
@@ -38,6 +46,7 @@ export class UserNodesSection {
     if (!s) return;
     this.supported = s.user_nodes_supported === true;
     this.noteText = s.user_nodes_note || "";
+    if (this.doc.activeElement !== this.autoBox) this.autoBox.checked = s.auto_add_packs === true;
     const saved = JSON.stringify(s.user_nodes || []);
     if (saved !== this._saved) {
       this._saved = saved;

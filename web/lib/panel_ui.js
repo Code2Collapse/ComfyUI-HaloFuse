@@ -7,6 +7,7 @@ import { bindH, clear } from "./dom.js";
 import { AccountSection } from "./account_ui.js";
 import { LibrarySection } from "./library_ui.js";
 import { UserNodesSection } from "./user_nodes_ui.js";
+import { addPackText } from "./user_nodes_view.js";
 import { WarmSection } from "./warm_ui.js";
 import { LiveSection } from "./live_ui.js";
 import { PREVIEW_METHODS, PREVIEW_MODES } from "./controller.js";
@@ -295,11 +296,12 @@ export class Panel {
           H("button", { className: "hf-btn hf-primary", type: "button", text: cap.buttonText,
             onclick: () => this.ctl.switchGpuAndCheck(cap.instanceType) })));
       }
-      // a class the runtime lacks but a Comfy Registry pack provides: one click adds it to My custom nodes
+      // a class the runtime lacks but a known pack provides (this ComfyUI's folder, the catalog, the Manager's node
+      // map or the Comfy Registry): one click adds it to My custom nodes (installed in each cloud job)
       for (const a of p.add_packs || []) {
         list.append(H("div", { className: "hf-item" },
-          H("span", { className: "hf-grow", style: { whiteSpace: "normal" }, text: `${(a.class_types || []).join(", ")} comes from ${a.name}${a.repo ? ` (${a.repo})` : ""}.` }),
-          H("button", { className: "hf-btn", type: "button", text: `Add ${a.name} to my custom nodes`,
+          H("span", { className: "hf-grow", style: { whiteSpace: "normal" }, text: addPackText(a) }),
+          H("button", { className: "hf-btn", type: "button", text: `Add ${a.name} to this render's custom nodes`,
             onclick: () => this.userNodes.addLine(a.line) })));
       }
       const models = this._modelRows(p.models || {});
