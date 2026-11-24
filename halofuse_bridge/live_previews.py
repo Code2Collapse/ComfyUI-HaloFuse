@@ -42,6 +42,10 @@ class PreviewLimits:
     keep_after_finish: int = 24
     rate_per_s: float = 1.0
     burst: int = 6
+    # node pictures (temp outputs, masks, output thumbnails) have their own, wider bucket: a burst of fast nodes
+    # finishing in one second must not leave their cards empty, and step frames never starve them (or the reverse)
+    picture_rate_per_s: float = 4.0
+    picture_burst: int = 32
 
 
 def sniff(data: bytes) -> tuple[str, str] | None:
@@ -78,8 +82,8 @@ class LivePreviewSink:
         self._lock = threading.Lock()
         self._records: list[dict] = []
         self._seq = 0
-        self._tokens = float(self.limits.burst)
-        self._last = None
+        self._buckets = {"latent": [float(self.limits.burst), None],
+                         "picture": [float(self.limits.picture_burst), None]}
         self.stats = {"accepted": 0, "rejected": 0, "rate_dropped": 0, "pruned": 0}
         self._load()
 
@@ -107,10 +111,10 @@ class LivePreviewSink:
             return self._reject()
         ext, mime = sniffed
         with self._lock:
-            if not self._take_token():
+            kind = meta.get("kind") if meta.get("kind") in _KINDS else "other"
+            if not self._take_token("latent" if kind == "latent" else "picture"):
                 self.stats["rate_dropped"] += 1
                 return None
-            kind = meta.get("kind") if meta.get("kind") in _KINDS else "other"
             if not self._make_room(kind):
                 self.stats["rejected"] += 1
                 return None
@@ -165,13 +169,18 @@ class LivePreviewSink:
             self.stats["rejected"] += 1
         return None
 
-    def _take_token(self) -> bool:
+    def _take_token(self, bucket: str = "latent") -> bool:
+        if bucket == "latent":
+            burst, rate = float(self.limits.burst), self.limits.rate_per_s
+        else:
+            burst, rate = float(self.limits.picture_burst), self.limits.picture_rate_per_s
+        state = self._buckets[bucket]
         now = self.clock()
-        if self._last is not None:
-            self._tokens = min(float(self.limits.burst), self._tokens + (now - self._last) * self.limits.rate_per_s)
-        self._last = now
-        if self._tokens >= 1.0:
-            self._tokens -= 1.0
+        if state[1] is not None:
+            state[0] = min(burst, state[0] + (now - state[1]) * rate)
+        state[1] = now
+        if state[0] >= 1.0:
+            state[0] -= 1.0
             return True
         return False
 

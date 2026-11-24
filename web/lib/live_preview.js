@@ -135,10 +135,14 @@ export class LiveModel {
     const thumbs = shown.filter((r) => !(r.kind === "temp_output" && r.source !== "delivered" && deliveredNodes.has(r.node_id)));
     const held = this._held != null ? this._bySeq.get(this._held) || null : null;
     const newestImage = [...thumbs].reverse().find((r) => !r.mask && isImage(r)) || null;
-    const frame = held || latent.at(-1) || newestImage;
-    const video = frame ? null : [...thumbs].reverse().find(isVideo) || null;
     const ended = !!job && terminal(job);
     const running = !!job && !ended;
+    // the stage follows the node that runs now: its newest step frame or picture, when it has one
+    const followId = running && !held && progress?.node_id != null ? String(progress.node_id) : null;
+    const following = followId == null ? null : [...all].reverse().find((r) => String(r.node_id) === followId
+      && !r.mask && (r.kind === "latent" || (thumbs.includes(r) && isImage(r)))) || null;
+    const frame = held || following || latent.at(-1) || newestImage;
+    const video = frame ? null : [...thumbs].reverse().find(isVideo) || null;
     const newestFrameTs = num(latent.at(-1)?.ts ?? frame?.ts);
     // the age of a frame matters only while the job runs; afterwards it is simply a frame of the finished run
     const ageS = !ended && frame && num(frame.ts) != null && num(nowS) != null ? Math.max(0, Math.round(nowS - frame.ts)) : null;
