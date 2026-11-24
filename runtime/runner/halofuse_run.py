@@ -949,7 +949,17 @@ def submit(workflow, targets=None):
         _log_node_errors(node_errors)
         if os.environ.get("ALLOW_PARTIAL_OUTPUTS", "") not in ("1", "true", "yes"):
             cls = hf_classify.classify_node_errors(node_errors)
-            _error_file("validation_failed", cls)
+            # owner 2026-11-24: the reason line ("Value not in list: vae_name: ...") was lost in the log stream and
+            # the error file had no details - carry every node's exact message into error.json
+            first_id, first = next(iter(node_errors.items()))
+            lines = []
+            for nid, info in node_errors.items():
+                for err in (info or {}).get("errors") or []:
+                    msg, det = err.get("message", ""), err.get("details", "")
+                    lines.append(f"node #{nid} ({(info or {}).get('class_type', '?')}): {msg}" + (f": {det}" if det else ""))
+            _error_file("validation_failed", cls, data={"node_id": first_id, "node_type": (first or {}).get("class_type"),
+                                                        "exception_type": "ValidationError",
+                                                        "exception_message": "\n".join(lines) or "validation failed"})
             raise WorkflowFailure(
                 3, f"{len(node_errors)} node(s) failed validation; their outputs "
                    "would be skipped (set ALLOW_PARTIAL_OUTPUTS=1 to run the rest anyway)", cls)
