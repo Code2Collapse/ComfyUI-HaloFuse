@@ -310,7 +310,12 @@ def _fetch_extras(catalog_dir, dest: Path, report: dict, cache, opener) -> None:
                 extract_zip(blob, staged)
                 rec["content_sha256"] = content_hash(staged)
                 if (dest / folder).exists():
-                    raise InstallError(f"folder {folder} already exists in custom_nodes")
+                    # owner 2026-11-24: two packs named ComfyUI-QwenVL (1038lab + aistudynow) - keep both
+                    folder = f"{folder}-{repo.split('/', 1)[0]}"
+                    rec["folder"] = folder
+                    if (dest / folder).exists():
+                        raise InstallError(f"folder {folder} already exists in custom_nodes")
+                    log(f"extra {repo}: its folder name is taken, installed as {folder}")
                 shutil.move(str(staged), str(dest / folder))
         except Exception as exc:  # noqa: BLE001
             rec["status"] = "failed"
