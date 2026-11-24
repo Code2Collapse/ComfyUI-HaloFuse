@@ -13,7 +13,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_MAX_BYTES = 24576
+DEFAULT_MAX_BYTES = 48128  # owner 2026-11-24: previews too poor; the largest a log line carries
 MIN_MAX_BYTES = 4096
 MAX_MAX_BYTES = 48128
 _PASS_THROUGH_MAGIC = (b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n")

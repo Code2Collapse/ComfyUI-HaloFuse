@@ -26,6 +26,8 @@ from . import events as hf_events
 from . import frames as hf_frames
 from . import outputs as hf_outputs
 
+LIVE_LONG_EDGE = 640  # owner 2026-11-24: 384 px live frames looked too poor
+
 _EXT = {"image/jpeg": "jpg", "image/png": "png"}
 _METHODS = ("latent2rgb", "taesd", "none")
 _NODE_SAFE = re.compile(r"[^A-Za-z0-9-]")
@@ -301,7 +303,7 @@ class LiveRelay:
         fields = {"kind": "latent", "node": None if node is None else str(node), "mime": mime, "bytes": len(image)}
         if self._write_atomic(self.preview_dir / name, image):  # full-quality last frame, for delivery
             fields["path"] = f"{hf_outputs.RESERVED_DIR}/previews/{name}"
-        fitted = hf_frames.fit(image, mime, self.max_bytes, 384)
+        fitted = hf_frames.fit(image, mime, self.max_bytes, LIVE_LONG_EDGE)
         if fitted is not None:
             seq_frame = self._next_frame_seq()
             live_name = f"f{seq_frame:06d}_latent_{node_safe(node or 'latent')}.jpg"
@@ -438,7 +440,7 @@ class LiveRelay:
                 mask = "Mask" in (self._class_type(prompt_id, node_id) or "") or hf_frames.is_grey(raw)
                 fields["mask"] = bool(mask)
                 if raw and self.thumb_throttle.allow(force=self._first_picture(prompt_id, node_id)):
-                    fitted = hf_frames.fit(raw, fields["mime"], self.max_bytes, 384, mask=mask)
+                    fitted = hf_frames.fit(raw, fields["mime"], self.max_bytes, LIVE_LONG_EDGE, mask=mask)
                     if fitted is not None:
                         fields.update(mime=fitted.mime, bytes=len(fitted.data), w=fitted.w, h=fitted.h,
                                       data=base64.b64encode(fitted.data).decode("ascii"), src_bytes=len(raw),
@@ -519,7 +521,7 @@ class LiveRelay:
     def _output_thumb(self, prompt_id, node_id, path, kind="output_thumb") -> None:
         video = hf_frames.is_video(path)
         fitted = (hf_frames.video_sheet(path, self.max_bytes, 512) if video
-                  else hf_frames.image_thumb(path, self.max_bytes, 384))
+                  else hf_frames.image_thumb(path, self.max_bytes, LIVE_LONG_EDGE))
         if fitted is None:
             return
         with self._lock:

@@ -115,7 +115,9 @@ export const HF_CSS = `
   padding: 7px 10px 6px; font: inherit; cursor: pointer; white-space: nowrap; }
 .hf-tab[aria-selected="true"] { color: var(--hf-fg); border-bottom-color: var(--hf-accent); }
 .hf-tab .hf-count { margin-left: 5px; font-size: 11px; }
-.hf-tabpanel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.hf-tabpanel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+/* owner 2026-11-24: the Live tab could not scroll - its content (stage + node cards) is taller than the window */
+.hf-console .hf-tabpanel > .hf-live { flex: 0 0 auto; overflow: visible; }
 .hf-tabpanel[hidden] { display: none; }
 .hf-scroll { overflow: auto; overscroll-behavior: contain; padding: 12px; flex: 1 1 auto; min-height: 0; }
 .hf-toolbar { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--hf-border); background: var(--hf-bg); }

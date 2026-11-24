@@ -20,7 +20,7 @@ LADDER_STEPS = ("resubmit_cached", "decode_tiled", "decode_from_latent")
 RESTART_POLICIES = {"off": 0, "once": 1, "twice": 2, "each": None}  # each: one restart per manifest entry
 DEFAULT_RESTART_POLICY = "each"
 PREVIEW_METHODS = ("latent2rgb", "taesd", "none")  # HF_PREVIEW_METHOD (R-PREVIEW-01)
-DEFAULT_PREVIEW_SIZE = "384"
+DEFAULT_PREVIEW_SIZE = "512"
 DEFAULT_UNRESPONSIVE_SECONDS = 300.0
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:=,+/-]+$")
 _NUMBER_RE = re.compile(r"^-?\d+(\.\d+)?$")
