@@ -2935,8 +2935,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "requires pynvml, which the image removes on purpose (deprecated-warning import hook), and jetson-stats; needs a build test"
+    "compatible": true,
+    "notes": "installs and imports in the image (29 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -2955,8 +2955,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "A powerful set of tools for ComfyUI",
@@ -3513,8 +3513,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "very broad dependency set (openai, pyopenssl, watchdog, torchaudio, rembg, clip-interrogator); many nodes are browser/app features; needs an import test"
+    "compatible": false,
+    "notes": "pip refuses requirements.txt line 33 (git+ SenseVoice-python -> sensevoice-onnx 1.1.0 needs setuptools<=65; the image has setuptools 83.0.0): ResolutionImpossible, CI runs 45264988366/45320986105"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -3533,8 +3533,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "BUILD TESTED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "Workflow-to-APP、ScreenShare&FloatingVideo、GPT & 3D、SpeechRecognition&TTS",
@@ -4014,8 +4014,8 @@
     ]
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "the implementation is a git submodule (repositories/ultimate_sd_upscale); pinned to the Comfy Registry package 1.7.2 instead of a GitHub archive, but whether that package contains the submodule code is NOT VERIFIED"
+    "compatible": true,
+    "notes": "installs and imports in the image (3 node classes registered); the registry 1.7.2 zip already contains the repositories/ultimate_sd_upscale submodule code"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -4034,8 +4034,8 @@
     "content_sha256": null
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "ComfyUI nodes for the Ultimate Stable Diffusion Upscale script by Coyote-A.",
@@ -4348,8 +4348,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "needs dlib and insightface, normally compiled from source (C++ toolchain); not build-tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (6 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -4368,8 +4368,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "Extension for ComfyUI to evaluate the similarity between two faces",
@@ -4428,8 +4428,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "needs insightface, normally compiled from source; not build-tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (7 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -4448,8 +4448,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "",
@@ -4524,7 +4524,7 @@
       ]
      }
     ],
-    "notes": "same node class names as the fork MinorBoy/ComfyUI_essentials_mb (verified in image.py); only one may be installed; the default image ships the fork"
+    "notes": "same node class names as the fork MinorBoy/ComfyUI_essentials_mb (verified in image.py); only one may be installed; the default image ships the fork; measured 2026-11-24: all 85 node classes of the fork (full snapshot) are also registered by this pack, so only one can load"
    },
    "profiles": [
     "image",
@@ -4788,8 +4788,8 @@
     ]
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "install.py installs insightface (source build) and an NSFW-detector model; not build-tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (18 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -4808,8 +4808,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "Fast and Simple Face Swap Extension Node for ComfyUI (SFW)",
@@ -5042,8 +5042,8 @@
     ]
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "requires groundingdino-py (C++/CUDA extension build); not build-tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (49 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -5072,8 +5072,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "A ComfyUI custom node designed for advanced image background removal and object, face, clothes, and fashion segmentation, utilizing multiple models including RMBG-2.0, VRMBG-3.0, FeyNoBg, Finegrain Bo",
@@ -5333,7 +5333,7 @@
     "archive": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation/archive/<commit>.zip",
     "extra_requirements": [
      {
-      "requirement": "cupy-cuda13x",
+      "requirement": "cupy-cuda13x==14.2.0",
       "reason": "config.yaml selects ops_backend cupy and vfi_models/ops/cupy_ops imports cupy; install.py installs cupy (archive installs never run it); cupy-cuda13x matches the image's CUDA 13"
      }
     ]
@@ -5360,8 +5360,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "install.py installs cupy for some interpolators (CUDA-version specific) and archive installs skip install.py; needs a build test"
+    "compatible": true,
+    "notes": "installs and imports in the image (16 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -5380,8 +5380,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "A custom node set for Video Frame Interpolation in ComfyUI.",
@@ -5628,8 +5628,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "requires aiortc and bitsandbytes; not build-tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (5 node classes registered); runs under transformers 5.16 via a requirement override (upstream caps <5): generation NOT VERIFIED"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -5648,8 +5648,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "A comprehensive ComfyUI integration for Microsoft's VibeVoice text-to-speech model, enabling high-quality single and multi-speaker voice synthesis directly within your ComfyUI workflows.",
@@ -6171,8 +6171,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "needs a nunchaku wheel built for the exact torch/CUDA/Python of the base image; not build-tested"
+    "compatible": false,
+    "notes": "the nunchaku engine has no wheel for torch 2.13 (newest release v1.3.0dev20260306 stops at torch 2.12); in the image only NunchakuDepthPreprocessor and NunchakuWheelInstaller register, every model loader fails (CI run 45264988366)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -6198,8 +6198,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "BUILD TESTED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "ComfyUI Plugin of Nunchaku",
@@ -6250,8 +6250,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "install.py installs the pruna package; not build-tested"
+    "compatible": false,
+    "notes": "the pruna package (installed by install.py) pulls auto-gptq, whose sdist build needs torch inside pip's isolated build env and fails (CI run 45264988366); pruna 0.3.5 also requires peft<0.19 (image: 0.20.0)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -6270,8 +6270,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "BUILD TESTED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "This is a ComfyUI node that integrates pruna",
@@ -6349,8 +6349,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "needs insightface, normally compiled from source; not build-tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (5 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -6369,8 +6369,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "First PuLID implementation for FLUX.2 — Consistent face identity in ComfyUI",
@@ -6435,8 +6435,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "needs insightface + cython build; not build-tested"
+    "compatible": false,
+    "notes": "import fails: No module named 'facenet_pytorch' (undeclared; facenet-pytorch 2.6.0 requires torch<2.3 and numpy<2) (CI run 45320986105)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -6455,8 +6455,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "BUILD TESTED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "",
@@ -6724,8 +6724,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "depends on ComfyUI-nunchaku, which is not build-tested"
+    "compatible": false,
+    "notes": "its LoRA loaders need the nunchaku engine (not installable on torch 2.13): only 2 classes register (CI run 45264988366); prestartup_script.py also patches comfy.ldm.qwen_image and source decoding process-wide"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -6751,8 +6751,8 @@
     "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "pin moved from beeaeb79e1f9 to 082d7d36c849 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
+    "status": "BUILD TESTED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "LoRA Loader & Diffsynth/LoRA ControlNet Loader for Nunchaku Qwen Image & Nunchaku Z-Image Turbo. Krea2 Depth/OpenPose LoRA ControlNet Loader",
@@ -6832,8 +6832,8 @@
     ]
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "requires onnxruntime-openvino (would replace the image's onnxruntime-gpu) and the SoX binary"
+    "compatible": true,
+    "notes": "installs and imports in the image (9 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -6852,8 +6852,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "A Simple Implementation of Qwen3-TTS's ComfyUI",
@@ -9085,8 +9085,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "requires transformers and diffusers from git main (unpinned), which would replace the image's released versions"
+    "compatible": true,
+    "notes": "installs and imports in the image (4 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -9105,8 +9105,8 @@
     "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "pin moved from 668d9c8193ae to fe69967a3a4f on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Main custom-node collection",
    "description": "Under construction for GLM",
@@ -10413,8 +10413,8 @@
     ]
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "RTX Video Super Resolution / NVIDIA VFX nodes need NVIDIA's proprietary runtime libraries; not build-tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (29 node classes registered); the RTX Video Super Resolution nodes still need NVIDIA's proprietary runtime at execution"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -10433,8 +10433,8 @@
     "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "pin moved from e5b4fe12eddd to b43184f41d5a on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Windows third-party repositories",
    "description": "ComfyUI custom nodes for RTX Video Super Resolution, NVIDIA VFX/nvvfx, LTX 2.3, Bernini Prompt Guide, Wan2.2 reference video edit, image/video compare, video preview, loaders, resize, and visual workf",
@@ -10485,8 +10485,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "multi-GPU / multi-worker orchestration needs worker-to-worker networking that a single cloud job does not provide (D6 assessment); not tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (12 node classes registered); multi-worker features need worker networking a single job lacks; registers its own SIGINT/SIGTERM handlers in ComfyUI"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -10505,8 +10505,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Windows third-party repositories",
    "description": "ComfyUI extension that enables multi-GPU processing locally, remotely and in the cloud",
@@ -10799,8 +10799,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "needs insightface, normally compiled from source; not build-tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (6 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -10819,8 +10819,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Windows third-party repositories",
    "description": "Refine and improve the quality of small faces in MiniMax H3 video. Per-frame face tracking, crop, refine with H3, stitch back.",
@@ -14780,8 +14780,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "research framework whose ComfyUI nodes pull a large training/inference dependency set (decord, datasets, tomesd ...); not build-tested"
+    "compatible": false,
+    "notes": "import fails: No module named 'videox_fun' (the nodes expect the repository installed as a package by install.py) (CI run 45320986105)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -14800,8 +14800,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "BUILD TESTED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Windows third-party repositories",
    "description": "📹 A more flexible framework that can generate videos at any resolution and creates videos from images.",
@@ -15479,8 +15479,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "requires tensorflow (very large, its own CUDA runtime); not build-tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (4 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -15499,8 +15499,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Linux custom-node repositories",
    "description": "ComfyI2I is a set of custom nodes for ComfyUI that help with image 2 image functions.",
@@ -15804,7 +15804,7 @@
    },
    "compatibility": {
     "compatible": "unknown",
-    "notes": "requires the sam3 package and a Blender connection for some nodes; not build-tested"
+    "notes": "not build-tested: the licence policy excludes it before any build; static: its sam3 0.1.4 requirement caps numpy<2.4 (image 2.4.4)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -16477,8 +16477,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "needs NVIDIA's proprietary NGX/DLSS runtime and a supported driver; not build-tested"
+    "compatible": false,
+    "notes": "imports (3 classes, CI run 45264988366) but execution needs Windows binaries (README: Windows only); cannot run in the Linux image"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -16504,8 +16504,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "BUILD TESTED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Linux custom-node repositories",
    "description": "NVIDIA DLSS 5 Neural Rendering (NGX feature 18) as ComfyUI nodes. Enhance image batches and video files with the real neural renderer, with optional upscaling.",
@@ -16709,8 +16709,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "FlashVSR's fast path needs a compiled block-sparse attention kernel; not build-tested"
+    "compatible": true,
+    "notes": "installs and imports in the image (5 node classes registered)"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -16729,8 +16729,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Linux custom-node repositories",
    "description": "FlashVSR：Towards Real-Time Diffusion-Based Streaming Video Super-Resolution，you can use it in comfyUI",
@@ -17004,7 +17004,7 @@
    },
    "compatibility": {
     "compatible": "unknown",
-    "notes": "requires llama-cpp-python (compiled; a CUDA build needs nvcc); not build-tested"
+    "notes": "NEEDS OWNER: installs and imports (4 node classes, CI runs 45264988366/45320986105), but its requirements.txt adds a third-party package index (--extra-index-url, CUDA 12.5 llama-cpp-python wheel of about 1.6 GB) to a CUDA 13 image; GPU LLM use NOT VERIFIED. Kept out of full until the owner accepts the index and the size; full-candidates still builds it"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -17023,8 +17023,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Linux custom-node repositories",
    "description": "Chunked  video/audio sampling for ComfyUI with latent continuation, frame-accurate shot prompt rewriting, and reduced VRAM usage.",
@@ -18091,8 +18091,8 @@
     "flags": []
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "needs NVIDIA's proprietary DLSS runtime; not build-tested"
+    "compatible": false,
+    "notes": "imports (2 classes, CI run 45264988366) but execution needs Windows DLLs, on Linux only through Wine + DXVK-NVAPI + vkd3d-proton + Xvfb, which the image does not have"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -18118,8 +18118,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "BUILD TESTED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Linux custom-node repositories",
    "description": "",
@@ -18278,8 +18278,8 @@
     ]
    },
    "compatibility": {
-    "compatible": "unknown",
-    "notes": "depends on comfy-env, which manages separate Python environments; behaviour inside a frozen image NOT VERIFIED. ComfyUI core also ships SAM 3 nodes"
+    "compatible": true,
+    "notes": "installs and imports in the image (15 node classes registered); nodes load in the main process (comfy-env isolation env not built); inference NOT VERIFIED"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -18308,8 +18308,8 @@
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
-    "status": "NOT VERIFIED",
-    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+    "status": "IMPORT VERIFIED",
+    "evidence": "CI runs 45264988366 and 45320986105 (profile full-candidates, push=false): pip install under the image constraints + CPU boot snapshot + smoke"
    },
    "source_list": "Linux custom-node repositories",
    "description": "ComfyUI wrapper for segment anything 3",
@@ -18452,7 +18452,7 @@
    },
    "compatibility": {
     "compatible": "unknown",
-    "notes": "requires taichi (wheels limited by Python version); not build-tested"
+    "notes": "not build-tested: the licence policy excludes it before any build; static: taichi 1.7.4 publishes a cp313 manylinux wheel"
    },
    "conflicts": {
     "conflicts_with": [],
@@ -19027,7 +19027,7 @@
       ]
      }
     ],
-    "notes": "registers WanVideoSampler etc. like kijai/ComfyUI-WanVideoWrapper (verified)"
+    "notes": "registers WanVideoSampler etc. like kijai/ComfyUI-WanVideoWrapper (verified); measured 2026-11-24: 145 of the 147 WanVideoWrapper node classes (full snapshot) are also defined by this pack; loading both lets folder order decide"
    },
    "profiles": [
     "research-experimental",

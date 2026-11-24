@@ -493,7 +493,7 @@ def install_deps(catalog_dir, profile: str, custom_nodes: Path, report: dict, pi
         req = _requirements_for(rec, req, entry, res.strict, work)
         argv = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "--no-input",
                 "--progress-bar", "off", "-r", str(req), "-c", str(constraints)]
-        log(f"pip install -r {rec['folder']}/requirements.txt")
+        log(f"pip install -r {rec['folder']}/{req.name}")
         code, _out, err = pip(argv)
         if code == 0:
             rec["status"] = "installed"

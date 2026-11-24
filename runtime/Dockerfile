@@ -234,10 +234,6 @@ FROM nodes AS snapshot
 ARG PROFILE=default
 ARG SNAPSHOT_BOOT=1
 COPY scripts/export_node_snapshot.py /opt/halofuse/scripts/
-# TRIAL (L9.320, removed before merge): size record in the build log; this stage never reaches the image.
-# hadolint ignore=SC2046
-RUN du -sb "$COMFYUI_DIR/custom_nodes" $(python3.13 -c 'import os, site; print(" ".join(sorted({p for p in site.getsitepackages() if os.path.isdir(p)})))') \
-      | sed 's/^/[size] /'
 RUN mkdir -p /out && if [ "$SNAPSHOT_BOOT" = "1" ]; then \
       python3.13 /opt/halofuse/scripts/export_node_snapshot.py export --boot \
         --comfyui-dir "$COMFYUI_DIR" --python python3.13 --profile "$PROFILE" \
