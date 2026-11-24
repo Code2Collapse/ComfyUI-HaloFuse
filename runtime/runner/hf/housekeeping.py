@@ -17,12 +17,21 @@ kept
   * Loaded models (VRAM / RAM) and ComfyUI's execution cache: ComfyUI 0.39+ already drops cached node outputs under
     RAM pressure by itself (its default RAM-pressure cache).
   * Prefetched model files and the Hugging Face cache (models a node downloaded for a later workflow).
-memory
-  * ``HF_UNLOAD_BETWEEN=1`` (default off): ``POST /free {"unload_models": true, "free_memory": true}`` after every
-    workflow, so each workflow starts with empty VRAM (its models load again).
-  * Otherwise ``/free`` is sent only when host RAM is critically low (measured from /proc/meminfo and the cgroup),
-    because a host-RAM OOM kills the whole ComfyUI. ComfyUI's ``free_memory`` also unloads the models (core
+memory (``HF_MEMORY_MODE`` keep | auto | always; L9.340)
+  * keep (default): models stay loaded for the next workflow.
+  * auto: unload when GPU memory use (nvidia-smi, the fullest GPU) is at or above ``HF_VRAM_HIGH_PCT`` (default 90)
+    after a workflow. Hysteresis: after an unload the next one is allowed only once a later check saw use below
+    ``HF_VRAM_LOW_PCT`` (default 75), so a workflow that simply needs that much memory is not unloaded and reloaded
+    after every workflow.
+  * always (also ``HF_UNLOAD_BETWEEN=1``, the older switch): ``POST /free {"unload_models": true, "free_memory":
+    true}`` after every workflow, so each workflow starts with empty VRAM (its models load again).
+  * In keep and auto, ``/free`` is also sent when host RAM is critically low (measured from /proc/meminfo and the
+    cgroup), because a host-RAM OOM kills the whole ComfyUI. ComfyUI's ``free_memory`` also unloads the models (core
     main.py: ``flags.get("unload_models", free_memory)``), so the log says the next workflow loads them again.
+protected
+  * The persistent model folders (``MODEL_BASE_DIR``, default /assets, and /models) are never cleaned: a removal
+    below them is refused (an unfinished ``*.incomplete`` download excepted). Temporary-file cleanup never deletes
+    model files.
 
 Every action is printed as a ``[runner] housekeeping: ...`` line and one ``[hf]`` phase mark ``housekeeping``.
 Nothing here raises: housekeeping never fails a job.
@@ -37,6 +46,13 @@ from pathlib import Path, PurePosixPath
 ENV_CLEAN = "HF_CLEAN_BETWEEN"
 ENV_UNLOAD = "HF_UNLOAD_BETWEEN"
 ENV_PIP_CACHE = "HF_USER_NODES_CACHE"   # hf/user_nodes.py CACHE_ENV: a deliberate cache is never removed
+ENV_MEMORY = "HF_MEMORY_MODE"
+ENV_VRAM_HIGH = "HF_VRAM_HIGH_PCT"
+ENV_VRAM_LOW = "HF_VRAM_LOW_PCT"
+MEMORY_MODES = ("keep", "auto", "always")
+DEFAULT_VRAM_HIGH, DEFAULT_VRAM_LOW = 90, 75
+MODEL_ROOTS = ("/assets", "/models")     # persistent model folders (MODEL_BASE_DIR is added at run time)
+PARTIAL_SUFFIX = ".incomplete"
 # Host RAM is "critical" below this share of MemTotal (or of the cgroup limit), with an absolute floor.
 RAM_CRITICAL_FRACTION = 0.05
 RAM_CRITICAL_FLOOR_MB = 2048
@@ -54,6 +70,60 @@ def flags_from_env(env=None) -> tuple:
     clean = str(env.get(ENV_CLEAN, "1")).strip().lower() not in _FALSE
     unload = str(env.get(ENV_UNLOAD, "0")).strip().lower() in _TRUE
     return clean, unload
+
+
+def _pct_env(env, key: str, default: int) -> int:
+    try:
+        value = int(str(env.get(key, "")).strip())
+    except ValueError:
+        return default
+    return value if 10 <= value <= 99 else default
+
+
+def memory_from_env(env=None) -> tuple:
+    """(mode, high_pct, low_pct). HF_MEMORY_MODE wins when valid; else HF_UNLOAD_BETWEEN=1 means "always"."""
+    env = os.environ if env is None else env
+    mode = str(env.get(ENV_MEMORY, "")).strip().lower()
+    if mode not in MEMORY_MODES:
+        mode = "always" if flags_from_env(env)[1] else "keep"
+    high = _pct_env(env, ENV_VRAM_HIGH, DEFAULT_VRAM_HIGH)
+    low = _pct_env(env, ENV_VRAM_LOW, DEFAULT_VRAM_LOW)
+    if low >= high:
+        low = max(10, high - 5)
+    return mode, high, low
+
+
+def vram_used_pct(sample) -> float | None:
+    """GPU memory use of the fullest GPU in a telemetry sample, in percent; None without nvidia-smi data."""
+    best = None
+    for gpu in (sample or {}).get("gpu") or ():
+        used, total = gpu.get("mem_used_mb"), gpu.get("mem_total_mb")
+        if isinstance(used, (int, float)) and isinstance(total, (int, float)) and total > 0:
+            pct = 100.0 * used / total
+            best = pct if best is None else max(best, pct)
+    return best
+
+
+def model_roots(env=None) -> list:
+    env = os.environ if env is None else env
+    roots = [Path(r) for r in MODEL_ROOTS]
+    if env.get("MODEL_BASE_DIR"):
+        roots.append(Path(env["MODEL_BASE_DIR"]))
+    return roots
+
+
+def _inside(path: Path, root: Path) -> bool:
+    try:
+        Path(os.path.abspath(path)).relative_to(os.path.abspath(root))
+        return True
+    except ValueError:
+        return False
+
+
+def protected(path, roots) -> bool:
+    """True for a path in (or equal to) a persistent model folder, or a folder that holds one: never removed."""
+    path = Path(path)
+    return any(_inside(path, r) or _inside(r, path) for r in roots or ())
 
 
 def _norm(value: str) -> str:
@@ -117,10 +187,13 @@ def _size(path: Path) -> int:
         return 0
 
 
-def remove_files(paths) -> tuple:
-    """(count, bytes) of the files removed; a file that cannot be removed is skipped."""
+def remove_files(paths, protect=()) -> tuple:
+    """(count, bytes) of the files removed; a file that cannot be removed is skipped, and so is a file in a protected
+    model folder (only an unfinished ``*.incomplete`` download may go there)."""
     count = freed = 0
     for path in paths:
+        if protected(path, protect) and not str(path).endswith(PARTIAL_SUFFIX):
+            continue
         size = _size(path)
         try:
             Path(path).unlink()
@@ -131,13 +204,16 @@ def remove_files(paths) -> tuple:
     return count, freed
 
 
-def clear_folder(folder) -> tuple:
-    """Remove everything inside *folder* (the folder itself stays). (count, bytes)."""
+def clear_folder(folder, protect=()) -> tuple:
+    """Remove everything inside *folder* (the folder itself stays). (count, bytes). A folder in, or holding, a
+    protected model folder is never cleared."""
     root = Path(folder)
-    if not root.is_dir():
+    if not root.is_dir() or protected(root, protect):
         return 0, 0
     count = freed = 0
     for child in list(root.iterdir()):
+        if protected(child, protect):
+            continue
         size = _size(child)
         try:
             if child.is_dir() and not child.is_symlink():
@@ -216,6 +292,10 @@ class Housekeeper:
         self.env = os.environ if env is None else env
         self.home = Path(home) if home is not None else Path.home()
         self.clean, self.unload = flags_from_env(self.env)
+        self.memory, self.vram_high, self.vram_low = memory_from_env(self.env)
+        self.unload = self.memory == "always"
+        self._armed = True            # auto: an unload is allowed; re-armed only after use was seen below vram_low
+        self.protect = model_roots(self.env)
         self.started = time.time()
         self._pip_existed = True   # unknown until before_user_nodes(): never remove a cache this job did not create
 
@@ -228,7 +308,7 @@ class Housekeeper:
     def announce(self) -> None:
         """An [hf] phase mark only: the frozen [runner] line sequence of a manifest job stays as it was (the bridge
         learns from this mark that the image cleans between renders)."""
-        self.mark(detail="announce", clean=self.clean, unload=self.unload)
+        self.mark(detail="announce", clean=self.clean, unload=self.unload, memory=self.memory)
 
     def _sample(self):
         try:
@@ -280,12 +360,12 @@ class Housekeeper:
     def _between(self, report, idx, total, done_workflows, remaining_workflows) -> None:
         parts = []
         if self.clean:
-            n, freed = clear_folder(self.temp_dir)
+            n, freed = clear_folder(self.temp_dir, self.protect)
             if n:
                 report["actions"].append("comfy_temp")
                 report["freed_bytes"] += freed
                 parts.append(f"{n} temporary file(s), {_mb(freed)}")
-            n, freed = remove_files(stale_inputs(self.staged_dir, done_workflows, remaining_workflows))
+            n, freed = remove_files(stale_inputs(self.staged_dir, done_workflows, remaining_workflows), self.protect)
             if n:
                 report["actions"].append("inputs")
                 report["freed_bytes"] += freed
@@ -295,16 +375,23 @@ class Housekeeper:
             low = disk_low(sample)
             if low:
                 n, freed = remove_files(p for d in hf_cache_dirs(self.env, self.home) if d.is_dir()
-                                        for p in d.rglob("*.incomplete") if self._this_job(p))
+                                        for p in d.rglob("*" + PARTIAL_SUFFIX) if self._this_job(p))
                 if n:
                     report["actions"].append("partial_downloads")
                     report["freed_bytes"] += freed
                     parts.append(f"{n} partial model download(s), {_mb(freed)} ({low})")
+        pct = vram_used_pct(sample)
+        report["vram_pct"] = None if pct is None else round(pct, 1)
         if self.unload:
             if self._free({"unload_models": True, "free_memory": True}):
                 report["free"] = "unload"
                 parts.append("models unloaded and ComfyUI's cache freed (your setting); the next workflow loads "
                              "its models again")
+        elif self.memory == "auto" and pct is not None and self._auto_unload(pct):
+            report["free"] = "vram_pressure"
+            parts.append(f"models unloaded because GPU memory use was {pct:.0f}% (your limit {self.vram_high}%); the "
+                         f"next workflow loads them again. No further automatic unload until use falls below "
+                         f"{self.vram_low}%")
         else:
             critical = ram_critical(sample)
             if critical and self._free({"free_memory": True}):
@@ -314,4 +401,18 @@ class Housekeeper:
         if parts:
             self.log(f"housekeeping after workflow {idx}/{total}: " + "; ".join(parts))
         self.mark(detail="between", wf=idx, of=total, actions=list(report["actions"]),
-                  freed_bytes=report["freed_bytes"], free=report["free"])
+                  freed_bytes=report["freed_bytes"], free=report["free"], memory=self.memory,
+                  vram_pct=report.get("vram_pct"))
+
+    def _auto_unload(self, pct: float) -> bool:
+        """auto: unload at or above vram_high when armed; re-arm only after a check below vram_low (hysteresis)."""
+        if not self._armed:
+            if pct < self.vram_low:
+                self._armed = True
+            return False
+        if pct < self.vram_high:
+            return False
+        if self._free({"unload_models": True, "free_memory": True}):
+            self._armed = False
+            return True
+        return False

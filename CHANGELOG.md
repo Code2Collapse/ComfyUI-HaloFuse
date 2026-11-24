@@ -2,6 +2,23 @@
 
 ## Unreleased — 2026-11-23
 
+- **Warm machine: modes, warm duration and costs (2026-11-24).** The panel's warm-machine section chooses *Off*,
+  *Always Warm* (starts the machine when chosen) or *Smart Warm* (starts it only when you are about to render: the
+  Workflow Check passed after Render, or models are being prepared for a render - never on opening the panel), and a
+  warm duration (30 min to 24 h, or custom): the machine shuts itself down after that long without a render. The
+  countdown pauses while renders or a queue run, is never reset by keep-alive jobs, survives a ComfyUI restart and
+  warns about 5 minutes before; *Keep it warm* restarts it. An automatic shutdown (idle or the daily spending limit)
+  never stops a running render. The section shows the remaining warm time, the hourly rate, the idle cost of the
+  chosen duration, the cost so far and the estimated total, the GPU memory of the last render on it, model transfers
+  in progress and the model cache. A settings file with *Keep the cloud machine warm* on means Always Warm with its
+  saved hold. Each render still starts ComfyUI again on the warm machine (models load from its disk cache).
+- **Model transfers in parallel, never twice.** Downloads and uploads of models run two at a time by default (1-4,
+  separately for each direction); the same model is never downloaded or uploaded twice at once. Unfinished downloads
+  untouched for 7 days can be removed from the panel; complete model files are never deleted.
+- **GPU memory between workflows** of a queue batch: keep models loaded, unload when GPU memory is high (with a lower
+  limit so a large workflow is not unloaded and reloaded every time), or always unload. Temporary-file cleanup never
+  touches the model folders.
+
 - **Missing models are fetched automatically.** A model that is neither on this computer nor in the cloud model library
   no longer just blocks the render: the Workflow Check looks for a public download, in this order - the workflow's own
   links (official templates carry them), the ComfyUI-Manager model list, then Hugging Face by exact file name (known

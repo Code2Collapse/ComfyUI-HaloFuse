@@ -232,6 +232,7 @@ export class Controller {
           : "Workflow check is not available on this bridge version.", check?.ok ? "success" : "warning");
         return;
       }
+      this._warmIntent(check);
       if (!this._gate(check, () => this._submit(workflow), () => this.render())) return;
       await this._submit(workflow);
     } catch (err) {
@@ -247,6 +248,14 @@ export class Controller {
       this.loadRecent();
       this.say(`${err.message || String(err)} The console has the details.`, "danger");
     } else this.say(err?.message || String(err), "danger");
+  }
+
+  /** Smart Warm (L9.340): Run was pressed and the Workflow Check passed (nothing blocks, no model is missing), so the
+   *  bridge may start the warm machine now; it provisions while models transfer. Fire-and-forget: Off ignores it,
+   *  and an older bridge without the route is fine. Never called for "Workflow check" only or on panel open. */
+  _warmIntent(check) {
+    if (!check || check.blocking?.length || check.models?.missing?.length || !this.api.warmIntent) return;
+    this.api.warmIntent(this.state.instanceType || undefined, "run").catch(() => {});
   }
 
   /** Returns the preflight result, or null when the route does not exist yet. */
@@ -528,6 +537,7 @@ export class Controller {
         this._set({ queueDraft: [] });
         this.session.attach(res.queue?.queue_id || res.queueId, "queue");
       };
+      this._warmIntent(check);
       if (!this._gate(check, go)) return;
       await go();
     } catch (err) { this.say(err.message, "danger"); } finally { this._set({ busy: false }); }

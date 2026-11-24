@@ -19,7 +19,7 @@ import uuid
 from pathlib import Path
 from typing import NamedTuple
 
-from . import brand, jobs, provider
+from . import brand, jobs, provider, transfer_pool
 from .config import load_settings
 from .provider.backend import BackendError
 
@@ -554,11 +554,37 @@ def _register_upload(files: list[dict]) -> str:
 def start_upload(files: list[dict], settings: dict | None = None) -> str:
     """Start uploading *prepared* files (see prepare_upload_files) in a daemon
     thread; returns the registry id the routes poll. The thread lives in the
-    ComfyUI server process, so it survives the browser tab closing."""
+    ComfyUI server process, so it survives the browser tab closing.
+
+    Every file's library path is claimed first, atomically: a second request for a model that is being uploaded is
+    refused (ValueError). Without *settings* the number of simultaneous uploads is read from the saved settings each
+    time a file starts, so a changed setting applies to the next file."""
+    pool_settings = settings
     settings = settings or load_settings()
-    upload_id = _register_upload(files)
-    threading.Thread(target=_run_upload, args=(upload_id, settings), daemon=True).start()
+    taken = transfer_pool.claim_all("upload", [f["remote_rel"] for f in files])
+    if taken:
+        f = next(f for f in files if f["remote_rel"] == taken[0])
+        raise ValueError(f"{f['name']} ({f['folder']}) is already being uploaded.")
+    try:
+        upload_id = _register_upload(files)
+        threading.Thread(target=_run_upload, args=(upload_id, settings),
+                         kwargs={"claimed": True, "pool_settings": pool_settings}, daemon=True).start()
+    except BaseException:
+        for f in files:
+            transfer_pool.unclaim("upload", f["remote_rel"])
+        raise
+    _render_intent()
     return upload_id
+
+
+def _render_intent() -> None:
+    """Smart Warm (L9.340): models staged for a render are render intent, so the warm machine provisions while they
+    transfer. Advisory: never fails or delays the transfer."""
+    try:
+        from . import warm_machine
+        warm_machine.intent_async("models")
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _put_file(be, space: str | None, f: dict, progress) -> None:
@@ -606,55 +632,116 @@ def _verify_upload(be, space, upload_id: str, index: int, f: dict, remote_path: 
 
 
 def _fail_upload(upload_id: str, index: int, name: str, message: str) -> None:
+    """Mark one file failed and give the batch its error (the first failure's). The batch status turns "failed" in
+    _run_upload once every file has ended, so the browser keeps polling while another file still finishes."""
     _set_file(upload_id, index, status="failed", error=message)
-    _set_upload(upload_id, status="failed", error=f"{name}: {message}")
+    _set_batch_error(upload_id, f"{name}: {message}")
 
 
-def _run_upload(upload_id: str, settings: dict) -> None:
-    space = settings.get("assets_library_space") or None
-    assets_path = (settings.get("assets_library_path") or "").rstrip("/")
+def _set_batch_error(upload_id: str, error: str) -> None:
+    with _UPLOAD_LOCK:
+        state = _UPLOADS.get(upload_id)
+        if state and not state.get("error"):
+            state["error"] = error
+
+
+_SAME = object()
+
+
+def _run_upload(upload_id: str, settings: dict, *, claimed: bool = False, pool_settings=_SAME) -> None:
+    """Upload the files of one batch at the same time, each in its own thread with its own backend, at most
+    transfer_max_uploads files on this computer at once (transfer_pool; *pool_settings* None = the saved settings,
+    default = *settings*); a waiting file stays "queued". After a file fails the batch is "failed" with that file's
+    error: files that have not started yet never start ("cancelled"), files already transferring finish. *claimed*:
+    start_upload claimed each file's remote_rel, released when that file ends."""
+    pool_settings = settings if pool_settings is _SAME else pool_settings
+    stop = threading.Event()
     try:
-        with provider.open_backend(settings) as be:
-            _set_upload(upload_id, status="running")
-            state = get_upload_state(upload_id)
-            cancelled = False
-            for i, f in enumerate(state["files"]):
-                if _upload_cancelled(upload_id):
-                    cancelled = True
-                    _set_file(upload_id, i, status="cancelled")
-                    continue
-                remote_path = _remote_path(assets_path, f["folder"], f["name"])
-                if remote_path is None:
-                    _fail_upload(upload_id, i, f["name"], brand.message("invalid_request"))
-                    return
-                _set_file(upload_id, i, status="uploading")
-
-                def progress(sent: int, total=None, _i: int = i) -> None:
-                    if _upload_cancelled(upload_id):
-                        raise UploadCancelled()
-                    if total is None:
-                        _set_file(upload_id, _i, sent=sent)
-                    else:
-                        _set_file(upload_id, _i, sent=sent, size=total)
-
-                try:
-                    _put_file(be, space, dict(f, remote_path=remote_path), progress)
-                except UploadCancelled:
-                    cancelled = True
-                    _set_file(upload_id, i, status="cancelled")
-                    _log.info("upload %s: %s cancelled mid-transfer", upload_id, f["name"])
-                    continue
-                except Exception as exc:  # noqa: BLE001 - surface in the registry (branded), stop the batch
-                    _fail_upload(upload_id, i, f["name"], _user_error(exc))
-                    _log.warning("upload %s: %s failed [%s] %s", upload_id, f["name"],
-                                 getattr(exc, "code", type(exc).__name__), getattr(exc, "detail", ""))
-                    return
-                if not _verify_upload(be, space, upload_id, i, f, remote_path):
-                    return
-                _set_file(upload_id, i, status="done", sent=f["size"])
-                _log.info("upload %s: %s done (%d bytes)", upload_id, f["name"], f["size"])
-            _set_upload(upload_id, status="cancelled" if cancelled else "done")
+        _set_upload(upload_id, status="running")
+        state = get_upload_state(upload_id)
+        outcomes: list[str] = ["failed"] * len(state["files"])
+        work = [(upload_id, i, f, settings, pool_settings, stop, outcomes, claimed)
+              for i, f in enumerate(state["files"])]
+        transfer_pool.run_threads(_upload_worker, work, f"halofuse-upload-{upload_id}")
     except Exception as exc:  # noqa: BLE001 - surface in the UI, branded; no traceback to the console (X3)
-        _set_upload(upload_id, status="failed", error=_user_error(exc))
+        stop.set()
+        _set_batch_error(upload_id, _user_error(exc))
         _log.warning("upload %s failed before transfer [%s] %s", upload_id,
                      getattr(exc, "code", type(exc).__name__), getattr(exc, "detail", ""))
+    if stop.is_set():
+        _set_upload(upload_id, status="failed")
+    else:
+        _set_upload(upload_id, status="cancelled" if "cancelled" in outcomes else "done")
+
+
+def _upload_worker(upload_id: str, i: int, f: dict, settings: dict, pool_settings, stop: threading.Event,
+                   outcomes: list, claimed: bool) -> None:
+    try:
+        outcomes[i] = _upload_file(upload_id, i, f, settings, pool_settings, stop)
+    except Exception as exc:  # noqa: BLE001 - surface in the UI, branded; no traceback to the console (X3)
+        stop.set()
+        _set_file(upload_id, i, status="failed", error=_user_error(exc))
+        _set_batch_error(upload_id, _user_error(exc))
+        _log.warning("upload %s failed before transfer [%s] %s", upload_id,
+                     getattr(exc, "code", type(exc).__name__), getattr(exc, "detail", ""))
+    finally:
+        if claimed:
+            transfer_pool.unclaim("upload", f["remote_rel"])
+
+
+def _upload_file(upload_id: str, i: int, f: dict, settings: dict, pool_settings, stop: threading.Event) -> str:
+    """One file: wait for an upload slot (a file whose batch was cancelled or failed meanwhile never starts), open a
+    backend for this thread, upload, verify. Returns done | cancelled | failed; a failure sets *stop*."""
+    space = settings.get("assets_library_space") or None
+    assets_path = (settings.get("assets_library_path") or "").rstrip("/")
+
+    def halted() -> bool:
+        return stop.is_set() or _upload_cancelled(upload_id)
+
+    if halted():
+        _set_file(upload_id, i, status="cancelled")
+        return "cancelled"
+    remote_path = _remote_path(assets_path, f["folder"], f["name"])
+    if remote_path is None:
+        stop.set()
+        _fail_upload(upload_id, i, f["name"], brand.message("invalid_request"))
+        return "failed"
+    if not transfer_pool.acquire("upload", cancel=halted, settings=pool_settings):
+        _set_file(upload_id, i, status="cancelled")
+        return "cancelled"
+    try:
+        if halted():                                 # failed or cancelled between the check and the slot
+            _set_file(upload_id, i, status="cancelled")
+            return "cancelled"
+        be = provider.open_backend(settings)
+        with be:
+            _set_file(upload_id, i, status="uploading")
+
+            def progress(sent: int, total=None) -> None:
+                if _upload_cancelled(upload_id):
+                    raise UploadCancelled()
+                if total is None:
+                    _set_file(upload_id, i, sent=sent)
+                else:
+                    _set_file(upload_id, i, sent=sent, size=total)
+
+            try:
+                _put_file(be, space, dict(f, remote_path=remote_path), progress)
+            except UploadCancelled:
+                _set_file(upload_id, i, status="cancelled")
+                _log.info("upload %s: %s cancelled mid-transfer", upload_id, f["name"])
+                return "cancelled"
+            except Exception as exc:  # noqa: BLE001 - surface in the registry (branded), stop the batch
+                stop.set()
+                _fail_upload(upload_id, i, f["name"], _user_error(exc))
+                _log.warning("upload %s: %s failed [%s] %s", upload_id, f["name"],
+                             getattr(exc, "code", type(exc).__name__), getattr(exc, "detail", ""))
+                return "failed"
+            if not _verify_upload(be, space, upload_id, i, f, remote_path):
+                stop.set()
+                return "failed"
+            _set_file(upload_id, i, status="done", sent=f["size"])
+            _log.info("upload %s: %s done (%d bytes)", upload_id, f["name"], f["size"])
+            return "done"
+    finally:
+        transfer_pool.release("upload")

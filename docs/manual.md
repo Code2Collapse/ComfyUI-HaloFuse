@@ -207,6 +207,10 @@ They survive extension updates and reinstalls.
 | Maximum cost per job, daily cost cap | off | stop or block renders above an **estimated** cost | settings file; panel control in development |
 | Launch preset | Safe | section 7.6 | settings file; panel control in development |
 | Panel location | Sidebar | where the panel shows: Sidebar, Floating window or Both (section 5) | ComfyUI Settings > HaloFuse (saved by ComfyUI, not in the HaloFuse settings file) |
+| Warm mode | Off | *Off*: nothing starts a warm machine by itself (Start in the panel still does). *Always Warm*: choosing it starts the machine; renders start it again after it shut down. *Smart Warm*: the machine starts only when you are about to render (the Workflow Check passed after Render, or models are being prepared for a render), so it provisions while models transfer; opening the panel never starts it. A settings file with the older *Keep the cloud machine warm* switched on means Always Warm | panel, warm machine |
+| Warm duration | 1 hour | the machine shuts itself down after it has been idle (no render) this long: 30 min, 1, 2, 4, 8, 12 or 24 hours, or a custom 5 minutes to 7 days. The countdown pauses while renders or a queue run on it and starts again after the last one; keep-alive jobs never reset it; it survives a ComfyUI restart; a warning comes about 5 minutes before; **Keep it warm** starts it again. An automatic shutdown never stops a running render (the daily spending limit also waits for it) | panel, warm machine |
+| GPU memory between workflows | Keep models loaded | *Keep models loaded*, *Unload when GPU memory is high* (at or above 90 %, again only after it fell below 75 %; both adjustable) or *Always unload between workflows* (the older *Also unload models* switch). Applies between the workflows of one cloud job (a queue batch); each separate render starts ComfyUI again anyway | panel, warm machine > Housekeeping |
+| Downloads / uploads at a time | 2 / 2 | model transfers on this computer that run at the same time, 1 to 4 each; the same model is never transferred twice at once | panel, warm machine > Housekeeping |
 
 ## 6. The floating console
 
