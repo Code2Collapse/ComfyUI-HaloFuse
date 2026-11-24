@@ -248,6 +248,7 @@ class BootResult:
     comfyui_version: str | None
     log_tail: list = field(default_factory=list)
     process_exited: bool = False
+    import_errors: list = field(default_factory=list)  # ComfyUI's "Cannot import ..." lines (the reason per pack)
 
 
 def _free_port() -> int:
@@ -296,7 +297,8 @@ def boot_and_capture(comfy_dir: Path, python: str = sys.executable, timeout: flo
     present = {p.name for p in cn.iterdir() if p.is_dir() and not p.name.startswith((".", "__"))} if cn.is_dir() else set()
     return BootResult(object_info=info, import_failures=parse_import_failures(lines), present_folders=present,
                       comfyui_version=comfyui_version_of(comfy_dir), log_tail=lines[-200:],
-                      process_exited=proc.poll() is not None)
+                      process_exited=proc.poll() is not None,
+                      import_errors=[strip_ansi(l) for l in lines if "Cannot import" in l])
 
 
 # ------------------------------------------------------------------ CLI
@@ -340,6 +342,8 @@ def main(argv=None) -> int:
             ap.error("--boot needs --comfyui-dir")
         boot = boot_and_capture(Path(args.comfyui_dir), python=args.python, timeout=args.timeout)
         oi, present, failures = boot.object_info, boot.present_folders, boot.import_failures
+        for line in boot.import_errors:  # the reason behind each "IMPORT FAILED (see build log)" in the snapshot
+            print(f"[snapshot] {_clean_error(line)}", flush=True)
         version = version or boot.comfyui_version
         source, oi_source = args.source or "image-build", "ComfyUI CPU boot during the image build"
     elif args.url:

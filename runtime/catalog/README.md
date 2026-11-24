@@ -17,7 +17,6 @@ defines the runtime profiles and the licence policy. `catalog.schema.json` is th
 | `license.class` | permissive, copyleft, network-copyleft (AGPL), non-commercial, restrictive-custom, no-licence, unknown |
 | `install.requirement_overrides` | non-strict profiles only (`full` etc.; never `default`): rewrite one upstream requirement line, e.g. a `numpy<2` cap the image moved past (`use: null` drops the line); `upstream` must match the pack's line exactly or the override is reported stale and not applied. Each has a `reason` |
 | `install.extra_requirements` | non-strict profiles only: a package the pack imports at load time but its requirements.txt omits, with a `reason` |
-| `install.submodules` | git submodules an archive install lacks (GitHub archives and registry zips leave the gitlink empty): `{path, repo, commit, reason}`, fetched at that exact commit into the pack folder after the pack's own content hash (so `pin.content_sha256` stays the upstream tree); optional `content_sha256` per submodule |
 | `model_download` | evidence from GitHub code search at the pin; the image never downloads models at build time |
 
 Unknown values are written as `{"value": "unknown", "reason": "..."}`, never omitted.

@@ -331,29 +331,6 @@ def _load(catalog_dir) -> tuple[dict, dict]:
     return catalog, profiles
 
 
-def _add_submodules(staged: Path, subs: list, cache, opener) -> list:
-    """Fetch catalog `install.submodules` into a staged pack (after its own content hash: the pack pin stays the
-    upstream tree). Each submodule is a GitHub archive at an exact commit, optionally hash-checked."""
-    out = []
-    for sm in subs:
-        target = staged.joinpath(*PurePosixPath(sm["path"]).parts)
-        if target.exists():
-            if not target.is_dir() or any(target.iterdir()):
-                raise InstallError(f"submodule path {sm['path']} already has files")
-            target.rmdir()
-        fake = {"repo": sm["repo"], "url": f"https://github.com/{sm['repo']}", "install": {"method": "git-archive"},
-                "pin": {"commit": sm["commit"]}}
-        log(f"  submodule {sm['path']} <- {sm['repo']} @ {sm['commit']}")
-        extract_zip(_archive(fake, cache, opener), target)
-        digest = content_hash(target)
-        expected = sm.get("content_sha256")
-        if expected and digest != expected:
-            raise InstallError(f"submodule {sm['path']}: content hash mismatch (expected {expected[:12]}, got {digest[:12]})")
-        out.append({"path": sm["path"], "repo": sm["repo"], "commit": sm["commit"], "content_sha256": digest,
-                    "hash_verified": bool(expected)})
-    return out
-
-
 def fetch(catalog_dir, profile: str, dest: Path, cache: Path | None = None, opener=urlopen_bytes,
           require_hashes: bool = False) -> dict:
     catalog, profiles = _load(catalog_dir)
@@ -388,9 +365,6 @@ def fetch(catalog_dir, profile: str, dest: Path, cache: Path | None = None, open
                     raise InstallError(f"content hash mismatch (expected {expected[:12]}, got {digest[:12]})")
                 rec["content_sha256"] = digest
                 rec["hash_verified"] = bool(expected)
-                subs = entry["install"].get("submodules") or []
-                if subs:
-                    rec["submodules"] = _add_submodules(staged, subs, cache, opener)
                 shutil.move(str(staged), str(dest / folder))
         except Exception as exc:  # noqa: BLE001 - recorded per pack; strict profiles re-raise
             rec["status"] = "failed"

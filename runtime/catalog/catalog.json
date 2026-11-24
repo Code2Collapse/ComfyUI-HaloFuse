@@ -3987,16 +3987,7 @@
    "install": {
     "method": "registry",
     "registry_id": "comfyui_ultimatesdupscale",
-    "folder": "comfyui_ultimatesdupscale",
-    "submodules": [
-     {
-      "path": "repositories/ultimate_sd_upscale",
-      "repo": "Coyote-A/ultimate-upscale-for-automatic1111",
-      "commit": "2322caa480535b1011a1f9c18126d85ea444f146",
-      "content_sha256": "27fe267e71342e3dd7200dffbc0238e35d37336f4e9a8e285a6a690b8d543d5f",
-      "reason": "the pack's .gitmodules submodule (gitlink unchanged since 2024-05-07, 233f8b8); the registry zip leaves repositories/ultimate_sd_upscale empty and __init__.py would otherwise download master at every start"
-     }
-    ]
+    "folder": "comfyui_ultimatesdupscale"
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",
@@ -6235,13 +6226,7 @@
    "install": {
     "method": "git-archive",
     "folder": "ComfyUI_pruna",
-    "archive": "https://github.com/PrunaAI/ComfyUI_pruna/archive/<commit>.zip",
-    "extra_requirements": [
-     {
-      "requirement": "pruna",
-      "reason": "the nodes import pruna (cache_nodes.py, compile_node.py); install.py installs it and archive installs never run it"
-     }
-    ]
+    "archive": "https://github.com/PrunaAI/ComfyUI_pruna/archive/<commit>.zip"
    },
    "requirements": {
     "python": "not declared (runs on the base image's Python 3.13)",

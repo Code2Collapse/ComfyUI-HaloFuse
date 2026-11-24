@@ -142,34 +142,6 @@ def _validate_extra_requirements(extras) -> list[str]:
     return errs
 
 
-def _validate_submodules(subs) -> list[str]:
-    """`install.submodules`: git submodules an archive install does not contain (GitHub archives and registry zips
-    leave the gitlink empty). Each is fetched at an exact commit into the pack folder (install_nodes.py).
-    {path, repo, commit, reason, content_sha256?}."""
-    if not isinstance(subs, list):
-        return ["install.submodules must be a list"]
-    errs = []
-    for i, sm in enumerate(subs):
-        where = f"install.submodules[{i}]"
-        if not isinstance(sm, dict):
-            errs.append(f"{where} must be an object")
-            continue
-        path = str(sm.get("path") or "")
-        parts = path.split("/")
-        if (not path or path.startswith("/") or "\\" in path or re.match(r"^[A-Za-z]:", path)
-                or any(part in ("", ".", "..") for part in parts)):
-            errs.append(f"{where}: path must be a relative POSIX path inside the pack (no '.', '..' or empty parts)")
-        if not REPO_RE.match(str(sm.get("repo") or "")):
-            errs.append(f"{where}: repo must be owner/name")
-        if not COMMIT_RE.match(str(sm.get("commit") or "")):
-            errs.append(f"{where}: commit must be 40 hex")
-        if sm.get("content_sha256") is not None and not SHA256_RE.match(str(sm["content_sha256"])):
-            errs.append(f"{where}: content_sha256 must be 64 hex or absent")
-        if len(str(sm.get("reason") or "").strip()) < 10:
-            errs.append(f"{where}: a reason (why the archive lacks it) is required")
-    return errs
-
-
 class CatalogError(ValueError):
     """The catalog or profile file is invalid. The message lists every problem."""
 
@@ -256,11 +228,6 @@ def validate_entry(entry: dict) -> list[str]:
             err(msg)
     if isinstance(inst, dict) and "extra_requirements" in inst:
         for msg in _validate_extra_requirements(inst["extra_requirements"]):
-            err(msg)
-    if isinstance(inst, dict) and "submodules" in inst:
-        if method not in ("registry", "git-archive"):
-            err("install.submodules needs install.method registry or git-archive")
-        for msg in _validate_submodules(inst["submodules"]):
             err(msg)
 
     for key in ("requirements", "system_deps", "model_download"):
