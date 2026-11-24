@@ -231,7 +231,8 @@ def _preflight(body: dict) -> dict:
     report["warnings"].extend(decoder_warnings)
     report["notes"].extend(_vault_notes(workflows))
     # the artist's own custom nodes count as available (a note); missing classes get an "add this pack" offer
-    user_nodes.apply_to_report(report, workflows, _settings())
+    from .config import save_settings
+    user_nodes.apply_to_report(report, workflows, _settings(), save=save_settings)
     _offer_other_runtimes(report, snapshot)
     if input_dir is None:
         report["warnings"].append(wa.Problem("inputs_not_checked", "Input files were not checked.").to_dict())

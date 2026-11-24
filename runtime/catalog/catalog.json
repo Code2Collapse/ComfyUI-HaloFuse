@@ -20124,6 +20124,84 @@
     "probed_at": "2026-11-23"
    },
    "needs_owner": "licence decision 12 (no-licence)"
+  },
+  {
+   "repo": "Code2Collapse/ComfyUI-H2Vault",
+   "url": "https://github.com/Code2Collapse/ComfyUI-H2Vault",
+   "category": "combined",
+   "backend_frontend": "both",
+   "install_target": "cloud",
+   "install": {
+    "method": "git-archive",
+    "folder": "ComfyUI-H2Vault",
+    "archive": "https://github.com/Code2Collapse/ComfyUI-H2Vault/archive/<commit>.zip"
+   },
+   "requirements": {
+    "python": ">=3.10",
+    "torch": "uses ComfyUI's torch from the base image",
+    "cuda": "base image CUDA 13.0 build (cu130); no extension-specific CUDA requirement declared",
+    "pip": [
+     "cryptography>=44"
+    ],
+    "source": "requirements.txt at 642e578fe67e"
+   },
+   "system_deps": [],
+   "model_download": {
+    "behavior": "models-from-mount",
+    "evidence": "no hf_hub_download / snapshot_download / load_file_from_url found by GitHub code search (default branch); other download paths not excluded",
+    "policy": "the image never downloads models at build time; runtime downloads need network in the job"
+   },
+   "license": {
+    "class": "network-copyleft",
+    "spdx": "AGPL-3.0",
+    "source": "GitHub licence detection (LICENSE file)",
+    "notes": "our own pack (Code2Collapse); owner 2026-11-24: AGPL is allowed in the image",
+    "flags": [
+     "network-copyleft (AGPL: source offer also to users of a hosted service)"
+    ]
+   },
+   "compatibility": {
+    "compatible": true,
+    "notes": "no blocker found by static inspection; import NOT VERIFIED (workflows with H2Vault_ProtectedSubgraph* nodes need it)"
+   },
+   "conflicts": {
+    "conflicts_with": [],
+    "overlaps": [],
+    "notes": ""
+   },
+   "profiles": [
+    "core",
+    "prompting-utilities",
+    "full"
+   ],
+   "enabled_by_default": false,
+   "pin": {
+    "commit": "642e578fe67e0236f5d7fd06a10e51b9621bbc23",
+    "version": null,
+    "pinned_at": "2026-11-24",
+    "content_sha256": "a107226d1815cfcc8a18e6e6443bcf978fe94994af229ebabc1b2967ee084f82",
+    "pin_source": "default branch HEAD on 2026-11-24 (GitHub API)"
+   },
+   "verified": {
+    "status": "NOT VERIFIED",
+    "evidence": "static classification from GitHub metadata at the pinned commit; no install or import test"
+   },
+   "source_list": "Code2Collapse own packs (owner 2026-11-24)",
+   "description": "A vault for lockdown (H2Vault protected native subgraphs)",
+   "upstream": {
+    "reachable": true,
+    "http_status": 200,
+    "canonical_name": "Code2Collapse/ComfyUI-H2Vault",
+    "archived": false,
+    "fork": false,
+    "default_branch": "main",
+    "head_commit": "642e578fe67e0236f5d7fd06a10e51b9621bbc23",
+    "head_date": "2026-11-24T03:57:55Z",
+    "submodules": [],
+    "committed_weight_bytes": 0,
+    "probed_at": "2026-11-24"
+   },
+   "needs_owner": "licence decision 12 (network-copyleft); owner 2026-11-24 allows this pack (own pack)"
   }
  ]
 }

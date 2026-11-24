@@ -49,3 +49,17 @@ export function checkSummary(result) {
   if (bad) return { text: `${bad} line(s) need attention; nothing was saved.`, tone: "danger" };
   return { text: `${rows.length} pack(s) checked and pinned.`, tone: "success" };
 }
+
+const PACK_SOURCE = {
+  local: "the same pack as in this computer's ComfyUI, at your local version",
+  catalog: "a pack the HaloFuse catalog knows",
+  manager: "named by ComfyUI-Manager's node list",
+};
+
+/** Workflow Check offer line: which classes, which pack, where the bridge found it (owner 2026-11-24). */
+export function addPackText(offer) {
+  const a = offer || {};
+  const where = PACK_SOURCE[a.source];
+  return `${(a.class_types || []).join(", ")} comes from ${a.name}${a.repo ? ` (${a.repo})` : ""}`
+    + `${where ? `, ${where}` : ""}. Adding it installs it in each cloud job (not verified until the job runs).`;
+}

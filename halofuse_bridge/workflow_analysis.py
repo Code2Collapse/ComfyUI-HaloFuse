@@ -856,6 +856,16 @@ def _check_values(node_id, class_type, inputs, cloud_specs, blocking) -> None:
                                         node_id, class_type, name))
 
 
+# The API prompt carries no wire for an input whose source is not sent: H2Vault's graphToPrompt hook removes a wire
+# from a node INSIDE an open vault unless that node is one of the vault's outputs ("never send an inner id"), and the
+# editor drops wires from muted nodes. Core then rejects the input exactly as this check does, so it stays blocking;
+# the hint names the likely cause (owner 2026-11-24: GrowMaskWithBlur "mask" fed from inside a vault).
+VAULT_CLASS_PREFIX = "H2Vault_ProtectedSubgraph"
+VAULT_WIRE_HINT = (". This workflow has an H2Vault vault: a wire from a node inside the vault is not sent (only the "
+                   "vault's outputs leave it), so connect this input to one of the vault's outputs, or add that value "
+                   "to the vault's outputs. A wire from a muted node is not sent either")
+
+
 def _node_label(node_id, class_type) -> str:
     """'Node 12 (DWPreprocessor)': warnings and notes are shown without the node column, so they name it."""
     if node_id is None:
@@ -909,6 +919,7 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
                                                  "API format the panel sends: send it from the panel"))
             continue
         node_ids = {str(k) for k in wf}
+        has_vault = any(n["class_type"].startswith(VAULT_CLASS_PREFIX) for _, n in _nodes(wf))
         unknown: list[tuple[str, str]] = []
         has_output = False
         needed = _needed_nodes(wf, defs)
@@ -953,7 +964,8 @@ def preflight(workflows: list[dict], *, snapshot: Snapshot | None | str = "defau
             for name, spec in specs.items():
                 if spec.required and spec.kind not in DYNAMIC_INPUT_KINDS and not _input_present(name, inputs):
                     blocking.append(Problem("missing_input", "required input is not set: connect it or give it a "
-                                                             "value", node_id, class_type, name))
+                                                             "value" + (VAULT_WIRE_HINT if has_vault else ""),
+                                            node_id, class_type, name))
             for name, value in inputs.items():
                 if _is_link_value(value) and str(value[0]) not in node_ids:
                     blocking.append(Problem("broken_link", f"connected to node {value[0]}, which is not in the "

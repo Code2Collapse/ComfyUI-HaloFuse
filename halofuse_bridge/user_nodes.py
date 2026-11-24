@@ -22,6 +22,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 _log = logging.getLogger("halofuse_bridge.user_nodes")
 
@@ -502,6 +503,268 @@ def local_pack_folder(class_type: str):
     return mod.split(".")[1] if mod.startswith("custom_nodes.") and mod.count(".") >= 1 else None
 
 
+# ---- which pack provides a class (owner 2026-11-24: "add more and more custom nodes") ------------------------
+# Order: (a) this ComfyUI's own folder for the class (object_info python_module = custom_nodes.<folder>) and that
+# folder's git remote + commit; (b) the runtime catalog (image snapshots name the pack of every class they hold,
+# also packs outside the chosen profile; catalog.json gives the pin and licence); (c) ComfyUI-Manager's
+# extension-node-map, read from disk only (offline / its cache); then (d) the Comfy Registry class lookup.
+# Nothing is ever uploaded from this computer: a local folder without a public GitHub remote stays blocked.
+
+_RUNTIME_DIR = Path(__file__).resolve().parents[1] / "runtime"
+_GITHUB_REMOTE_RE = re.compile(r"^(?:https://(?:[^@/\s]+@)?github\.com/|git@github\.com:|ssh://git@github\.com/)"
+                               r"([A-Za-z0-9][A-Za-z0-9._-]{0,99})/([A-Za-z0-9][A-Za-z0-9._-]{0,99}?)(?:\.git)?/?$")
+_ALLOWED_FALLBACK = frozenset({"permissive"})
+_catalog_cache: dict = {}
+_map_cache: dict = {}
+
+
+def github_repo_of_remote(url) -> str | None:
+    """owner/repo for a GitHub remote URL (https, ssh or scp form), None for any other host. Credentials in an https
+    remote are dropped, never returned."""
+    m = _GITHUB_REMOTE_RE.fullmatch(str(url or "").strip())
+    return f"{m.group(1)}/{m.group(2)}" if m else None
+
+
+def _git_dir(folder: Path) -> Path | None:
+    g = folder / ".git"
+    if g.is_dir():
+        return g
+    if g.is_file():                     # worktree / submodule: "gitdir: <path>"
+        try:
+            line = g.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            return None
+        if line.startswith("gitdir:"):
+            p = Path(line[7:].strip())
+            p = p if p.is_absolute() else (folder / p)
+            return p if p.is_dir() else None
+    return None
+
+
+def _read(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def git_origin_and_commit(folder) -> tuple:
+    """(origin URL or None, HEAD commit or None) read from the folder's .git files (no git process is started)."""
+    gd = _git_dir(Path(folder))
+    if gd is None:
+        return None, None
+    common = gd
+    cd = _read(gd / "commondir")
+    if cd and cd.strip():
+        common = (gd / cd.strip()).resolve()
+    url = None
+    section = None
+    for raw in (_read(common / "config") or "").splitlines():
+        line = raw.strip()
+        if line.startswith("["):
+            section = line
+        elif section == '[remote "origin"]' and line.replace(" ", "").startswith("url="):
+            url = line.split("=", 1)[1].strip()
+            break
+    commit = None
+    head = (_read(gd / "HEAD") or "").strip()
+    if _SHA_RE.fullmatch(head):
+        commit = head
+    elif head.startswith("ref:"):
+        ref = head[4:].strip()
+        value = None
+        for base in (gd, common):
+            value = _read(base / ref)
+            if value is not None:
+                break
+        if value is not None:
+            commit = value.strip() if _SHA_RE.fullmatch(value.strip()) else None
+        else:
+            for line in (_read(common / "packed-refs") or "").splitlines():
+                parts = line.split()
+                if len(parts) == 2 and parts[1] == ref and _SHA_RE.fullmatch(parts[0]):
+                    commit = parts[0]
+                    break
+    return url, commit
+
+
+def _custom_nodes_dirs() -> list:
+    try:
+        import folder_paths  # ComfyUI-provided
+        return [Path(p) for p in folder_paths.get_folder_paths("custom_nodes")]
+    except Exception:  # noqa: BLE001 - outside ComfyUI
+        return []
+
+
+def local_pack_source(class_type: str, *, folder_of=None, roots=None):
+    """{"folder", "repo" (GitHub owner/repo or None), "commit" (or None), "remote" (True when origin is any URL)}
+    for the custom_nodes folder that provides *class_type* in this ComfyUI, or None. No URL is returned."""
+    folder = (folder_of or local_pack_folder)(class_type)
+    if not folder or "/" in folder or "\\" in folder or folder in (".", ".."):
+        return None
+    for root in (roots if roots is not None else _custom_nodes_dirs()):
+        path = Path(root) / folder
+        if path.is_dir():
+            url, commit = git_origin_and_commit(path)
+            repo = github_repo_of_remote(url)
+            return {"folder": folder, "repo": repo if repo and not _refused(repo) else None, "commit": commit,
+                    "remote": bool(url)}
+    return {"folder": folder, "repo": None, "commit": None, "remote": False}
+
+
+def _catalog(path=None) -> dict:
+    """{lower repo: {"repo", "commit", "licence", "licence_class"}} from runtime/catalog/catalog.json (cached)."""
+    path = Path(path) if path else _RUNTIME_DIR / "catalog" / "catalog.json"
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return {}
+    with _cache_lock:
+        hit = _catalog_cache.get(str(path))
+    if hit and hit[0] == mtime:
+        return hit[1]
+    out = {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for e in data.get("entries") or []:
+            repo = e.get("repo")
+            if not isinstance(repo, str) or not _REPO_RE.fullmatch(repo) or e.get("install_target") != "cloud":
+                continue
+            pin = e.get("pin") or {}
+            lic = e.get("license") or {}
+            commit = pin.get("commit") if isinstance(pin.get("commit"), str) and _SHA_RE.fullmatch(pin["commit"]) \
+                else None
+            spdx = lic.get("spdx") if isinstance(lic.get("spdx"), str) and _SPDX_RE.fullmatch(lic["spdx"]) else None
+            cls = lic.get("class") if lic.get("class") in LICENCE_CLASSES else licence_class(spdx)
+            out[repo.lower()] = {"repo": repo, "commit": commit, "licence": spdx, "licence_class": cls}
+    except (OSError, ValueError, AttributeError):
+        _log.warning("runtime catalog unreadable")
+    with _cache_lock:
+        _catalog_cache[str(path)] = (mtime, out)
+    return out
+
+
+def allowed_licence_classes(path=None) -> frozenset:
+    """Licence classes the catalog's licence policy installs (runtime/catalog/profiles.json `licence_policy`:
+    include / include-flagged): the same policy that decides what goes into the HaloFuse image."""
+    path = Path(path) if path else _RUNTIME_DIR / "catalog" / "profiles.json"
+    try:
+        policy = json.loads(path.read_text(encoding="utf-8")).get("licence_policy") or {}
+        allowed = frozenset(k for k, v in policy.items() if k in LICENCE_CLASSES and str(v).startswith("include"))
+        return allowed or _ALLOWED_FALLBACK
+    except (OSError, ValueError, AttributeError):
+        return _ALLOWED_FALLBACK
+
+
+def _snapshot_profiles() -> list:
+    from . import workflow_analysis as wa
+    names = []
+    try:
+        index = json.loads((wa.SNAPSHOT_DIR / "index.json").read_text(encoding="utf-8"))
+        names = [n for n in (index.get("profiles") or {}) if isinstance(n, str)]
+    except (OSError, ValueError, AttributeError):
+        pass
+    return names or ["default", "full"]
+
+
+def catalog_pack_for_class(class_type: str, *, snapshots=None):
+    """{"repo", "commit", "licence", "licence_class"} of the catalog pack that provides *class_type* in any shipped
+    image snapshot (every profile, so also packs outside the selected one), or None."""
+    from . import workflow_analysis as wa
+
+    if snapshots is None:
+        snapshots = []
+        for profile in _snapshot_profiles():
+            try:
+                snap = wa.load_snapshot(profile)
+            except ValueError:
+                snap = None
+            if snap is not None:
+                snapshots.append(snap)
+    for snap in snapshots:
+        pack = snap.pack_of.get(class_type)
+        repo = (pack or {}).get("repo")
+        if isinstance(repo, str) and _REPO_RE.fullmatch(repo) and not _refused(repo):
+            hit = _catalog().get(repo.lower())
+            return dict(hit) if hit else {"repo": repo, "commit": None, "licence": None, "licence_class": None}
+    return None
+
+
+def _manager_map_files() -> list:
+    files = []
+    for root in _custom_nodes_dirs():
+        files.append(root / "ComfyUI-Manager" / "extension-node-map.json")
+        files.append(root / "comfyui-manager" / "extension-node-map.json")
+    try:
+        import folder_paths  # ComfyUI-provided
+        user = Path(folder_paths.get_user_directory())
+        for cache in (user / "__manager" / "cache", user / "default" / "ComfyUI-Manager" / "cache"):
+            if cache.is_dir():
+                files.extend(sorted(cache.glob("*extension-node-map.json"), reverse=True))
+    except Exception:  # noqa: BLE001 - outside ComfyUI
+        pass
+    return [f for f in files if f.is_file()]
+
+
+def manager_repo_for_class(class_type: str, *, files=None):
+    """owner/repo (GitHub only) that ComfyUI-Manager's extension-node-map names for *class_type*. Files on disk only
+    (the Manager's own copy or its cache); never fetched."""
+    for f in (files if files is not None else _manager_map_files()):
+        f = Path(f)
+        try:
+            key = (str(f), f.stat().st_mtime)
+        except OSError:
+            continue
+        with _cache_lock:
+            index = _map_cache.get(key)
+        if index is None:
+            index = {}
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                for url, value in (data.items() if isinstance(data, dict) else ()):
+                    repo = github_repo_of_remote(url)
+                    if not repo or not isinstance(value, list) or not value or not isinstance(value[0], list):
+                        continue
+                    for ct in value[0]:
+                        if isinstance(ct, str):
+                            index.setdefault(ct, repo)
+            except (OSError, ValueError):
+                index = {}
+            with _cache_lock:
+                _map_cache[key] = index
+        repo = index.get(class_type)
+        if repo and not _refused(repo):
+            return repo
+    return None
+
+
+def _offer(repo: str, commit, source: str, licence_cls, **extra) -> dict:
+    return {"id": repo, "name": repo.rsplit("/", 1)[-1], "repo": repo, "line": f"{repo}@{commit}" if commit else repo,
+            "source": source, "licence_class": licence_cls, **extra}
+
+
+def find_pack_for_class(class_type: str, *, local_source=None, catalog_lookup=None, manager_lookup=None,
+                        registry_lookup=None):
+    """The pack that provides *class_type* as an add offer {"id", "name", "repo", "line", "source", ...}: source
+    "local" (this ComfyUI's folder with a GitHub remote, pinned to the local commit), "catalog", "manager", or the
+    registry's shape; {"source": "local-only", "folder"} for a local folder without a GitHub remote (its code is never
+    uploaded); None when nothing knows the class."""
+    local = (local_source or local_pack_source)(class_type)
+    if local and local.get("repo"):
+        known = _catalog().get(local["repo"].lower()) or {}
+        return _offer(local["repo"], local.get("commit"), "local", known.get("licence_class"), folder=local["folder"])
+    cat = (catalog_lookup or catalog_pack_for_class)(class_type)
+    if cat:
+        return _offer(cat["repo"], cat.get("commit"), "catalog", cat.get("licence_class"))
+    repo = (manager_lookup or manager_repo_for_class)(class_type)
+    if repo:
+        known = _catalog().get(repo.lower()) or {}
+        return _offer(repo, known.get("commit"), "manager", known.get("licence_class"))
+    if local:
+        return {"source": "local-only", "folder": local["folder"]}
+    return (registry_lookup or registry_pack_for_class)(class_type)
+
+
 def _user_keys(entries: list) -> dict:
     keys = {}
     for e in entries:
@@ -517,11 +780,60 @@ def _problem(code, message, class_type=None, node_id=None) -> dict:
     return {"code": code, "message": message, "node_id": node_id, "class_type": class_type, "input": None}
 
 
-def apply_to_report(report: dict, workflows, settings: dict, *, lookup=None, local_folder=None) -> dict:
-    """Workflow Check: classes the runtime lacks but the artist's packs provide become notes (not verified); for
-    the others the Comfy Registry pack is offered (`add_packs`). Returns *report* (changed in place)."""
-    lookup = lookup or registry_pack_for_class
+LOCAL_ONLY_MESSAGE = ("{ct} comes from the folder {folder} in this computer's ComfyUI, which has no GitHub address. "
+                      "HaloFuse never uploads code from your computer: publish the pack as a public GitHub repository "
+                      "and add it under My custom nodes, or replace the node.")
+
+
+def _auto_add(packs: dict, entries: list, save) -> tuple:
+    """Setting auto_add_packs: resolve each offered pack through the public GitHub / Registry APIs (a private or
+    missing repository fails there) and save it to `user_nodes` when its licence class is one the licence policy
+    installs. Returns (class -> label added, refused [{"name", "why"}])."""
+    allowed = allowed_licence_classes()
+    added, refused, new = {}, [], list(entries)
+    by_line: dict = {}
+    for ct, pack in packs.items():
+        by_line.setdefault(pack["line"], (pack, []))[1].append(ct)
+    for line, (pack, classes) in by_line.items():
+        if len(new) >= MAX_PACKS:
+            refused.append({"name": pack["name"], "why": f"My custom nodes is full ({MAX_PACKS} packs)"})
+            continue
+        row = resolve_text(line)["rows"][0]
+        if not row["ok"]:
+            refused.append({"name": pack["name"], "why": row.get("message") or "it could not be checked"})
+            continue
+        entry = row["entry"]
+        if entry.get("licence_class") not in allowed:
+            refused.append({"name": pack["name"], "why": f"its licence ({entry.get('licence') or 'none found'}) is "
+                                                         "not one HaloFuse adds by itself; add it yourself if its "
+                                                         "terms suit you"})
+            continue
+        trial = new + [entry]
+        if not valid_entries(trial):
+            refused.append({"name": pack["name"], "why": "it is already in My custom nodes in another form"})
+            continue
+        new = trial
+        for ct in classes:
+            added[ct] = entry.get("repo") or entry.get("id")
+    if added:
+        save({"user_nodes": new})
+    return added, refused
+
+
+def apply_to_report(report: dict, workflows, settings: dict, *, lookup=None, local_folder=None, find=None,
+                    save=None) -> dict:
+    """Workflow Check: classes the runtime lacks but the artist's packs provide become notes (not verified). For the
+    others the providing pack is found (find_pack_for_class) and offered (`add_packs`, one click, the blocking item
+    marked fixable) or, with the setting auto_add_packs and a *save* callable, added to My custom nodes at once when
+    it is public and its licence is allowed. A local folder without a GitHub remote stays blocked with the reason.
+    Returns *report* (changed in place)."""
     local_folder = local_folder or local_pack_folder
+    if find is None:
+        registry = lookup or registry_pack_for_class
+
+        def find(ct):
+            return find_pack_for_class(ct, registry_lookup=registry,
+                                       local_source=lambda c: local_pack_source(c, folder_of=local_folder))
     entries = entries_of(settings)
     supported, note = runtime_support(settings)
     if entries and not supported:
@@ -533,7 +845,7 @@ def apply_to_report(report: dict, workflows, settings: dict, *, lookup=None, loc
     if not unknown:
         return report
     keys = _user_keys(entries)
-    provided, packs = {}, {}
+    provided, packs, local_only, added, refused = {}, {}, {}, {}, []
     deadline = time.monotonic() + LOOKUP_BUDGET_S
     for ct in list(dict.fromkeys(b["class_type"] for b in unknown))[:MAX_LOOKUPS]:
         folder = str(local_folder(ct) or "").lower()
@@ -542,37 +854,57 @@ def apply_to_report(report: dict, workflows, settings: dict, *, lookup=None, loc
             continue
         if time.monotonic() > deadline:
             break
-        pack = lookup(ct)
+        pack = find(ct)
         if not pack:
             continue
-        label = keys.get(pack["id"].lower()) or (keys.get(pack["repo"].lower()) if pack.get("repo") else None)
+        if pack.get("source") == "local-only":
+            local_only[ct] = pack["folder"]
+            continue
+        repo = (pack.get("repo") or "").lower()
+        label = keys.get(pack["id"].lower()) or (keys.get(repo) or keys.get(repo.rsplit("/", 1)[-1]) if repo else None)
         if label:
             provided[ct] = label
         else:
             packs[ct] = pack
-    if not provided and not packs:
+    if packs and save is not None and settings.get("auto_add_packs") is True:
+        added, refused = _auto_add(packs, entries, save)
+        for ct in added:
+            packs.pop(ct, None)
+    if not (provided or packs or local_only or added or refused):
         return report
     blocking = []
     for b in report.get("blocking", []):
         ct = b.get("class_type")
-        if b.get("code") == "unknown_node" and ct in provided:
+        if b.get("code") == "unknown_node" and (ct in provided or ct in added):
             continue
         if b.get("code") == "unknown_node" and ct in packs:
             b = dict(b, message=f"{b['message']} It comes from the pack {packs[ct]['name']}: add it under My custom "
-                                "nodes.")
+                                "nodes (one click below).", fixable=True,
+                     fix={"kind": "add_pack", "line": packs[ct]["line"]})
+        elif b.get("code") == "unknown_node" and ct in local_only:
+            b = dict(b, code="node_local_only", message=LOCAL_ONLY_MESSAGE.format(ct=ct, folder=local_only[ct]),
+                     fixable=False)
         blocking.append(b)
     report["blocking"] = blocking
     for ct, label in provided.items():
         report.setdefault("notes", []).append(_problem(
             "node_user_pack", f"{ct} comes from your custom node {label}: it is installed when the job starts (not "
                               "verified until the job runs).", ct))
-    offers = {}
+    for ct, label in added.items():
+        report.setdefault("notes", []).append(_problem(
+            "node_pack_added", f"{ct}: its pack {label} was added to My custom nodes (setting: always add the packs "
+                               "a workflow needs); it is installed when the job starts (not verified until the job "
+                               "runs).", ct))
+    for r in refused:
+        report.setdefault("warnings", []).append(_problem(
+            "pack_not_auto_added", f"{r['name']} was not added automatically: {r['why']}."))
+    offers: dict = {}
     for ct, pack in packs.items():
         offers.setdefault(pack["id"], dict(pack, class_types=[]))["class_types"].append(ct)
     if offers:
         report["add_packs"] = list(offers.values())
-    if provided:
-        remaining = [b for b in blocking if b.get("code") == "unknown_node"]
+    if provided or added:
+        remaining = [b for b in blocking if b.get("code") in ("unknown_node", "node_local_only")]
         report["warnings"] = [w for w in report.get("warnings", []) if w.get("code") != "unknown_nodes_summary"]
         if remaining:
             listed = ", ".join(f"{b['class_type']} (node {b['node_id']})" for b in remaining[:20])
