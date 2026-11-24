@@ -116,6 +116,11 @@ export function createApi(fetchImpl) {
     },
     costSummary: () => get("/halofuse/cost/summary"),
     // warm cloud machine (owner 2026-11-23): status, start, shut down, check
+    // Live ComfyUI (L9.345): status, start, one-shot open link, stop
+    getLive: () => get("/halofuse/live"),
+    startLive: (instanceType) => post("/halofuse/live/start", instanceType ? { instance_type: instanceType } : {}),
+    openLive: () => post("/halofuse/live/open"),
+    stopLive: () => post("/halofuse/live/stop"),
     getWarm: () => get("/halofuse/warm"),
     startWarm: (instanceType) => post("/halofuse/warm/start", instanceType ? { instance_type: instanceType } : {}),
     shutdownWarm: () => post("/halofuse/warm/shutdown"),
