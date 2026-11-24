@@ -451,7 +451,9 @@ export class Panel {
       ci && /confirmed/.test(job.cancel.state) ? H("div", { className: "hf-meta", text: "Billing end is not yet independently confirmed by HaloFuse." }) : null,
       job?.status_note ? H("div", { className: "hf-meta", text: job.status_note }) : null,
       job ? H("div", { className: "hf-meta", text: [costText(job.cost), deliveryText(job.delivery)].filter(Boolean).join(" · ") }) : null,
-      job?.diagnosis ? H("div", { className: "hf-meta hf-tone-danger", text: `${job.diagnosis.title || job.diagnosis.code}: ${job.diagnosis.next_action || job.diagnosis.cause || ""}` }) : null,
+      job?.error_report?.headline
+        ? H("div", { className: "hf-meta hf-tone-danger", text: `${job.error_report.headline}.${job.error_report.next_steps?.length ? ` ${job.error_report.next_steps[0]}` : ""} Full error: console, Problems tab.` })
+        : job?.diagnosis ? H("div", { className: "hf-meta hf-tone-danger", text: `${job.diagnosis.title || job.diagnosis.code}: ${job.diagnosis.next_action || job.diagnosis.cause || ""}` }) : null,
       s.error && !job ? H("div", { className: "hf-meta hf-tone-danger", text: s.error.message }) : null);
     if (this._imgsFor !== s.id) { this._imgs.clear(); this._imgsFor = s.id; }
     const lv = !isQueue && job ? s.live.view({ nowS: Date.now() / 1000, job, progress: prog }) : null;

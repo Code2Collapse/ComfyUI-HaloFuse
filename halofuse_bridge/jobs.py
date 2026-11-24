@@ -304,8 +304,14 @@ def _job_env(settings: dict, base: dict, *, max_runtime_s: int, preview_mode: st
     # Only a non-default choice is sent; images without housekeeping ignore both variables.
     if settings.get("clean_between_renders") is False:
         env["HF_CLEAN_BETWEEN"] = "0"
-    if settings.get("unload_models_between_renders") is True:
-        env["HF_UNLOAD_BETWEEN"] = "1"
+    memory = warm_machine.memory_behavior(settings)   # keep | auto | always (L9.340)
+    if memory == "always":
+        env["HF_UNLOAD_BETWEEN"] = "1"                  # images before L9.340 understand only this switch
+    if memory != "keep":
+        env["HF_MEMORY_MODE"] = memory
+    if memory == "auto":
+        env["HF_VRAM_HIGH_PCT"] = str(warm_machine.percent_setting(settings, "vram_unload_high_pct", 90))
+        env["HF_VRAM_LOW_PCT"] = str(warm_machine.percent_setting(settings, "vram_unload_low_pct", 75))
     try:
         from . import presets  # type: ignore[attr-defined]  # WS4
     except ImportError:

@@ -4,7 +4,7 @@
 import { bindH, copyText } from "./dom.js";
 import { FloatingWindow } from "./console_window.js";
 import { LogView } from "./console_logs.js";
-import { renderProblems, renderProgress, renderSummary, renderTelemetry } from "./console_panes.js";
+import { problemsSignature, renderProblems, renderProgress, renderSummary, renderTelemetry } from "./console_panes.js";
 import { cancelInfo, isTerminal, progressText, statusInfo } from "./job_view.js";
 import { createImageCache, renderLive } from "./live_preview.js";
 import { formatEntry } from "./log_model.js";
@@ -91,6 +91,8 @@ export class HaloFuseConsole {
     // a file that fails to load re-renders the pane once, which then shows a placeholder with the reason
     this._imgs = createImageCache(this.doc, (name) => o.previewUrl(this.session.id, name), 160, () => this._renderPane(true));
     this._live = { selected: null, mode: "overlay", message: null, autoPending: false, userPicked: false };
+    // Problems tab: the technical-detail toggle survives the pane's re-renders (L9.338)
+    this._problemsUi = { techOpen: false, onChange: () => this._renderPane(true) };
     this._announce = H("p", { className: "hf-sr-only", attrs: { "aria-live": "polite" } });
     this._announcedAt = 0;
     this.window.el.classList.toggle("hf-no-ts", this.window.prefs().timestamps === false);
@@ -252,6 +254,7 @@ export class HaloFuseConsole {
       this._nodeImgs?.clear();
       this._nodeBroken?.clear();
       this._live = { selected: null, mode: this._live.mode, message: null, autoPending: true, userPicked: false };
+      this._problemsUi.techOpen = false;
     }
     if (this._live.autoPending && this.session.job) {
       // the Live view comes first while a render runs, unless the user picked another tab for this job
@@ -301,10 +304,23 @@ export class HaloFuseConsole {
     const s = this.session;
     const run = s.run.snapshot();
     const ctx = { job: s.job, run, now: now / 1000 };
+    if (this.tab === "problems") {
+      const sig = problemsSignature(s.job, run, s.warnings, this._problemsUi);
+      if (sig === this._problemsSig && this.panels.problems.firstChild) return; // nothing new: keep selection + focus
+      this._problemsSig = sig;
+    }
     let el;
     if (this.tab === "progress") el = renderProgress(H, { ...ctx, onFocusNode: (id) => this.o.onFocusNode(id) });
     else if (this.tab === "telemetry") el = renderTelemetry(H, ctx);
-    else if (this.tab === "problems") el = renderProblems(H, { ...ctx, warnings: s.warnings, onJump: (seq) => this.jumpTo(seq) });
+    else if (this.tab === "problems") {
+      el = renderProblems(H, { ...ctx, warnings: s.warnings, onJump: (seq) => this.jumpTo(seq),
+        onFocusNode: (id) => this.o.onFocusNode(id), ui: this._problemsUi,
+        onCopy: async (text) => {
+          const ok = await copyText(this.win, text);
+          this._announce.textContent = ok ? "Error copied to the clipboard." : "Copy failed: select the technical detail and copy it.";
+          return ok;
+        } });
+    }
     else if (this.tab === "live") {
       const live = this._liveCtx(run);
       el = H("div", { className: "hf-scroll" }, renderLive(H, live), renderNodeSections(H, {
@@ -323,12 +339,15 @@ export class HaloFuseConsole {
     }
     const panel = this.panels[this.tab];
     const prevScroll = panel.firstChild?.scrollTop || 0;
+    const prevTech = panel.querySelector?.(".hf-tech")?.scrollTop || 0;
     // keep keyboard focus on the same control across a re-render (buttons carry data-hf-key)
     const active = this.doc.activeElement;
     const key = active && panel.contains(active) ? active.getAttribute?.("data-hf-key") : null;
-    if (this.tab === "live") panel.replaceChildren(el, this._announce);
+    if (this.tab === "live" || this.tab === "problems") panel.replaceChildren(el, this._announce);
     else panel.replaceChildren(el);
     el.scrollTop = prevScroll;
+    const tech = prevTech ? panel.querySelector?.(".hf-tech") : null;
+    if (tech) tech.scrollTop = prevTech;
     if (key) panel.querySelector(`[data-hf-key="${key}"]`)?.focus({ preventScroll: true });
   }
 

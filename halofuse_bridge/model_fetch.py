@@ -37,6 +37,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import transfer_pool
 from .workflow_analysis import MODEL_EXTS
 
 _log = logging.getLogger(__name__)
@@ -663,6 +664,7 @@ def reset_for_tests() -> None:
         _MEM.clear()
     with _FETCH_LOCK:
         _FETCHES.clear()
+    transfer_pool.reset_for_tests()
 
 
 # ---- local target -------------------------------------------------------------------------------------------------
@@ -959,15 +961,38 @@ def prepare_fetch(requests: list, settings: dict | None = None) -> list[dict]:
 
 
 def start_fetch(prepared: list[dict], settings: dict | None = None) -> str:
+    """Register and start one download batch. Every model is claimed first, atomically: a second request for a model
+    that is being downloaded is refused (FetchError) even when both passed prepare_fetch at the same moment."""
+    keys = [(p["folder"], p["name"]) for p in prepared]
+    taken = transfer_pool.claim_all("download", keys)
+    if taken:
+        folder, name = taken[0]
+        raise FetchError(f"{name} ({folder}) is already being downloaded.")
     fid = uuid.uuid4().hex[:12]
     state = {"status": "queued", "started_at": time.time(), "error": None, "cancel": False, "files": [
         {"folder": p["folder"], "name": p["name"], "label": p["_source"].label, "size": p["_source"].size,
          "verified": bool(p["_source"].sha256), "received": 0, "status": "queued", "error": None,
          "_target": p["_target"], "_source": p["_source"]} for p in prepared]}
-    with _FETCH_LOCK:
-        _FETCHES[fid] = state
-    threading.Thread(target=_run_fetch, args=(fid,), daemon=True, name=f"halofuse-fetch-{fid}").start()
+    try:
+        with _FETCH_LOCK:
+            _FETCHES[fid] = state
+        threading.Thread(target=_run_fetch, args=(fid, settings), daemon=True, name=f"halofuse-fetch-{fid}").start()
+    except BaseException:
+        for key in keys:
+            transfer_pool.unclaim("download", key)
+        raise
+    _render_intent()
     return fid
+
+
+def _render_intent() -> None:
+    """Smart Warm (L9.340): models staged for a render are render intent, so the warm machine provisions while they
+    transfer. Advisory: never fails or delays the transfer."""
+    try:
+        from . import warm_machine
+        warm_machine.intent_async("models")
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _record(text: str, level: str = "info") -> None:
@@ -979,44 +1004,66 @@ def _record(text: str, level: str = "info") -> None:
         pass
 
 
-def _run_fetch(fid: str) -> None:
+def _run_fetch(fid: str, settings: dict | None = None) -> None:
+    """The files of one batch download at the same time, each in its own thread, at most transfer_max_downloads files
+    on this computer at once (transfer_pool); a waiting file stays "queued". The batch ends failed > cancelled > done
+    once every file has ended."""
     with _FETCH_LOCK:
         files = list(_FETCHES[fid]["files"])
     _set_fetch(fid, status="running")
-    cancelled = failed = False
-    for i, f in enumerate(files):
-        if _cancelled(fid):
-            cancelled = True
-            _set_file(fid, i, status="cancelled")
-            continue
-        src: Source = f["_source"]
-        _set_file(fid, i, status="downloading")
-        _record(f"Downloading model {f['name']} ({f['folder']}) from {src.label} ({_gb(src.size)}).")
-        try:
-            size, digest = download(src, Path(f["_target"]),
-                                    progress=lambda n, total, _i=i: _set_file(fid, _i, received=n, size=total),
-                                    cancel=lambda: _cancelled(fid))
-        except _Cancelled:
-            cancelled = True
-            _set_file(fid, i, status="cancelled", error="Cancelled; the part downloaded so far is kept and resumes.")
-            continue
-        except FetchError as exc:
-            failed = True
-            _set_file(fid, i, status="failed", error=str(exc))
-            _set_fetch(fid, error=f"{f['name']}: {exc}")
-            _record(f"Model download failed: {f['name']} ({f['folder']}): {exc}", level="error")
-            continue
-        except Exception as exc:  # noqa: BLE001 - reported in words; detail to the private log
-            failed = True
-            msg = "the download stopped unexpectedly; try again (it resumes), or see the HaloFuse log"
-            _set_file(fid, i, status="failed", error=msg)
-            _set_fetch(fid, error=f"{f['name']}: {msg}")
-            _log.warning("model download %s failed [%s]", fid, type(exc).__name__)
-            continue
-        _set_file(fid, i, status="done", received=size, size=size, sha256=digest)
-        _record(f"Downloaded model {f['name']} into models/{f['folder']} ({_gb(size)}"
-                f"{', SHA-256 verified' if src.sha256 else ''}).")
+    outcomes: list[str] = ["failed"] * len(files)
+    transfer_pool.run_threads(_fetch_worker, [(fid, i, f, settings, outcomes) for i, f in enumerate(files)],
+                              f"halofuse-fetch-{fid}")
+    failed, cancelled = "failed" in outcomes, "cancelled" in outcomes
     _set_fetch(fid, status="failed" if failed else "cancelled" if cancelled else "done")
+
+
+def _fetch_worker(fid: str, i: int, f: dict, settings: dict | None, outcomes: list) -> None:
+    """One file: wait for a download slot (a file cancelled while waiting never starts), download, then give the slot
+    and the model's claim back whatever happened."""
+    try:
+        if not transfer_pool.acquire("download", cancel=lambda: _cancelled(fid), settings=settings):
+            outcomes[i] = "cancelled"
+            _set_file(fid, i, status="cancelled")
+            return
+        try:
+            outcomes[i] = _fetch_file(fid, i, f)
+        finally:
+            transfer_pool.release("download")
+    finally:
+        transfer_pool.unclaim("download", (f["folder"], f["name"]))
+
+
+def _fetch_file(fid: str, i: int, f: dict) -> str:
+    """Download one file of batch *fid*; returns its outcome: done | cancelled | failed."""
+    if _cancelled(fid):
+        _set_file(fid, i, status="cancelled")
+        return "cancelled"
+    src: Source = f["_source"]
+    _set_file(fid, i, status="downloading")
+    _record(f"Downloading model {f['name']} ({f['folder']}) from {src.label} ({_gb(src.size)}).")
+    try:
+        size, digest = download(src, Path(f["_target"]),
+                                progress=lambda n, total, _i=i: _set_file(fid, _i, received=n, size=total),
+                                cancel=lambda: _cancelled(fid))
+    except _Cancelled:
+        _set_file(fid, i, status="cancelled", error="Cancelled; the part downloaded so far is kept and resumes.")
+        return "cancelled"
+    except FetchError as exc:
+        _set_file(fid, i, status="failed", error=str(exc))
+        _set_fetch(fid, error=f"{f['name']}: {exc}")
+        _record(f"Model download failed: {f['name']} ({f['folder']}): {exc}", level="error")
+        return "failed"
+    except Exception as exc:  # noqa: BLE001 - reported in words; detail to the private log
+        msg = "the download stopped unexpectedly; try again (it resumes), or see the HaloFuse log"
+        _set_file(fid, i, status="failed", error=msg)
+        _set_fetch(fid, error=f"{f['name']}: {msg}")
+        _log.warning("model download %s failed [%s]", fid, type(exc).__name__)
+        return "failed"
+    _set_file(fid, i, status="done", received=size, size=size, sha256=digest)
+    _record(f"Downloaded model {f['name']} into models/{f['folder']} ({_gb(size)}"
+            f"{', SHA-256 verified' if src.sha256 else ''}).")
+    return "done"
 
 
 class _Cancelled(Exception):

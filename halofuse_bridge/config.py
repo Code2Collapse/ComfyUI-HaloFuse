@@ -86,9 +86,24 @@ DEFAULTS = {
     # HaloFuse is not running (nothing re-arms the hold then): the billing backstop.
     "keep_warm": False,
     "warm_hold_seconds": 1800,
+    # Owner 2026-11-24 (L9.340): warm_mode off | always | smart. A settings file without it keeps its old meaning
+    # (keep_warm true = always, see load_settings). warm_idle_timeout_seconds = the artist's warm duration: HaloFuse
+    # shuts the machine down after it has been idle (no render) this long; keep-alive jobs never count as activity.
+    # It is separate from warm_hold_seconds (the cloud's own backstop while ComfyUI is closed).
+    "warm_mode": "off",
+    "warm_idle_timeout_seconds": 3600,
     # Housekeeping between the workflows of one cloud job (runtime hf/housekeeping.py).
     "clean_between_renders": True,
     "unload_models_between_renders": False,
+    # Memory behaviour between workflows (L9.340): keep (models stay loaded) | auto (unload when GPU memory use is above
+    # vram_unload_high_pct; again only after it fell below vram_unload_low_pct: hysteresis) | always (= the older
+    # unload_models_between_renders true). A file without it keeps its old meaning (load_settings).
+    "memory_behavior": "keep",
+    "vram_unload_high_pct": 90,
+    "vram_unload_low_pct": 75,
+    # Model transfers on this computer (L9.340): simultaneous downloads / uploads, 1-4 each.
+    "transfer_max_downloads": 2,
+    "transfer_max_uploads": 2,
     # Owner 2026-11-23 (node previews): render with ComfyUI's cache off (--cache-none) - matters for warm sessions,
     # queues and render repeats; add one-frame previews to the CLOUD COPY for IMAGE/MASK outputs no output node shows
     # (off | first | last | first_last); save delivered outputs by input name / date / node title next to the job
@@ -109,7 +124,13 @@ PUBLIC_KEYS = [
     "launch_preset", "comfy_extra_args", "extra_env", "oom_ladder", "preview_mode", "preview_method",
     "runtime_image", "user_nodes", "ignore_cache", "auto_preview", "organized_output_dir",
     "keep_warm", "warm_hold_seconds", "clean_between_renders", "unload_models_between_renders",
+    "warm_mode", "warm_idle_timeout_seconds", "memory_behavior", "vram_unload_high_pct", "vram_unload_low_pct",
+    "transfer_max_downloads", "transfer_max_uploads",
 ]
+
+WARM_MODES = ("off", "always", "smart")
+MEMORY_BEHAVIORS = ("keep", "auto", "always")
+IDLE_TIMEOUT_MIN_S, IDLE_TIMEOUT_MAX_S = 300, 7 * 86400   # presets 30 min - 24 h; a custom value may go 5 min - 7 days
 
 # Public keys whose value may be explicitly cleared with null.
 _NULLABLE_KEYS = ("max_job_cost_usd", "daily_spend_cap_usd")
@@ -301,7 +322,19 @@ def load_settings() -> dict:
     data["command"] = list(contract.command)
     data["manifest_name"] = contract.manifest_name
     data["runtime_image"] = contract.name
+    _migrate_warm_keys(raw, data)
     return data
+
+
+def _migrate_warm_keys(raw: dict, data: dict) -> None:
+    """Settings written before L9.340 keep their meaning: keep_warm true = Always Warm (with the saved hold), and
+    unload_models_between_renders true = memory behaviour "always". An invalid saved value falls back the same way."""
+    if raw.get("warm_mode") not in WARM_MODES:
+        data["warm_mode"] = "always" if raw.get("keep_warm") is True else "off"
+    data["keep_warm"] = data["warm_mode"] != "off"
+    if raw.get("memory_behavior") not in MEMORY_BEHAVIORS:
+        data["memory_behavior"] = "always" if raw.get("unload_models_between_renders") is True else "keep"
+    data["unload_models_between_renders"] = data["memory_behavior"] == "always"
 
 
 def _valid_pref(key: str, value) -> bool:
@@ -322,6 +355,16 @@ def _valid_pref(key: str, value) -> bool:
         return _number(value) and 0 <= value <= 100000
     if key == "warm_hold_seconds":
         return isinstance(value, int) and not isinstance(value, bool) and 300 <= value <= 86400
+    if key == "warm_mode":
+        return value in WARM_MODES
+    if key == "memory_behavior":
+        return value in MEMORY_BEHAVIORS
+    if key == "warm_idle_timeout_seconds":
+        return isinstance(value, int) and not isinstance(value, bool) and             IDLE_TIMEOUT_MIN_S <= value <= IDLE_TIMEOUT_MAX_S
+    if key in ("vram_unload_high_pct", "vram_unload_low_pct"):
+        return isinstance(value, int) and not isinstance(value, bool) and 10 <= value <= 99
+    if key in ("transfer_max_downloads", "transfer_max_uploads"):
+        return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 4
     if key == "max_runtime_seconds":
         return isinstance(value, int) and not isinstance(value, bool) and 60 <= value <= 7 * 86400
     if key in _NULLABLE_KEYS:
@@ -422,9 +465,11 @@ def save_settings(values: dict) -> dict:
         raw = {}
     if any(k in values for k in ("host", "endpoint")):
         _log.warning("ignored a request to change the service endpoint (it is deployment configuration)")
+    _sync_legacy_switches(values, raw)
     for key in PUBLIC_KEYS:
         if key in values and (values[key] is not None or key in _NULLABLE_KEYS) and _valid_pref(key, values[key]):
             raw[key] = values[key]
+    _keep_legacy_switches_in_step(raw)
     if raw.get("host") or raw.get("endpoint"):
         from . import credentials
 
@@ -434,6 +479,34 @@ def save_settings(values: dict) -> dict:
     _atomic_write(path, raw)
     _settings_ok = True
     return load_settings()
+
+
+def _sync_legacy_switches(values: dict, raw: dict) -> None:
+    """An older panel saves only keep_warm / unload_models_between_renders: translate them into the new choices
+    (without overriding a new key sent in the same request, and without turning Smart into Always)."""
+    current = {**DEFAULTS, **raw}
+    _migrate_warm_keys(raw, current)
+    if "warm_mode" not in values and isinstance(values.get("keep_warm"), bool):
+        if not values["keep_warm"]:
+            values["warm_mode"] = "off"
+        elif current["warm_mode"] == "off":
+            values["warm_mode"] = "always"
+    if "memory_behavior" not in values and isinstance(values.get("unload_models_between_renders"), bool):
+        if values["unload_models_between_renders"]:
+            values["memory_behavior"] = "always"
+        elif current["memory_behavior"] == "always":
+            values["memory_behavior"] = "keep"
+
+
+def _keep_legacy_switches_in_step(raw: dict) -> None:
+    """The old keys stay written (an older bridge reading this file keeps working) and always agree with the new."""
+    if raw.get("warm_mode") in WARM_MODES:
+        raw["keep_warm"] = raw["warm_mode"] != "off"
+    if raw.get("memory_behavior") in MEMORY_BEHAVIORS:
+        raw["unload_models_between_renders"] = raw["memory_behavior"] == "always"
+    high, low = raw.get("vram_unload_high_pct"), raw.get("vram_unload_low_pct")
+    if isinstance(high, int) and isinstance(low, int) and low >= high:
+        raw["vram_unload_low_pct"] = max(10, high - 5)   # hysteresis needs low < high
 
 
 def public_settings() -> dict:
