@@ -13,6 +13,8 @@ import urllib.parse
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
+import time
+
 import httpx
 
 from . import redact, sdk as _sdk_binding
@@ -306,6 +308,40 @@ class CloudAdapter:
             notes=tuple(redact.redact(n) for n in (getattr(est, "notes", None) or ())),
         )
 
+    # owner 2026-11-24: a large input bundle (video) failed with "WriteTimeout: The write operation timed out".
+    _UPLOAD_WRITE_TIMEOUT_S = 600.0
+    _UPLOAD_ATTEMPTS = 3
+
+    def _widen_upload_timeouts(self) -> None:
+        """Raise the write/read timeout of every httpx client the SDK holds (best effort, never raises)."""
+        try:
+            seen = set()
+            for holder in (self._client, getattr(self._client, "_client", None), getattr(self._client, "_http", None)):
+                if holder is None or id(holder) in seen:
+                    continue
+                seen.add(id(holder))
+                for value in [holder, *vars(holder).values()] if hasattr(holder, "__dict__") else [holder]:
+                    if isinstance(value, (httpx.Client, httpx.AsyncClient)):
+                        t = value.timeout
+                        value.timeout = httpx.Timeout(connect=t.connect, pool=t.pool,
+                                                      read=max(t.read or 0, self._UPLOAD_WRITE_TIMEOUT_S),
+                                                      write=max(t.write or 0, self._UPLOAD_WRITE_TIMEOUT_S))
+        except Exception:  # noqa: BLE001 - only a wider timeout; the upload still runs
+            _log.info("could not widen the SDK upload timeout")
+
+    def _upload_input(self, input_dir: Path, upload) -> None:
+        """Upload the job inputs with a long write timeout, retrying network timeouts (3 attempts, 5/15 s apart)."""
+        self._widen_upload_timeouts()
+        for attempt in range(1, self._UPLOAD_ATTEMPTS + 1):
+            try:
+                self._call(self._client.upload_input, input_dir, upload)
+                return
+            except BackendError as err:
+                if err.code not in ("unreachable", "network_error", "timeout") or attempt == self._UPLOAD_ATTEMPTS:
+                    raise
+                _log.warning("input upload attempt %d failed (%s); retrying", attempt, err.code)
+                time.sleep(5 if attempt == 1 else 15)
+
     # ---- jobs ------------------------------------------------------------------------------
 
     def submit(self, spec: SubmitSpec) -> CloudJobRef:
@@ -317,7 +353,7 @@ class CloudAdapter:
             try:
                 if not upload:
                     raise BackendError("input_upload_failed", detail="no upload slot returned")
-                self._call(self._client.upload_input, Path(spec.input_dir), upload)
+                self._upload_input(Path(spec.input_dir), upload)
             except BackendError as err:
                 try:
                     if job_id:
