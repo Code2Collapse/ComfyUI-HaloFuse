@@ -108,11 +108,14 @@ class PreviewThrottle:
         self._dropped = 0
         self._lock = threading.Lock()
 
-    def allow(self) -> bool:
+    def allow(self, force: bool = False) -> bool:
+        """`force`: the preview goes out anyway (a node's first one), without counting a drop."""
         with self._lock:
             now = self._clock()
             if self._last is None or now - self._last >= self.min_interval:
                 self._last = now
+                return True
+            if force:
                 return True
             self._dropped += 1
             return False

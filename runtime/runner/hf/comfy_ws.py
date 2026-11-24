@@ -1,6 +1,6 @@
 """Minimal RFC 6455 websocket client (stdlib only) for ComfyUI's /ws endpoint on container loopback.
 
-Receive-only: JSON text messages (status, executing, progress, executed, execution_*) and binary preview frames
+Receive-only (after one feature_flags message asking for preview metadata): JSON text messages (status, executing, progress, executed, execution_*) and binary preview frames
 (4-byte big-endian event type: 1 = PREVIEW_IMAGE [4-byte image type 1 JPEG / 2 PNG + bytes],
 4 = PREVIEW_IMAGE_WITH_METADATA [4-byte metadata length + JSON + image bytes]; verified in ComfyUI 0.30.1 and 0.39.0
 server.py / protocol.py). Reconnects after a ComfyUI restart. Never raises into the caller's thread.
@@ -16,6 +16,7 @@ import time
 PREVIEW_IMAGE = 1
 PREVIEW_IMAGE_WITH_METADATA = 4
 _MAX_MESSAGE = 64 * 2**20
+FEATURE_FLAGS = json.dumps({"type": "feature_flags", "data": {"supports_preview_metadata": True}}).encode("utf-8")
 
 
 class WSClosed(Exception):
@@ -188,6 +189,13 @@ class ComfyWS:
                 self._stop.wait(self.retry_seconds)
                 continue
             sock.settimeout(0.5)
+            try:
+                # core sends step frames WITH node_id / display_node_id / prompt_id (PREVIEW_IMAGE_WITH_METADATA)
+                # only to a client that announces this flag as its first message (comfy_api/feature_flags.py;
+                # server.py websocket_handler); without it every frame arrives anonymous (PREVIEW_IMAGE)
+                _send_frame(sock, 0x1, FEATURE_FLAGS)
+            except OSError:
+                pass
             self._sock = sock
             self.connected.set()
             self.on_state("connected")

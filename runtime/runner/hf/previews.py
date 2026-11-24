@@ -66,7 +66,8 @@ class TokenBucket:
         self._dropped = 0
         self._lock = threading.Lock()
 
-    def allow(self) -> bool:
+    def allow(self, force: bool = False) -> bool:
+        """`force`: the preview goes out anyway (a node's first one), without counting a drop."""
         with self._lock:
             now = self._clock()
             if self._last is not None:
@@ -74,6 +75,8 @@ class TokenBucket:
             self._last = now
             if self._tokens >= 1.0:
                 self._tokens -= 1.0
+                return True
+            if force:
                 return True
             self._dropped += 1
             return False
@@ -117,7 +120,10 @@ class LiveRelay:
         self._steps = {}            # (prompt_id, node) -> (value, max): latest progress, before the emit throttle
         self._fallback_sent = False
         self._async = bool(async_thumbs)
-        self._jobs = queue.Queue(maxsize=2)
+        self._jobs = queue.Queue(maxsize=16)
+        # (prompt_id, node) that already sent a picture: every node's FIRST picture bypasses the throttles, so a
+        # burst of fast nodes never leaves a card of the Live tab empty until delivery (owner 2026-11-24)
+        self._pictured = set()
         self._worker = None
         self._output_dropped = 0
         self._seen_outputs = set()
@@ -280,7 +286,7 @@ class LiveRelay:
             return
         with self._lock:
             pid = meta.get("prompt_id") or self.current["prompt_id"]
-            raw_node = meta.get("node_id") or meta.get("display_node_id") or self.current["node"]
+            raw_node = meta.get("display_node_id") or meta.get("node_id") or self.current["node"]
             key = (pid, None if raw_node is None else str(self._fold(pid, raw_node)))
             self._frames[key] = self._frames.get(key, 0) + 1
         if not self.throttle.allow():
@@ -288,7 +294,7 @@ class LiveRelay:
         dropped = self.throttle.take_dropped()
         with self._lock:
             prompt_id = meta.get("prompt_id") or self.current["prompt_id"]
-            node = self._fold(prompt_id, meta.get("node_id") or meta.get("display_node_id") or self.current["node"])
+            node = self._fold(prompt_id, meta.get("display_node_id") or meta.get("node_id") or self.current["node"])
             step = self._steps.get((prompt_id, None if node is None else str(node)))
         ext = _EXT.get(mime, "jpg")
         name = f"latest_{node or 'latent'}.{ext}"
@@ -420,6 +426,10 @@ class LiveRelay:
         for path, node_id in copied:
             fields = {"kind": "temp_output", "node": node_id, "mime": _mime_of(path), "bytes": path.stat().st_size,
                       "path": f"{hf_outputs.RESERVED_DIR}/previews/{path.name}"}
+            if self.previews_enabled and not fields["mime"] and hf_frames.is_video(path):
+                # a temp VIDEO preview (SAM3 Track Preview, VHS Video Combine with save_output off, GIF/WebM):
+                # a 4-frame sheet of it travels now, instead of nothing until delivery
+                self._queue_thumb(prompt_id, str(node_id), path, "temp_output")
             if self.previews_enabled and fields["mime"]:
                 try:
                     raw = path.read_bytes()
@@ -427,7 +437,7 @@ class LiveRelay:
                     raw = b""
                 mask = "Mask" in (self._class_type(prompt_id, node_id) or "") or hf_frames.is_grey(raw)
                 fields["mask"] = bool(mask)
-                if raw and self.thumb_throttle.allow():
+                if raw and self.thumb_throttle.allow(force=self._first_picture(prompt_id, node_id)):
                     fitted = hf_frames.fit(raw, fields["mime"], self.max_bytes, 384, mask=mask)
                     if fitted is not None:
                         fields.update(mime=fitted.mime, bytes=len(fitted.data), w=fitted.w, h=fitted.h,
@@ -468,17 +478,29 @@ class LiveRelay:
                 path = self._output_path(item)
                 if path is None or not (hf_frames.is_video(path) or hf_frames.is_image(path)):
                     continue
-                if not self.output_throttle.allow():
+                if not self.output_throttle.allow(force=self._first_picture(prompt_id, node_id)):
                     continue
-                if not self._async:
-                    self._output_thumb(prompt_id, node_id, path)
-                    continue
-                self._ensure_worker()
-                try:
-                    self._jobs.put_nowait((prompt_id, node_id, path))
-                except queue.Full:
-                    with self._lock:
-                        self._output_dropped += 1
+                self._queue_thumb(prompt_id, node_id, path, "output_thumb")
+
+    def _first_picture(self, prompt_id, node_id) -> bool:
+        """True the first time a node sends a picture in this prompt."""
+        key = (prompt_id, str(node_id))
+        with self._lock:
+            if key in self._pictured:
+                return False
+            self._pictured.add(key)
+            return True
+
+    def _queue_thumb(self, prompt_id, node_id, path, kind) -> None:
+        if not self._async:
+            self._output_thumb(prompt_id, node_id, path, kind)
+            return
+        self._ensure_worker()
+        try:
+            self._jobs.put_nowait((prompt_id, node_id, path, kind))
+        except queue.Full:
+            with self._lock:
+                self._output_dropped += 1
 
     def _ensure_worker(self) -> None:
         if self._worker is not None and self._worker.is_alive():
@@ -494,7 +516,7 @@ class LiveRelay:
             except Exception:  # noqa: BLE001 - a thumbnail failure never stops the relay
                 pass
 
-    def _output_thumb(self, prompt_id, node_id, path) -> None:
+    def _output_thumb(self, prompt_id, node_id, path, kind="output_thumb") -> None:
         video = hf_frames.is_video(path)
         fitted = (hf_frames.video_sheet(path, self.max_bytes, 512) if video
                   else hf_frames.image_thumb(path, self.max_bytes, 384))
@@ -507,7 +529,7 @@ class LiveRelay:
             src_bytes = path.stat().st_size
         except OSError:
             src_bytes = None
-        fields = {"kind": "output_thumb", "node": node_id, "mime": fitted.mime, "bytes": len(fitted.data),
+        fields = {"kind": kind, "node": node_id, "mime": fitted.mime, "bytes": len(fitted.data),
                   "data": base64.b64encode(fitted.data).decode("ascii"), "w": fitted.w, "h": fitted.h,
                   "source_kind": "video" if video else "image", "src_bytes": src_bytes,
                   "seq_frame": self._next_frame_seq(), "dropped": dropped}
