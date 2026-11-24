@@ -108,7 +108,8 @@ export const HF_CSS = `
 .hf-win-title { font-weight: 650; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; outline: none; }
 .hf-win-job { color: var(--hf-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
 .hf-win-head .hf-btn { cursor: pointer; }
-.hf-tabs { display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--hf-border); background: var(--hf-bg); overflow-x: auto; }
+.hf-tabs { display: flex; flex: none; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--hf-border); background: var(--hf-bg); overflow-x: auto; }
+/* flex: none - a tall pane (the technical detail) squeezed the tab row and cut its labels (L9.338) */
 .hf-tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--hf-muted);
   padding: 7px 10px 6px; font: inherit; cursor: pointer; white-space: nowrap; }
 .hf-tab[aria-selected="true"] { color: var(--hf-fg); border-bottom-color: var(--hf-accent); }

@@ -324,7 +324,6 @@ def explain(entry: dict, source: str = "runtime_file", dropped_lines: int | None
         if value not in (None, ""):
             facts.append({"label": label, "value": str(value)})
 
-    fact("Node", who)
     if code in ("vram_oom", "vae_decode_oom"):
         headline = f"{who or 'A node'} ran out of GPU memory"
         bits = []
