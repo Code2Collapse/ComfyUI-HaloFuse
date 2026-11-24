@@ -346,6 +346,18 @@ def validate(catalog: dict, profiles: dict) -> None:
         for ref in d.get("include_members_of") or []:
             if ref == name or (defs.get(ref) or {}).get("members") is None:
                 errs.append(f"profile {name}: include_members_of {ref!r} must name another profile with members")
+        if "try_unknown" in d:
+            tries = d["try_unknown"]
+            if not isinstance(tries, list) or not all(isinstance(r, str) for r in tries):
+                errs.append(f"profile {name}: try_unknown must be a list of owner/repo strings")
+            else:
+                if d.get("members") is not None:
+                    errs.append(f"profile {name}: try_unknown is not allowed on a members profile")
+                if d.get("target") != "cloud":
+                    errs.append(f"profile {name}: try_unknown needs target cloud")
+                for r in tries:
+                    if r not in by_repo:
+                        errs.append(f"profile {name}: try_unknown {r!r} is not in the catalog")
     policy = profiles.get("licence_policy") or {}
     for cls in LICENCE_CLASSES:
         if policy.get(cls) not in POLICY_ACTIONS:
@@ -381,6 +393,8 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
         (catalog pins, that profile's licence exemption, flagged), so an
         image that replaces another never loses one of its packs.
       * otherwise members are the entries listing the profile in `profiles`.
+      * `try_unknown` (trial profiles) admits the listed entries whose compatibility is "unknown" for a build
+        test (flagged); compatibility false still excludes; licence and conflicts apply as usual.
       * cloud profiles keep only cloud, compatible entries; the licence policy
         then includes, flags or excludes; conflicts exclude the later entry.
       * local profiles (frontend-extensions) list local entries; never imaged.
@@ -411,6 +425,7 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
         candidates = [e for e in catalog["entries"] if name in e["profiles"]]
 
     taken = {}
+    tries = set(d.get("try_unknown") or [])
     # `include_members_of`: the packs an earlier image already ships stay in this one (at the catalog's current
     # pins), under the same licence exemption as that profile, so switching images never loses a node.
     for ref in d.get("include_members_of") or []:
@@ -441,7 +456,8 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
         if e["install"]["method"] == "base-image":
             continue  # ComfyUI core comes with the base image
         comp = e["compatibility"]["compatible"]
-        if comp is not True:
+        trial = comp == "unknown" and e["repo"] in tries
+        if comp is not True and not trial:
             res.excluded.append((e, f"compatibility {comp}: {e['compatibility'].get('notes', '')}".strip()))
             continue
         action = _licence_action(e, policy)
@@ -455,6 +471,8 @@ def resolve(catalog: dict, profiles: dict, name: str) -> Resolved:
             continue
         res.installed.append(e)
         taken[e["repo"]] = e
+        if trial:
+            res.flagged.append((e, "trial: compatibility unknown, installed for a build test"))
         if action == "include-flagged":
             res.flagged.append((e, f"licence class {e['license']['class']} ({e['license'].get('spdx')})"))
     return res

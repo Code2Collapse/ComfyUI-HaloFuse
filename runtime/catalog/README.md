@@ -31,6 +31,12 @@ of two conflicting packs. A failing optional pack is isolated at build time (mov
 marked in `/etc/halofuse/install_report.json`). `full` is every compatible backend entry. `frontend-extensions` is a
 local list and is never built into an image. ComfyUI-Manager is in no cloud profile.
 
+A trial profile may list `try_unknown: [owner/repo, ...]`: those entries are installed even though their
+compatibility is still `unknown`, so an image build measures them (flagged "trial" in the install report).
+`compatible: false`, the licence policy and conflicts still apply. `full-candidates` is such a profile (CI
+builds it on request with push=false); a pack that installs and imports there gets `compatible: true` with the
+CI run as evidence, and one that does not keeps a measured reason.
+
 Since 2026-11-23 (owner: "add all the nodes ... updating all nodes to the latest"):
 
 - **`full` is the HaloFuse image** (the bridge's `halofuse` runtime, Advanced > Cloud runtime). Its

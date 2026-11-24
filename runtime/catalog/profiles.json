@@ -251,6 +251,44 @@
    "include_members_of": [
     "default"
    ]
+  },
+  "full-candidates": {
+   "target": "cloud",
+   "rule": "all-compatible-backend",
+   "include_members_of": [
+    "default"
+   ],
+   "try_unknown": [
+    "crystian/ComfyUI-Crystools",
+    "MixLabPro/comfyui-mixlab-nodes",
+    "ssitu/ComfyUI_UltimateSDUpscale",
+    "cubiq/ComfyUI_FaceAnalysis",
+    "cubiq/ComfyUI_InstantID",
+    "Gourieff/ComfyUI-ReActor",
+    "1038lab/ComfyUI-RMBG",
+    "Fannovel16/ComfyUI-Frame-Interpolation",
+    "Enemyx-net/VibeVoice-ComfyUI",
+    "nunchux-ai/ComfyUI-nunchaku",
+    "PrunaAI/ComfyUI_pruna",
+    "iFayens/ComfyUI-PuLID-Flux2",
+    "lldacing/ComfyUI_PuLID_Flux_ll",
+    "ussoewwin/ComfyUI-QwenImageLoraLoader",
+    "flybirdxx/ComfyUI-Qwen-TTS",
+    "Code2Collapse/ComfyUI-GLM_Image",
+    "Deno2026/comfyui-deno-custom-nodes",
+    "robertvoy/ComfyUI-Distributed",
+    "Carasibana/ComfyUI-H3-FaceRefine",
+    "aigc-apps/VideoX-Fun",
+    "ManglerFTW/ComfyI2I",
+    "amir84ferdos/ComfyUI-ArchAi3d-Qwen",
+    "Blueforcer/ComfyUI-DLSS5-Enhancer",
+    "smthemex/ComfyUI_FlashVSR",
+    "hradec/ComfyUI-HR-Endless-Sampler",
+    "RH-RunningHub/ComfyUI-RH-DLSS5",
+    "PozzettiAndrea/ComfyUI-SAM3",
+    "kijai/ComfyUI-SCAIL-Pose"
+   ],
+   "description": "Trial image (L9.320): `full` plus every cloud pack whose compatibility is still unknown (try_unknown), so one CI build (push=false) measures install and import. Never pushed or used by the bridge."
   }
  }
 }

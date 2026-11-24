@@ -478,16 +478,22 @@ def install_deps(catalog_dir, profile: str, custom_nodes: Path, report: dict, pi
         if rec["status"] != "fetched":
             continue
         req = custom_nodes / rec["folder"] / "requirements.txt"
+        entry = None if rec.get("extra") else by_repo.get(rec["repo"])
         if not req.is_file():
-            rec["status"] = "installed"
-            continue
+            # a pack without requirements.txt (its install.py, which archive installs never run, names the packages):
+            # catalog `extra_requirements` still apply in non-strict profiles, from an empty upstream list
+            if res.strict or not ((entry or {}).get("install") or {}).get("extra_requirements"):
+                rec["status"] = "installed"
+                continue
+            req = work / rec["folder"] / "requirements.upstream-none.txt"
+            req.parent.mkdir(parents=True, exist_ok=True)
+            req.write_text("", encoding="utf-8")
         frozen = torch_pins if res.strict else sorted(set(_freeze(pip)) | set(torch_pins))
         constraints.write_text("\n".join(frozen) + "\n")
-        entry = None if rec.get("extra") else by_repo.get(rec["repo"])
         req = _requirements_for(rec, req, entry, res.strict, work)
         argv = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "--no-input",
                 "--progress-bar", "off", "-r", str(req), "-c", str(constraints)]
-        log(f"pip install -r {rec['folder']}/requirements.txt")
+        log(f"pip install -r {rec['folder']}/{req.name}")
         code, _out, err = pip(argv)
         if code == 0:
             rec["status"] = "installed"
