@@ -813,7 +813,11 @@ class JobWatcher:
         if getattr(job, "status", None) == "smartcompute-interrupted":
             return "The cloud machine was interrupted before the render finished."
         code = getattr(job, "exit_code", None)
-        return f"The cloud render failed (exit code {code})." if code is not None else "The cloud render failed."
+        base = f"The cloud render failed (exit code {code})." if code is not None else "The cloud render failed."
+        # owner 2026-11-24: the cloud's own reason (error_message, already redacted by the adapter) was dropped, so a
+        # job that failed seconds after submit said only "The cloud render failed." with no cause
+        reason = _visible_reason(getattr(job, "error_message", None))
+        return f"{base} The cloud says: {reason}" if reason else base
 
     def _diagnose(self, job) -> None:
         try:

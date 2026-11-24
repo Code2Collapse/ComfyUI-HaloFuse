@@ -146,6 +146,18 @@ def _latest(store: JobStore) -> dict | None:
     return store.get(rows[0]["job_id"]) if rows else None
 
 
+def last_failure(store: JobStore | None = None) -> str | None:
+    """Why the most recent warm machine ended, in words (owner 2026-11-24: the render only said "did not start")."""
+    try:
+        rec = _latest(_store(store))
+    except Exception:  # noqa: BLE001
+        return None
+    warm = (rec or {}).get("warm") or {}
+    if (rec or {}).get("outcome") in ("failed", "cancelled") or warm.get("end_reason") not in (None, "", "shutdown"):
+        return warm.get("end_message") or None
+    return None
+
+
 def _note(store: JobStore, rid: str, text: str, level: str = "info", code: str | None = None,
           console: bool = False) -> None:
     store.append_event(rid, "note", text=text, level=level, data={"code": code} if code else None)

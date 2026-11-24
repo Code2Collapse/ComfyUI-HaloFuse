@@ -499,8 +499,10 @@ def _send_when_warm(store: JobStore, job_id: str, sku: str, settings: dict, send
                 lifecycle._fail_without_cloud(store, job_id, "session_failed",
                                               "The warm cloud machine did not start, so this render was not sent.")
                 return
+            why = warm_machine.last_failure(store)
             store.append_event(job_id, "note", level="warning", data={"code": "warm_unavailable"},
-                               text="The warm machine did not start; this render runs on its own machine.")
+                               text="The warm machine did not start; this render runs on its own machine."
+                                    + (f" Reason: {why}" if why else ""))
         ref = send(handle)
     except Exception as exc:  # noqa: BLE001
         err = lifecycle.as_halofuse_error(exc)
