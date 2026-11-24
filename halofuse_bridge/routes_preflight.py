@@ -353,9 +353,9 @@ async def post_models_upload(request):
             raise HaloFuseError("bad_request", "Choose the models to upload.", 400)
         try:
             prepared = await _run(lambda: model_sync.prepare_upload_files(files))
+            upload_id = model_sync.start_upload(prepared)   # refuses a model already being uploaded (L9.340)
         except ValueError as exc:
             raise HaloFuseError("bad_request", str(exc)[:300], 400) from None
-        upload_id = model_sync.start_upload(prepared)
         return web.json_response({"upload_id": upload_id, "uploadId": upload_id}, status=202)
     except Exception as exc:  # noqa: BLE001
         return _from_exc(exc)
@@ -406,9 +406,9 @@ async def post_models_fetch(request):
             raise HaloFuseError("bad_request", "Choose the models to download.", 400)
         try:
             prepared = await _run(lambda: model_fetch.prepare_fetch(files, _settings()))
+            fetch_id = model_fetch.start_fetch(prepared)   # refuses a model already being downloaded (L9.340)
         except model_fetch.FetchError as exc:
             raise HaloFuseError("bad_request", str(exc)[:600], 400) from None
-        fetch_id = model_fetch.start_fetch(prepared)
         return web.json_response({"fetch_id": fetch_id, **model_fetch.get_fetch_state(fetch_id)}, status=202)
     except Exception as exc:  # noqa: BLE001
         return _from_exc(exc)

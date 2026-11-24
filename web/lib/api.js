@@ -120,6 +120,12 @@ export function createApi(fetchImpl) {
     startWarm: (instanceType) => post("/halofuse/warm/start", instanceType ? { instance_type: instanceType } : {}),
     shutdownWarm: () => post("/halofuse/warm/shutdown"),
     checkWarm: () => post("/halofuse/warm/check"),
+    // L9.340: warm mode + warm duration (Always starts the machine), render intent (Smart Warm), keep it warm longer,
+    // model-cache status and removal of abandoned partial downloads
+    setWarmMode: (prefs) => post("/halofuse/warm/mode", prefs),
+    warmIntent: (instanceType, reason = "run") => post("/halofuse/warm/intent", instanceType ? { instance_type: instanceType, reason } : { reason }),
+    keepWarm: () => post("/halofuse/warm/keep"),
+    cleanupWarmCache: () => post("/halofuse/warm/cache/cleanup"),
     submitJob: (body) => post("/halofuse/jobs", body),
     listJobs: ({ active, limit } = {}) => get(`/halofuse/jobs${query({ active: active ? 1 : undefined, limit })}`),
     getJob: (id) => get(J(id)),

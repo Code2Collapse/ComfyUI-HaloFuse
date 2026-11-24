@@ -77,6 +77,7 @@ export const HF_CSS = `
 .hf-version { color: var(--hf-muted); font-size: 11px; }
 .hf-section { border-top: 1px solid var(--hf-border); padding-top: 10px; margin-top: 10px; }
 .hf-warm { display: grid; gap: 6px; } .hf-warm > .hf-hint { display: grid; gap: 2px; margin: 0; }
+.hf-warm .hf-row > .hf-grow { flex: 1 1 140px; } .hf-warm .hf-row > .hf-grow > .hf-field { margin-bottom: 4px; } .hf-warm details .hf-hint { display: grid; gap: 2px; }
 .hf-root details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
   font-weight: 600; padding: 2px 0 6px; }
 .hf-root details > summary::-webkit-details-marker { display: none; }
