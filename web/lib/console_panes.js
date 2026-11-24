@@ -108,11 +108,83 @@ export function renderTelemetry(H, { job, run }) {
   return wrap;
 }
 
-export function renderProblems(H, { job, run, warnings, onJump }) {
+/** Plain text of an error report for "Copy error": headline, explanation, steps, facts and the full technical text. */
+export function errorReportText(r) {
+  if (!r) return "";
+  const parts = [r.headline || "Render problem"];
+  if (r.explanation) parts.push("", r.explanation);
+  if (r.next_steps?.length) parts.push("", "What to do next:", ...r.next_steps.map((s, i) => `${i + 1}. ${s}`));
+  if (r.facts?.length) parts.push("", ...r.facts.map((f) => `${f.label}: ${f.value}`));
+  if (r.note) parts.push("", r.note);
+  if (r.technical) parts.push("", "Technical detail:", r.technical);
+  return parts.join("\n");
+}
+
+/** L9.338: the full error of a failed job (job.error_report from the bridge). Never cut: long text wraps and the
+ * technical block scrolls. `ui.techOpen` survives the pane's re-renders. */
+export function renderErrorReport(H, r, { onCopy, onFocusNode, ui } = {}) {
+  const state = ui || { techOpen: false };
+  const who = r.node_id != null
+    ? `Node ${r.node_id}${r.class_type ? ` (${r.class_type})` : ""}${r.node_title && r.node_title !== r.class_type ? ` "${r.node_title}"` : ""}`
+    : null;
+  const card = H("div", { className: "hf-card hf-card-danger hf-error-report", attrs: { role: "group", "aria-label": "Error" } },
+    H("h3", { className: "hf-wrap", text: r.headline || "Render problem" }),
+    r.explanation ? H("p", { className: "hf-wrap hf-er-p", text: r.explanation }) : null,
+    who ? H("div", { className: "hf-row hf-er-node" }, H("span", { className: "hf-grow hf-wrap", text: who }),
+      onFocusNode ? H("button", { className: "hf-btn", type: "button", text: "Show node on canvas",
+        dataset: { hfKey: "er-node" }, onclick: () => onFocusNode(String(r.node_id)) }) : null) : null);
+  if (r.next_steps?.length) {
+    card.append(H("strong", { text: "What to do next" }),
+      H("ol", { className: "hf-er-steps" }, ...r.next_steps.map((s) => H("li", { className: "hf-wrap", text: s }))));
+  }
+  if (r.facts?.length) {
+    const dl = H("dl", { className: "hf-kv" });
+    for (const f of r.facts) dl.append(H("dt", { text: f.label }), H("dd", { className: "hf-wrap", text: f.value }));
+    card.append(dl);
+  }
+  if (r.note) card.append(H("p", { className: "hf-wrap hf-er-p hf-tone-warning", text: r.note }));
+  const hasTech = typeof r.technical === "string";
+  const toggle = hasTech ? H("button", { className: "hf-btn", type: "button", dataset: { hfKey: "er-tech" },
+    text: state.techOpen ? "Hide technical detail" : `Show technical detail${r.technical_lines ? ` (${r.technical_lines} lines)` : ""}`,
+    attrs: { "aria-expanded": state.techOpen ? "true" : "false" } }) : null;
+  const copyBtn = H("button", { className: "hf-btn", type: "button", text: "Copy error", dataset: { hfKey: "er-copy" },
+    title: "Copy the whole error, with the technical detail" });
+  copyBtn.addEventListener("click", () => {
+    Promise.resolve(onCopy?.(errorReportText(r))).then((ok) => { copyBtn.textContent = ok === false ? "Copy failed" : "Copied"; });
+  });
+  card.append(H("div", { className: "hf-row hf-er-actions" }, copyBtn, toggle,
+    hasTech ? null : H("span", { className: "hf-hint", text: "Technical detail loads with the job." })));
+  if (hasTech && state.techOpen) {
+    card.append(H("pre", { className: "hf-tech", tabIndex: 0, text: r.technical, dataset: { hfKey: "er-pre" },
+      attrs: { "aria-label": "Technical detail" } }));
+  }
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      state.techOpen = !state.techOpen;
+      ui?.onChange?.();
+    });
+  }
+  return card;
+}
+
+/** What the Problems tab shows, as a cheap string: the pane is rebuilt only when it changes, so a selection in the
+ * technical detail (and keyboard focus) survives the job record's 1 s poll. */
+export function problemsSignature(job, run, warnings, ui) {
+  const r = job?.error_report;
   const m = mergedRun(job, run);
-  const wrap = H("div", { className: "hf-scroll" });
+  const last = m.errors[m.errors.length - 1];
+  return [job?.job_id, job?.status, job?.diagnosis?.title, job?.error?.message, r?.headline, r?.source, r?.note,
+    typeof r?.technical === "string" ? r.technical.length : -1, r?.facts?.length, m.errors.length, last?.seq,
+    m.droppedLines, warnings?.length, warnings?.[warnings.length - 1]?.seq, ui?.techOpen].join("\u0001");
+}
+
+export function renderProblems(H, { job, run, warnings, onJump, onCopy, onFocusNode, ui }) {
+  const m = mergedRun(job, run);
+  const wrap = H("div", { className: "hf-scroll hf-problems" });
   const d = job?.diagnosis;
-  if (d) {
+  if (job?.error_report) {
+    wrap.append(renderErrorReport(H, job.error_report, { onCopy, onFocusNode, ui }));
+  } else if (d) {
     wrap.append(H("div", { className: "hf-card hf-card-danger", attrs: { role: "group", "aria-label": "Diagnosis" } },
       H("h3", { text: d.title || d.code || "Render problem" }),
       d.cause ? H("div", {}, H("strong", { text: "Likely cause: " }), d.cause) : null,
@@ -128,16 +200,21 @@ export function renderProblems(H, { job, run, warnings, onJump }) {
   }
   wrap.append(H("div", { className: "hf-h", text: `Errors (${m.errors.length})` }));
   if (!m.errors.length) wrap.append(empty(H, "No errors reported."));
+  if (m.errors.length > 200) wrap.append(H("div", { className: "hf-hint", text: `Showing the last 200 of ${m.errors.length}. All are in the Logs tab.` }));
   for (const e of m.errors.slice(-200)) {
     const where = [e.class_type, e.node_id ? `node ${e.node_id}` : null].filter(Boolean).join(", ");
+    const detail = e.detail && e.detail !== e.message ? e.detail : null;
     wrap.append(H("div", { className: "hf-item" },
-      H("span", { className: "hf-grow", title: e.message, text: `${e.code ? `[${e.code}] ` : ""}${e.message}${where ? ` (${where})` : ""}` }),
+      H("div", { className: "hf-grow" },
+        H("div", { text: `${e.code ? `[${e.code}] ` : ""}${e.message}${where ? ` (${where})` : ""}` }),
+        detail ? H("div", { className: "hf-er-detail", text: detail }) : null),
       H("button", { className: "hf-btn hf-icon", type: "button", text: "Log", title: "Show in the log", onclick: () => onJump(e.seq) })));
   }
   wrap.append(H("div", { className: "hf-h", text: `Warnings (${warnings.length})` }));
   if (!warnings.length) wrap.append(empty(H, "No warnings."));
+  if (warnings.length > 200) wrap.append(H("div", { className: "hf-hint", text: `Showing the last 200 of ${warnings.length}. All are in the Logs tab.` }));
   for (const w of warnings.slice(-200)) {
-    wrap.append(H("div", { className: "hf-item" }, H("span", { className: "hf-grow", title: w.text, text: w.text }),
+    wrap.append(H("div", { className: "hf-item" }, H("span", { className: "hf-grow", text: w.text }),
       H("button", { className: "hf-btn hf-icon", type: "button", text: "Log", title: "Show in the log", onclick: () => onJump(w.seq) })));
   }
   return wrap;
@@ -184,6 +261,7 @@ export function renderSummary(H, { job, run, outputs, viewUrl, previewUrl, onRet
   add("Cost", costText(job.cost));
   add("Outputs", deliveryText(job.delivery));
   if (m.final) add("Runner result", `${m.final.status}${m.final.error ? ` (${m.final.error})` : ""}, ${m.final.outputs ?? 0} output file(s)`);
+  if (job.error_report?.headline) add("Problem", `${job.error_report.headline}. Full error and next steps: Problems tab.`);
   wrap.append(kv);
   // L9.338: where the time went (queue, machine and image, start, model copies, first node, execution)
   const split = timeSplitRows({ phases: m.phases, timeline: run?.timeline, createdAt: job.created_at,
