@@ -245,7 +245,7 @@ They survive extension updates and reinstalls.
 
   ![The Telemetry tab with simulated values](images/console-telemetry.png)
 
-- **Live tab** (*experimental; needs the new HaloFuse runtime image (with live preview)*). See section 6.1. While a
+- **Live tab** (*experimental; needs the HaloFuse cloud runtime, not the Original image*). See section 6.1. While a
   render runs, the console opens on this tab.
 - **Problems tab.** Errors and warnings of the job, with the diagnosis (section 10).
 - **Summary tab.** Status, HaloFuse job id, cloud job id, ComfyUI prompt ids, GPU, times, cost estimate and the
@@ -253,8 +253,8 @@ They survive extension updates and reinstalls.
 
 ### 6.1 Live view: watch a cloud render and stop it early
 
-**Experimental.** It needs the new HaloFuse runtime image (with live preview) and has not yet been verified on a real
-cloud render. Choose **Live preview** before you render (section 7.2).
+**Experimental.** It needs the HaloFuse cloud runtime (Advanced > Cloud runtime; the Original image sends no live
+previews) and has not yet been verified on a real cloud render. Choose **Live preview** before you render (section 7.2).
 
 What you see while the render runs:
 
@@ -270,6 +270,20 @@ What you see while the render runs:
   arrives for 6 seconds the frame dims and the line says *Waiting for the next preview (the cloud log can drop
   lines).* When the cloud reports dropped lines, the number is shown. A video render shows the first frame of the
   clip while it samples.
+
+After the render ended (finished, failed or stopped):
+
+- The line says *Render failed - showing the last frames.* (or *finished* / *stopped*) and the frame is marked
+  *From the finished run*; its age no longer counts.
+- Preview files that arrived with the outputs stay viewable: a video preview (for example from Video Combine) plays
+  as a video, masks stay masks. A file that is no longer in the job folder shows *This preview file is no longer in
+  the job folder.* instead of a broken picture.
+- With no step frame at all the stage says why: *This render ended before any sampler ran.*, *The sampler (node 1458
+  KSampler) stopped before its first step preview.* (for example when it ran out of memory), or *Node … sent no step
+  previews: the cloud image has no preview decoder for this model.* When the detailed preview decoder for a model
+  could not be loaded in the cloud, the line names it.
+- The note *Live preview needs the HaloFuse cloud runtime* appears only when the render used the Original cloud image,
+  which sends no live previews.
 
 When it looks wrong:
 

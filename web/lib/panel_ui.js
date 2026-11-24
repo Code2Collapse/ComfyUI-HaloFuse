@@ -11,7 +11,7 @@ import { WarmSection } from "./warm_ui.js";
 import { PREVIEW_METHODS, PREVIEW_MODES } from "./controller.js";
 import { previewPath } from "./api.js";
 import { LIVE_TEXT, createImageCache } from "./live_preview.js";
-import { cancelActions, cancelInfo, costText, deliveryText, isTerminal, progressText, statusInfo } from "./job_view.js";
+import { cancelActions, cancelInfo, capacityAskText, capacityNotice, costText, deliveryText, isTerminal, progressText, statusInfo } from "./job_view.js";
 import { fmtBytes, fmtLocal, fmtUsd } from "./format.js";
 import { outputKind } from "./console_panes.js";
 import { AUTO_PREVIEW_MODES, renderNodeSections } from "./node_sections.js";
@@ -253,7 +253,10 @@ export class Panel {
       ? `${detailed?.reason || "Detailed preview is not available on this computer."} This render will use Fast.` : "";
     const why = unavailable && st.previewMethod !== "taesd" ? "Detailed needs preview decoder files in models/vae_approx." : "";
     this.methodHint.className = `hf-hint${reason ? " hf-tone-warning" : ""}`;
-    this.methodHint.textContent = [reason || desc, why, LIVE_TEXT.experimental].filter(Boolean).join(" ");
+    // the runtime note only when the chosen cloud runtime really lacks live preview (bridge settings payload)
+    const lacking = st.settings?.live_preview_supported === false
+      ? (typeof st.settings.live_preview_note === "string" && st.settings.live_preview_note) || LIVE_TEXT.experimental : "";
+    this.methodHint.textContent = [reason || desc, why, lacking].filter(Boolean).join(" ");
   }
 
   _renderCheck(st) {
@@ -278,6 +281,14 @@ export class Panel {
           H("span", { className: "hf-grow", text: `The ${r.label} has ${r.covers.join(", ")}.${r.still_missing?.length ? ` Still missing there: ${r.still_missing.join(", ")}.` : ""}` }),
           H("button", { className: "hf-btn hf-primary", type: "button", text: `Use the ${r.label}`,
             onclick: () => this.ctl.switchRuntimeAndCheck(r.runtime) })));
+      }
+      // L9.338: the selected GPU type is likely too small: one click switches to one with enough memory and re-checks
+      const cap = capacityNotice(p);
+      if (cap) {
+        list.append(H("div", { className: `hf-item hf-tone-${cap.verdict === "blocked" ? "danger" : "warning"}` },
+          H("span", { className: "hf-grow", style: { whiteSpace: "normal" }, text: cap.text }),
+          H("button", { className: "hf-btn hf-primary", type: "button", text: cap.buttonText,
+            onclick: () => this.ctl.switchGpuAndCheck(cap.instanceType) })));
       }
       // a class the runtime lacks but a Comfy Registry pack provides: one click adds it to My custom nodes
       for (const a of p.add_packs || []) {
@@ -348,6 +359,16 @@ export class Panel {
         cur ? H("div", { className: "hf-hint", text: `${cur.name} from ${cur.label}` }) : null,
         H("div", { className: `hf-bar${total ? "" : " hf-indeterminate"}` }, H("div", { style: { width: `${total ? Math.floor((got / total) * 100) : 0}%` } })),
         H("div", {}, H("button", { className: "hf-btn hf-danger", type: "button", text: "Cancel download", onclick: () => this.ctl.cancelFetch() }))));
+      return;
+    }
+    if (st.capacityAsk) {
+      const t = capacityAskText(st.capacityAsk);
+      const btns = H("div", { className: "hf-row" });
+      if (t.switchText) btns.append(H("button", { className: "hf-btn hf-primary", type: "button", text: t.switchText, onclick: () => this.ctl.capacitySwitch() }));
+      btns.append(H("button", { className: `hf-btn${t.switchText ? "" : " hf-primary"}`, type: "button", text: t.anywayText, onclick: () => this.ctl.capacityAnyway() }),
+        H("button", { className: "hf-btn", type: "button", text: "Cancel", onclick: () => this.ctl.capacityCancel() }));
+      this.consentBox.append(H("div", { className: "hf-consent hf-tone-warning", attrs: { role: "group", "aria-label": "Machine memory" } },
+        H("strong", { text: t.title }), H("div", { className: "hf-hint", style: { whiteSpace: "normal" }, text: t.detail }), btns));
       return;
     }
     if (st.fetchConsent) {
@@ -430,7 +451,9 @@ export class Panel {
       ci && /confirmed/.test(job.cancel.state) ? H("div", { className: "hf-meta", text: "Billing end is not yet independently confirmed by HaloFuse." }) : null,
       job?.status_note ? H("div", { className: "hf-meta", text: job.status_note }) : null,
       job ? H("div", { className: "hf-meta", text: [costText(job.cost), deliveryText(job.delivery)].filter(Boolean).join(" · ") }) : null,
-      job?.diagnosis ? H("div", { className: "hf-meta hf-tone-danger", text: `${job.diagnosis.title || job.diagnosis.code}: ${job.diagnosis.next_action || job.diagnosis.cause || ""}` }) : null,
+      job?.error_report?.headline
+        ? H("div", { className: "hf-meta hf-tone-danger", text: `${job.error_report.headline}.${job.error_report.next_steps?.length ? ` ${job.error_report.next_steps[0]}` : ""} Full error: console, Problems tab.` })
+        : job?.diagnosis ? H("div", { className: "hf-meta hf-tone-danger", text: `${job.diagnosis.title || job.diagnosis.code}: ${job.diagnosis.next_action || job.diagnosis.cause || ""}` }) : null,
       s.error && !job ? H("div", { className: "hf-meta hf-tone-danger", text: s.error.message }) : null);
     if (this._imgsFor !== s.id) { this._imgs.clear(); this._imgsFor = s.id; }
     const lv = !isQueue && job ? s.live.view({ nowS: Date.now() / 1000, job, progress: prog }) : null;

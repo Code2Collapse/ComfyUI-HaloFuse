@@ -441,6 +441,8 @@ class _Run:
         dest.parent.mkdir(parents=True, exist_ok=True)
         if category == "log" and dest.name == "render.log":
             self._keep_streamed_copy(dest)
+        if category in ("log", "runner") and dest.suffix.lower() == ".json" and self._place_json(part, dest):
+            return
         if category in ("log", "runner") and dest.suffix.lower() in _REDACTED_SUFFIXES:
             tmp = dest.with_name(f".{dest.name}.tmp")
             with open(part, "r", encoding="utf-8", errors="replace", newline="") as src, \
@@ -452,6 +454,29 @@ class _Run:
             part.unlink(missing_ok=True)
         else:
             self._replace(part, dest)
+
+    def _place_json(self, part: Path, dest: Path) -> bool:
+        """A runner JSON file (L9.338 error.json) redacted value by value, so it stays valid JSON. False when the file
+        is not JSON (then the line-wise pass runs)."""
+        try:
+            data = json.loads(part.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, ValueError):
+            return False
+
+        def clean(obj):
+            if isinstance(obj, str):
+                return redact(obj)
+            if isinstance(obj, dict):
+                return {k: clean(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [clean(v) for v in obj]
+            return obj
+
+        tmp = dest.with_name(f".{dest.name}.tmp")
+        tmp.write_text(json.dumps(clean(data), ensure_ascii=False, indent=1), encoding="utf-8")
+        self._replace(tmp, dest)
+        part.unlink(missing_ok=True)
+        return True
 
     def _keep_streamed_copy(self, dest: Path) -> None:
         """WS2's live-streamed render.log becomes render.stream.log; the runner's complete file takes its name."""
@@ -548,7 +573,21 @@ def deliver(job_id: str, outcome: str | None = None, store: JobStore | None = No
     store = _store(store)
     validate_job_id(job_id)
     with _job_lock(job_id):
-        return _Run(store, job_id, outcome, max_attempts, retry_sleep_s).run()
+        st = _Run(store, job_id, outcome, max_attempts, retry_sleep_s).run()
+    _attach_error_report(store, job_id)
+    return st
+
+
+def _attach_error_report(store: JobStore, job_id: str) -> None:
+    """L9.338: after delivery (failed jobs too), read the runner's error report (or rebuild it) onto the record."""
+    rec = store.get(job_id) or {}
+    if rec.get("outcome") not in ("failed", "timed_out"):
+        return
+    try:
+        from . import error_report
+        error_report.attach(job_id, store)
+    except Exception:  # noqa: BLE001 - an explanation problem never changes delivery
+        _log.debug("HaloFuse error report for %s failed", job_id, exc_info=True)
 
 
 def terminal_hook(job_id: str, outcome: str, store: JobStore) -> None:

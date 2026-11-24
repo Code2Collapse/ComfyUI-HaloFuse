@@ -1,8 +1,9 @@
 // HaloFuse Live view: the latest preview of a running cloud render, its step, the masks and intermediate images,
 // and the "looks wrong" actions (Stop now, Stop and try a new seed). Side-effect-free ES module.
 // PREVIEW_DESIGN section 4. Frames are files the bridge wrote into the job folder while the job runs (C-4 6a);
-// they load by URL, never as data: strings. Everything here is labelled experimental until a real cloud render
-// with the new runtime image has been verified.
+// they load by URL, never as data: strings. Once the job ends the view says so (no running frame age), delivered
+// videos play as video, a file that failed to load is a placeholder with the reason, and an empty stage says why
+// (ledger L9.339). The "needs another runtime" label shows only when the job's runtime lacks live preview.
 
 const MAX_LATENT = 120;
 const MAX_RECORDS = 300;
@@ -20,11 +21,41 @@ export const LIVE_TEXT = Object.freeze({
   none: "This render sent no previews. The cloud runtime may be an older image without live preview.",
   fallback: "Detailed preview unavailable for this model; showing the fast preview.",
   experimental: "Experimental: needs the new HaloFuse runtime image.",
+  unsupported: "Live preview needs the HaloFuse cloud runtime. This render used the Original cloud image, which sends no live previews.",
+  finished: "Render finished - showing the last frames.",
+  failed: "Render failed - showing the last frames.",
+  stopped: "Render stopped - showing the last frames.",
+  noSampler: "This render ended before any sampler ran.",
+  fileGone: "This preview file is no longer in the job folder.",
+  fromFinished: "From the finished run",
+  noFrame: "No step preview or picture from this render. Its masks are listed on the right.",
 });
+const END_TEXT = { succeeded: LIVE_TEXT.finished, completed: LIVE_TEXT.finished, failed: LIVE_TEXT.failed,
+  timed_out: LIVE_TEXT.failed, cancelled: LIVE_TEXT.stopped };
+const IMAGE_KINDS = new Set(["latent", "temp_output", "output_thumb", "image"]);
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const terminal = (job) => !!job && (job.terminal === true
   || ["succeeded", "completed", "failed", "cancelled", "timed_out"].includes(job.status));
+const mimeOf = (r) => (typeof r?.mime === "string" ? r.mime.toLowerCase() : "");
+/** An image the stage or a thumbnail can show in an <img> (never a delivered video or audio file). */
+const isImage = (r) => (mimeOf(r) ? mimeOf(r).startsWith("image/") : IMAGE_KINDS.has(r?.kind));
+const isVideo = (r) => r?.kind === "video" || mimeOf(r).startsWith("video/");
+const markOf = (marks, name) => [...(marks || [])].reverse().find((m) => m && m.name === name) || null;
+
+const noStepText = (mark) => `Node ${mark.detail || "?"} sent no step previews: the cloud image has no preview decoder for this model.`;
+
+/** Why a finished job shows no step preview, from the runner's marks and the nodes that ran (RunState nodes). */
+function noFrameReason(nodes, marks, job) {
+  const none = markOf(marks, "no_step_previews");
+  if (none) return noStepText(none);
+  const samplers = nodes.filter((n) => n && n.stage === "sample" && !n.cached);
+  if (!samplers.length) return LIVE_TEXT.noSampler;
+  const last = samplers.at(-1);
+  const which = `node ${last.node_id}${last.class_type ? ` ${last.class_type}` : ""}`;
+  const ok = job && (job.status === "succeeded" || job.status === "completed");
+  return ok ? `The sampler (${which}) sent no step preview.` : `The sampler (${which}) stopped before its first step preview.`;
+}
 
 export function methodText(method) {
   if (method === "taesd") return "Detailed (small decoder)";
@@ -94,23 +125,38 @@ export class LiveModel {
     return null;
   }
 
-  view({ nowS, job, progress = null, marks = [], droppedLines = 0 } = {}) {
+  view({ nowS, job, progress = null, marks = [], droppedLines = 0, nodes = [] } = {}) {
     const all = this._sorted();
     const latent = all.filter((r) => r.kind === "latent");
-    const thumbs = all.filter((r) => THUMB_KINDS.has(r.kind) || r.source === "delivered");
+    // thumbnails: live temp/mask/output pictures and the files delivery brought, but only what a browser can show
+    const shown = all.filter((r) => (THUMB_KINDS.has(r.kind) || r.source === "delivered") && (isImage(r) || isVideo(r)));
+    // once delivery brought a node's full-size preview files, its small live copies are duplicates
+    const deliveredNodes = new Set(shown.filter((r) => r.source === "delivered" && r.node_id != null).map((r) => r.node_id));
+    const thumbs = shown.filter((r) => !(r.kind === "temp_output" && r.source !== "delivered" && deliveredNodes.has(r.node_id)));
     const held = this._held != null ? this._bySeq.get(this._held) || null : null;
-    const newestImage = [...thumbs].reverse().find((r) => !r.mask) || null;
+    const newestImage = [...thumbs].reverse().find((r) => !r.mask && isImage(r)) || null;
     const frame = held || latent.at(-1) || newestImage;
-    const running = !!job && !terminal(job);
+    const video = frame ? null : [...thumbs].reverse().find(isVideo) || null;
+    const ended = !!job && terminal(job);
+    const running = !!job && !ended;
     const newestFrameTs = num(latent.at(-1)?.ts ?? frame?.ts);
-    const ageS = frame && num(frame.ts) != null && num(nowS) != null ? Math.max(0, Math.round(nowS - frame.ts)) : null;
+    // the age of a frame matters only while the job runs; afterwards it is simply a frame of the finished run
+    const ageS = !ended && frame && num(frame.ts) != null && num(nowS) != null ? Math.max(0, Math.round(nowS - frame.ts)) : null;
     const stale = running && !held && newestFrameTs != null && nowS - newestFrameTs > STALE_S;
     let statusText = null;
     if (!all.length) {
       if (job && job.preview_mode && job.preview_mode !== "live" && !terminal(job)) statusText = LIVE_TEXT.off;
       else if (running) statusText = LIVE_TEXT.waiting;
-      else if (job) statusText = job.preview_mode && job.preview_mode !== "live" ? LIVE_TEXT.off : LIVE_TEXT.none;
+      else if (job && job.preview_mode && job.preview_mode !== "live") statusText = LIVE_TEXT.off;
+      else if (job && job.live_support?.state === "no") statusText = job.live_support.note || LIVE_TEXT.unsupported;
+      else if (job && Array.isArray(nodes) && nodes.length) statusText = noFrameReason(nodes, marks, job);
+      else if (job) statusText = LIVE_TEXT.none;
+    } else if (ended && !frame && !video) {
+      // masks (or files a browser cannot show) only: say so instead of "waiting"
+      statusText = Array.isArray(nodes) && nodes.length ? noFrameReason(nodes, marks, job) : LIVE_TEXT.noFrame;
     } else if (stale) statusText = LIVE_TEXT.stale;
+    const decoder = markOf(marks, "preview_decoder_failed");
+    const noSteps = markOf(marks, "no_step_previews");
     const step = num(progress?.step) ?? num(frame?.step);
     const steps = num(progress?.steps) ?? num(frame?.steps);
     const nodeId = progress?.node_id ?? frame?.node_id ?? null;
@@ -118,11 +164,20 @@ export class LiveModel {
     const fellBack = (marks || []).some((m) => m && m.name === "preview_fallback");
     return {
       frame,
+      video,
       holding: !!held,
       ageS,
-      ageText: ageS == null ? null : `Frame from ${ageS} s ago`,
+      ageText: ended ? (frame || video ? LIVE_TEXT.fromFinished : null) : ageS == null ? null : `Frame from ${ageS} s ago`,
       stale,
       statusText,
+      endText: ended && all.length ? END_TEXT[job.status] || END_TEXT[job.outcome] || LIVE_TEXT.finished : null,
+      // the runtime reason matters only when live preview was asked for (or the record does not say)
+      expText: job?.live_support?.state === "no" && (!job.preview_mode || job.preview_mode === "live")
+        ? job.live_support.note || LIVE_TEXT.unsupported : null,
+      decoderText: decoder ? `The detailed preview decoder for this model (${decoder.detail || "unknown"}) did not load in `
+        + "the cloud. Step previews use the fast colour preview or are missing."
+        : noSteps && (frame || video) ? noStepText(noSteps) : null,
+      nodeLabel: ended ? "Last node" : "Node",
       stepText: step != null && steps ? `Step ${step} of ${steps}` : null,
       fraction: step != null && steps ? Math.min(step / steps, 1) : null,
       nodeText: nodeId != null ? `Node ${nodeId}${progress?.class_type ? ` ${progress.class_type}` : ""}` : null,
@@ -172,13 +227,33 @@ export function drawMaskOverlay(canvas, baseImg, maskImg, mode = "overlay", doc 
 }
 
 /**
- * The Live pane. ctx: {view, model, job, imgFor(name) -> <img> (reused across renders: no re-fetch, no flicker),
- * stopping, message, selectedMask, overlayMode, onStop(), onReseed(), onHold(seq|null), onSelectMask(seq|null),
- * onOverlayMode(mode), isQueue}.
+ * The Live pane. ctx: {view, model, job, imgFor(name, role) -> <img> (reused across renders: no re-fetch, no flicker),
+ * isBroken(name) -> true once that file failed to load, videoFor(name, role) -> cached <video>, urlFor(name),
+ * stopping, message,
+ * selectedMask, overlayMode, onStop(), onReseed(), onHold(seq|null), onSelectMask(seq|null), onOverlayMode(mode),
+ * isQueue}.
  */
 export function renderLive(H, ctx) {
   const v = ctx.view;
   const job = ctx.job;
+  const broken = (name) => !!ctx.isBroken?.(name);
+  const missing = (small = false) => H("div", { className: `hf-live-missing${small ? " hf-live-missing-sm" : ""}`,
+    text: small ? "Missing" : LIVE_TEXT.fileGone, title: LIVE_TEXT.fileGone,
+    attrs: { role: "img", "aria-label": LIVE_TEXT.fileGone } });
+  // one cached <video> per (name, role): a re-render every poll must not restart or re-fetch a playing video
+  const videoEl = (rec, className, controls) => {
+    const el = ctx.videoFor ? ctx.videoFor(rec.name, controls ? "stage" : "thumb")
+      : H("video", { src: ctx.urlFor ? ctx.urlFor(rec.name) : "" });
+    el.className = className;
+    el.muted = true;
+    el.loop = controls;
+    el.controls = controls;
+    el.preload = "metadata";
+    el.playsInline = true;
+    el.setAttribute("aria-label", `Video from node ${rec.node_id ?? "?"}`);
+    el.setAttribute("playsinline", "");
+    return el;
+  };
   const cancelState = job?.cancel?.state;
   const stopping = ctx.stopping || cancelState === "cancel_requested" || cancelState === "cancel_accepted";
   const canAct = !!job && v.running && !ctx.isQueue;
@@ -192,32 +267,47 @@ export function renderLive(H, ctx) {
         text: "Stop and try a new seed", title: "Stop this render and start it again with new seeds (same GPU and settings)",
         onclick: () => ctx.onReseed() }));
   }
-  const head = H("div", { className: "hf-live-head" },
-    H("span", { className: "hf-live-exp", text: LIVE_TEXT.experimental }), actions);
-
-  // stage: the frame (or a mask drawn over its image) with the step bar
-  const stage = H("figure", { className: `hf-live-stage${v.stale ? " hf-live-stale" : ""}` });
+  // the runtime label appears only when this job's runtime really lacks live preview (bridge job.live_support)
   const selected = ctx.selectedMask != null ? v.masks.find((m) => m.seq === ctx.selectedMask) || null : null;
-  if (selected) {
-    const canvas = H("canvas", { className: "hf-live-canvas", attrs: { role: "img",
-      "aria-label": `${selected.mask ? "Mask" : "Image"} from node ${selected.node_id ?? "?"}` } });
+  const stageSays = !v.frame && !v.video && !selected ? v.statusText || LIVE_TEXT.waiting : null;
+  const head = H("div", { className: "hf-live-head" },
+    v.expText && v.expText !== stageSays ? H("span", { className: "hf-live-exp", text: v.expText }) : null, actions);
+
+  // stage: the frame (or a mask drawn over its image, or a delivered video) with the step bar
+  const stage = H("figure", { className: `hf-live-stage${v.stale ? " hf-live-stale" : ""}` });
+  const selectedVideo = !!selected && (selected.kind === "video" || String(selected.mime || "").startsWith("video/"));
+  if (selected && selectedVideo) {
+    stage.append(broken(selected.name) ? missing() : videoEl(selected, "hf-live-frame", true));
+  } else if (selected) {
     const base = selected.mask ? ctx.model.overlayBase(selected) : null;
-    const maskImg = ctx.imgFor(selected.name, "src");
-    const baseImg = base ? ctx.imgFor(base.name, "src") : null;
-    const draw = () => {
-      if ((maskImg.complete && maskImg.naturalWidth) && (!baseImg || (baseImg.complete && baseImg.naturalWidth))) {
-        drawMaskOverlay(canvas, selected.mask ? baseImg : maskImg, selected.mask ? maskImg : null,
-          selected.mask ? ctx.overlayMode : "image");
-      }
-    };
-    for (const im of [maskImg, baseImg]) if (im && !(im.complete && im.naturalWidth)) im.addEventListener("load", draw, { once: true });
-    draw();
-    stage.append(canvas);
+    if (broken(selected.name) || (base && broken(base.name))) {
+      stage.append(missing());
+    } else {
+      const canvas = H("canvas", { className: "hf-live-canvas", attrs: { role: "img",
+        "aria-label": `${selected.mask ? "Mask" : "Image"} from node ${selected.node_id ?? "?"}` } });
+      const maskImg = ctx.imgFor(selected.name, "src");
+      const baseImg = base ? ctx.imgFor(base.name, "src") : null;
+      const draw = () => {
+        if ((maskImg.complete && maskImg.naturalWidth) && (!baseImg || (baseImg.complete && baseImg.naturalWidth))) {
+          drawMaskOverlay(canvas, selected.mask ? baseImg : maskImg, selected.mask ? maskImg : null,
+            selected.mask ? ctx.overlayMode : "image");
+        }
+      };
+      for (const im of [maskImg, baseImg]) if (im && !(im.complete && im.naturalWidth)) im.addEventListener("load", draw, { once: true });
+      draw();
+      stage.append(canvas);
+    }
   } else if (v.frame) {
-    const img = ctx.imgFor(v.frame.name, "stage");
-    img.className = "hf-live-frame";
-    img.alt = v.frame.kind === "latent" ? `Live preview${v.stepText ? `, ${v.stepText.toLowerCase()}` : ""}` : "Latest preview image";
-    stage.append(img);
+    if (broken(v.frame.name)) {
+      stage.append(missing());
+    } else {
+      const img = ctx.imgFor(v.frame.name, "stage");
+      img.className = "hf-live-frame";
+      img.alt = v.frame.kind === "latent" ? `Live preview${v.stepText ? `, ${v.stepText.toLowerCase()}` : ""}` : "Latest preview image";
+      stage.append(img);
+    }
+  } else if (v.video) {
+    stage.append(broken(v.video.name) ? missing() : videoEl(v.video, "hf-live-frame", true));
   } else {
     stage.append(H("div", { className: "hf-live-empty", text: v.statusText || LIVE_TEXT.waiting }));
   }
@@ -231,24 +321,34 @@ export function renderLive(H, ctx) {
   // side: what is shown, where it comes from, and how fresh it is
   const info = H("dl", { className: "hf-live-info" });
   const row = (k, val) => { if (val) info.append(H("dt", { text: k }), H("dd", { text: val })); };
-  row("Node", v.nodeText);
+  row(v.nodeLabel || "Node", v.nodeText);
   row("Progress", [v.stepText, v.etaText].filter(Boolean).join(", "));
   row("Preview", v.methodText);
   row("Frame", v.holding ? "Held (live view paused)" : v.ageText);
   // the console owns one persistent polite live region (updated at most every 5 s); this line is visual only
-  const status = H("p", { className: `hf-live-status${v.stale || v.droppedText ? " hf-tone-warning" : ""}`, text: [v.frame ? v.statusText : null, v.droppedText, ctx.message].filter(Boolean).join(" ") });
+  const warn = v.stale || v.droppedText || v.decoderText;
+  const status = H("p", { className: `hf-live-status${warn ? " hf-tone-warning" : ""}`,
+    text: [v.endText, v.decoderText, v.frame || v.video ? v.statusText : null, v.droppedText, ctx.message].filter(Boolean).join(" ") });
   const side = H("div", { className: "hf-live-side" }, info, status);
   if (v.masks.length) {
     const thumbs = H("div", { className: "hf-live-thumbs", attrs: { role: "group", "aria-label": "Masks and intermediate images" } });
     for (const m of v.masks) {
       const on = m.seq === ctx.selectedMask;
-      const label = `${m.mask ? "Mask" : m.kind === "output_thumb" ? (m.source_kind === "video" ? "Video frames" : "Result") : "Image"} from node ${m.node_id ?? "?"}`;
-      const im = ctx.imgFor(m.name, "thumb");
-      im.alt = "";
-      thumbs.append(H("button", { className: `hf-live-thumb${on ? " hf-on" : ""}${m.mask ? " hf-live-mask" : ""}`, type: "button",
-        dataset: { hfKey: `mask-${m.seq}` },
+      const isVid = m.kind === "video" || String(m.mime || "").startsWith("video/");
+      const what = isVid ? "Video" : m.mask ? "Mask"
+        : m.kind === "output_thumb" ? (m.source_kind === "video" ? "Video frames" : "Result") : "Image";
+      const label = `${what} from node ${m.node_id ?? "?"}`;
+      let media;
+      if (broken(m.name)) media = missing(true);
+      else if (isVid) media = videoEl(m, "hf-live-vthumb", false);
+      else {
+        media = ctx.imgFor(m.name, "thumb");
+        media.alt = "";
+      }
+      thumbs.append(H("button", { className: `hf-live-thumb${on ? " hf-on" : ""}${m.mask ? " hf-live-mask" : ""}${isVid ? " hf-live-video" : ""}`,
+        type: "button", dataset: { hfKey: `mask-${m.seq}` },
         title: label, attrs: { "aria-label": label, "aria-pressed": String(on) },
-        onclick: () => ctx.onSelectMask(on ? null : m.seq) }, im));
+        onclick: () => ctx.onSelectMask(on ? null : m.seq) }, media));
     }
     side.append(H("h4", { className: "hf-live-h", text: "Masks and intermediate images" }), thumbs);
   }
@@ -270,8 +370,12 @@ export function renderLive(H, ctx) {
     const strip = H("div", { className: "hf-live-strip", attrs: { role: "group", "aria-label": "Recent frames" } });
     for (const f of v.filmstrip) {
       const on = v.holding && v.frame?.seq === f.seq;
-      const im = ctx.imgFor(f.name, "strip");
-      im.alt = "";
+      let im;
+      if (broken(f.name)) im = missing(true);
+      else {
+        im = ctx.imgFor(f.name, "strip");
+        im.alt = "";
+      }
       strip.append(H("button", { className: `hf-live-thumb${on ? " hf-on" : ""}`, type: "button", dataset: { hfKey: `frame-${f.seq}` },
         attrs: { "aria-label": f.step != null ? `Show frame from step ${f.step}` : `Show frame ${f.seq}`, "aria-pressed": String(on) },
         onclick: () => ctx.onHold(on ? null : f.seq) }, im));
@@ -282,23 +386,60 @@ export function renderLive(H, ctx) {
   return out;
 }
 
-/** <img> elements by preview name, reused across renders (a re-created <img> would re-fetch a no-store file). */
-export function createImageCache(doc, urlFor, max = 160) {
+/** <img> elements by preview name, reused across renders (a re-created <img> would re-fetch a no-store file).
+ *  A file that fails to load (deleted from the job folder, a pruned frame) is remembered: `isBroken(name)` lets the
+ *  pane show a placeholder with the reason instead of the browser's broken-image icon; `onBroken(name)` fires so the
+ *  pane can re-render. A failed name is tried again after 10 s and 60 s (a ComfyUI restart or a briefly locked file
+ *  is not a deleted file); `timers` (setTimeout) is injectable for tests. */
+const RETRY_MS = [10000, 60000]; // a failed file is tried again twice (a restart or a locked file is not "gone")
+
+export function createImageCache(doc, urlFor, max = 160, onBroken = null, timers = globalThis) {
   const map = new Map();
+  const bad = new Set();
+  const tries = new Map();
+  const fail = (name) => {
+    if (bad.has(name)) return;
+    bad.add(name);
+    const n = tries.get(name) || 0;
+    if (n < RETRY_MS.length && typeof timers?.setTimeout === "function") {
+      tries.set(name, n + 1);
+      const t = timers.setTimeout(() => {
+        bad.delete(name);
+        for (const key of [...map.keys()]) if (key.endsWith(`:${name}`)) map.delete(key); // re-created = re-fetched
+        try { onBroken?.(name); } catch { /* a listener failure never breaks the pane */ }
+      }, RETRY_MS[n]);
+      t?.unref?.();
+    }
+    try { onBroken?.(name); } catch { /* a listener failure never breaks the pane */ }
+  };
+  const make = (tag, name, key) => {
+    const el = doc.createElement(tag);
+    if (tag === "img") el.decoding = "async";
+    el.addEventListener("error", () => fail(name));
+    el.addEventListener(tag === "img" ? "load" : "loadedmetadata", () => { bad.delete(name); tries.delete(name); });
+    el.src = urlFor(name);
+    map.set(key, el);
+    while (map.size > max) map.delete(map.keys().next().value);
+    return el;
+  };
   return {
     /** One element per (name, role): an element can sit in one place only (stage, thumbnail, filmstrip). */
     get(name, role = "") {
       const key = `${role}:${name}`;
-      let img = map.get(key);
+      const img = map.get(key);
       if (img) { map.delete(key); map.set(key, img); return img; }
-      img = doc.createElement("img");
-      img.decoding = "async";
-      img.src = urlFor(name);
-      map.set(key, img);
-      while (map.size > max) map.delete(map.keys().next().value);
-      return img;
+      return make("img", name, key);
     },
-    clear() { map.clear(); },
+    /** The same for a <video> (kept across renders so playback is not restarted by a poll). */
+    video(name, role = "") {
+      const key = `video-${role}:${name}`;
+      const el = map.get(key);
+      if (el) { map.delete(key); map.set(key, el); return el; }
+      return make("video", name, key);
+    },
+    isBroken(name) { return bad.has(name); },
+    url(name) { return urlFor(name); },
+    clear() { map.clear(); bad.clear(); tries.clear(); },
     get size() { return map.size; },
   };
 }

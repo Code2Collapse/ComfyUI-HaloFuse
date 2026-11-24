@@ -126,6 +126,17 @@ Dockerfile and builds the runtime image.
 AGPL-3.0, see [LICENSE](LICENSE). HaloFuse is built on an MIT-licensed bridge and runtime; that notice is kept
 in [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
 
+## What changed on 2026-11-24
+
+- Faster start (HaloFuse image): the workflow starts as soon as ComfyUI is up; models keep copying in the order the
+  workflow needs them, and a loader waits only for its own file. On a measured run this moves the first node about
+  15 minutes earlier (estimate from that run's log; not yet measured on a real render).
+- Memory check before paying: Workflow Check estimates the RAM a render needs and offers a machine that has enough.
+- The Summary shows where the time went: queue, machine start, image download, model copy, first node, execution.
+- Live tab after a render ends: every preview shows as itself (videos play, masks stay masks), the frame age stops,
+  and an empty view says why (for example "this render ended before any sampler ran"). The "experimental" label only
+  shows for the Original image.
+
 ## What changed on 2026-11-23
 
 - Workflow Check reads core Math Expression inputs correctly and skips nodes that feed no output, as ComfyUI does.

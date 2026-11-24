@@ -81,6 +81,7 @@ const PHASES = {
   model_paths: "Resolving model paths",
   comfy_start: "Starting ComfyUI",
   prefetch_wait: "Waiting for model prefetch",
+  model_wait: "Waiting for a model copy",
   execute: "Executing workflow",
   collect_outputs: "Collecting outputs",
   recovery: "Recovering",
@@ -104,6 +105,36 @@ export function phaseLabel(name) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+const gbText = (v) => (typeof v === "number" && Number.isFinite(v) ? `${v} GB` : "unknown");
+
+/** L9.338: the one-click GPU switch the Workflow Check offers when the selected machine is likely too small (or
+ *  blocked): { from, verdict, text, buttonText, instanceType } or null. Plain English, no provider words. */
+export function capacityNotice(check) {
+  const sw = check?.capacity_switch;
+  if (!sw || !sw.instance_type) return null;
+  const spec = `${sw.gpu_type ? `${sw.gpu_type}, ` : ""}${gbText(sw.gpu_memory_gb)} GPU memory, ${gbText(sw.memory_gb)} RAM`;
+  // the warning / blocking line above it already says why the selected machine is too small: no repeat here
+  return {
+    from: sw.from_instance_type || null,
+    verdict: sw.verdict || null,
+    instanceType: sw.instance_type,
+    text: `${sw.instance_type} (${spec}) has enough memory for this workflow by this estimate.`,
+    buttonText: `Switch to ${sw.instance_type} and check again`,
+  };
+}
+
+/** The pause before a render on a likely-too-small machine (controller.capacityAsk) as display text. */
+export function capacityAskText(ask) {
+  if (!ask) return null;
+  const ram = ask.ram && typeof ask.ram.low === "number" ? ` Estimated host RAM: ${ask.ram.low}–${ask.ram.high} GB.` : "";
+  return {
+    title: `${ask.from} is likely too small for this workflow`,
+    detail: `${ask.reason ? `${ask.reason.charAt(0).toUpperCase()}${ask.reason.slice(1)}.` : ""}${ram}`,
+    switchText: ask.switchTo ? `Switch to ${ask.switchTo.instance_type} and render` : null,
+    anywayText: `Render on ${ask.from} anyway`,
+  };
+}
+
 export function progressText(progress, status) {
   if (!progress || !progress.phase) return status ? statusInfo(status).label : "";
   const parts = [phaseLabel(progress.phase)];
@@ -122,6 +153,52 @@ export function phaseRows(phases, now) {
       duration: (running ? now : p.ended_at) - p.started_at, running,
     };
   });
+}
+
+/** L9.338 owner: where the time before and during a render went, so slow starts are visible. `phases` are the C-3
+ *  phase rows (phaseRows input shape), `timeline` comes from RunState (state changes, the image-pull line, the first
+ *  node). Rows: { key, label, seconds, note }; a row is left out when its edges are not in the log. */
+export function timeSplitRows({ phases, timeline, createdAt, now }) {
+  const ph = (phases || []).filter((p) => p && Number.isFinite(p.started_at));
+  const tl = timeline || {};
+  const first = (name) => ph.find((p) => p.name === name) || null;
+  const total = (names) => {
+    const rows = ph.filter((p) => names.includes(p.name));
+    if (!rows.length) return null;
+    return rows.reduce((s, p) => s + ((Number.isFinite(p.ended_at) ? p.ended_at : now) - p.started_at), 0);
+  };
+  const start = Number.isFinite(createdAt) ? createdAt : tl.firstTs;
+  const toProv = (tl.states || []).find((s) => s.to === "provisioning");
+  const boot = first("boot");
+  const comfy = first("comfy_start");
+  const rows = [];
+  const add = (key, label, a, b, note) => {
+    if (Number.isFinite(a) && Number.isFinite(b) && b >= a) rows.push({ key, label, seconds: b - a, note: note || "" });
+  };
+  add("queue", "Queue", start, toProv?.ts);
+  if (Number.isFinite(tl.pullAt)) {
+    add("machine", "Machine start", toProv?.ts, tl.pullAt);
+    add("image_pull", "Image pull and input download", tl.pullAt, boot?.started_at,
+      "the runtime image was not on the machine yet");
+  } else {
+    add("machine", "Machine start (image already on the machine)", toProv?.ts, boot?.started_at);
+  }
+  add("boot", "Runner and ComfyUI start", boot?.started_at, Number.isFinite(comfy?.ended_at) ? comfy.ended_at : null);
+  const prefetch = first("prefetch");
+  if (prefetch) {
+    rows.push({ key: "prefetch", label: "Model copy to the machine's disk", seconds: total(["prefetch"]),
+      note: "runs in the background, beside the rows above and below" });
+  }
+  const waited = total(["prefetch_wait", "model_wait"]);
+  if (waited != null) rows.push({ key: "model_wait", label: "Waiting for model copies", seconds: waited, note: "" });
+  add("first_node", "Time to the first node (from submit)", start, tl.firstNodeAt);
+  const exec = total(["execute"]);
+  const gateWait = total(["model_wait"]);
+  if (exec != null) {
+    rows.push({ key: "execute", label: "Executing the workflow", seconds: exec,
+      note: gateWait != null ? "includes the waits for model copies above" : "" });
+  }
+  return rows;
 }
 
 export function nodeRows(nodes, now) {

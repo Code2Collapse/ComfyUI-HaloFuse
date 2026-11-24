@@ -79,11 +79,13 @@ if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
 from hf import classify as hf_classify  # noqa: E402
+from hf import error_report as hf_error_report  # noqa: E402
 from hf import events as hf_events  # noqa: E402
 from hf import housekeeping as hf_housekeeping  # noqa: E402
 from hf import latents as hf_latents  # noqa: E402
 from hf import launch as hf_launch  # noqa: E402
 from hf import outputs as hf_outputs  # noqa: E402
+from hf import prefetch as hf_prefetch  # noqa: E402
 from hf import previews as hf_previews  # noqa: E402
 from hf import storage as hf_storage  # noqa: E402
 from hf import supervisor as hf_sup  # noqa: E402
@@ -134,6 +136,13 @@ PREFETCH_MODELS = os.environ.get("PREFETCH_MODELS", "1").lower() not in ("0", "f
 LOCAL_MODEL_DIR = Path(os.environ.get("LOCAL_MODEL_DIR", "/tmp/halofuse-models"))
 PREFETCH_THREADS = max(1, int(os.environ.get("PREFETCH_THREADS", "4")))
 MODEL_EXTS = (".safetensors", ".sft", ".ckpt", ".pt", ".pth", ".bin", ".gguf", ".onnx")
+# L9.338: the prompt is submitted as soon as ComfyUI is up; the copies keep running in first-use order and a model
+# load that needs an unfinished copy waits for that copy only (hf/prefetch.py + hf/model_gate.py, shared state here).
+PREFETCH_STATE_DIR = Path(os.environ.get("HF_PREFETCH_STATE", "/tmp/halofuse-prefetch"))
+# Kill switch: HF_PREFETCH_BEFORE_SUBMIT=1 restores the old behaviour (every copy finishes before the prompt is sent).
+PREFETCH_BEFORE_SUBMIT = os.environ.get("HF_PREFETCH_BEFORE_SUBMIT", "").lower() in ("1", "true", "yes")
+GATE_FILE_NAME = "halofuse_model_gate.py"
+GATE_SOURCE = _HERE / "hf" / "model_gate.py"
 # ComfyUI's input directory. /input is read-only for the life of the job, and
 # ComfyUI creates folders there at startup (Load3D's 3d/, uploads, and so on),
 # so the runner copies the job files here and passes this path instead.
@@ -183,8 +192,14 @@ _PREVIEW_DISCARD_MARKED = False
 _DELIVERED = {}
 _PREFETCH_STOP = threading.Event()  # set on exit: a running model copy stops between chunks
 _PREFETCH_THREADS = []  # copy workers, joined briefly on exit so a stopped copy can remove its .part file
+_PREFETCH_PLANNED = threading.Event()  # set once the copy plan is written (or there is none): the prompt may go
+_PREFETCHER = None   # hf.prefetch.Prefetcher of this job, when models are copied
+_MODEL_WAIT = {"open": None, "total": 0.0}  # gate waits (monotonic): JOB_TIMEOUT_SECONDS does not count them
 _USER_NODES = None   # hf.user_nodes.UserNodes when the job brought a custom node list
 _HOUSEKEEPER = None  # hf.housekeeping.Housekeeper: cleaning between manifest entries (HF_CLEAN_BETWEEN / _UNLOAD_)
+_ERROR_REPORT = None  # hf.error_report.ErrorReport: /output/_halofuse/error.json (L9.338)
+_COMFY_LOG = None     # hf.error_report.ComfyLog: /output/_halofuse/comfyui.log
+_SUBMITTED = None     # the workflow last submitted (node titles for the error report)
 
 
 class _StartupFailedWithUserNodes(Exception):
@@ -238,6 +253,53 @@ def die(code, msg, error=_CLASSIFY_BY_CODE):
         if error:
             _CTX.error(error, exit_code=code, **_wf_fields())
     sys.exit(code)
+
+
+def _runner_dir():
+    return OUTPUT_DIR / hf_outputs.RESERVED_DIR
+
+
+def _finish_error_file(code):
+    """L9.338: the job's result goes into error.json (when the job failed or anything was recorded), so the bridge
+    explains the failure that ENDED the job, not an earlier recovered one. Never raises."""
+    global _ERROR_REPORT
+    try:
+        if _CTX is None or (code == 0 and _ERROR_REPORT is None):
+            return
+        if _ERROR_REPORT is None:
+            _ERROR_REPORT = hf_error_report.ErrorReport(_runner_dir())
+        status = _CTX.final_status(code)
+        error = None if status == "succeeded" else ("cancelled" if status == "cancelled"
+                                                    else (_CTX.last_error or {}).get("code"))
+        _ERROR_REPORT.finish({"exit_code": code, "status": status, "error": error,
+                              "detail": (_CTX.last_error or {}).get("detail") if error else None})
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _error_file(kind, classification, data=None, returncode=None, prompt_id=None):
+    """L9.338: write the complete error into /output/_halofuse/error.json (delivered even when the job fails), so the
+    bridge never depends on the lossy cloud log stream for it. Never raises."""
+    global _ERROR_REPORT
+    try:
+        if _ERROR_REPORT is None:
+            _ERROR_REPORT = hf_error_report.ErrorReport(_runner_dir())
+        sample = peaks = None
+        if _SAMPLER is not None:
+            try:
+                sample = _SAMPLER.sample()
+                peaks = _SAMPLER.peaks()
+            except Exception:  # noqa: BLE001 - a broken probe never hides the error itself
+                pass
+        proc = _CTX.proc if _CTX is not None else None
+        tail = proc.tail() if proc is not None and hasattr(proc, "tail") else ()
+        wf = _wf_fields()
+        entry = hf_error_report.build_entry(kind, classification, data=data, workflow=_SUBMITTED, tail=tail,
+                                            sample=sample, peaks=peaks, returncode=returncode, prompt_id=prompt_id,
+                                            wf=wf.get("wf"), of=wf.get("of"))
+        _ERROR_REPORT.record(entry)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def http_json(path, payload=None, timeout=30):
@@ -378,7 +440,7 @@ def write_extra_model_paths():
         # copy wins over the /assets original. Files never prefetched are still
         # found under halofuse below.
         lines += ["halofuse_local:", f"  base_path: {LOCAL_MODEL_DIR}"]
-        lines += [f"  {name}: {name}" for name in MODEL_SUBDIRS]
+        lines += [f"  {name}: {name}" for name in names]
     lines += ["halofuse:", f"  base_path: {MODEL_BASE_DIR}"]
     lines += [f"  {name}: {name}" for name in names]
     EXTRA_MODEL_PATHS.write_text("\n".join(lines) + "\n")
@@ -433,42 +495,15 @@ def _link_extra_model_dirs(names):
 
 
 def _referenced_model_files(workflows):
-    """Model files under MODEL_BASE_DIR that these API-format workflows name.
+    """{rel: size} of the model files under MODEL_BASE_DIR that these API-format workflows name, in first-use order.
 
-    Any string input ending in a model extension is looked up in each standard
-    model folder; every match is returned as a path relative to MODEL_BASE_DIR.
-    Extra custom-node folders are left alone: they are symlinked into ComfyUI's
-    own models/ directory, which ComfyUI searches before any extra path.
+    Any string input ending in a model extension is looked up in each standard model folder and in every extra
+    (custom-node) folder at the top of MODEL_BASE_DIR (there only when its directory holds nothing but model files);
+    every match is returned as a path relative to MODEL_BASE_DIR.
     """
-    base = Path(MODEL_BASE_DIR)
-    names = set()
-    for wf in workflows:
-        for node in wf.values():
-            if not isinstance(node, dict):
-                continue
-            for value in (node.get("inputs") or {}).values():
-                if isinstance(value, str) and value.lower().endswith(MODEL_EXTS):
-                    names.add(value.replace("\\", "/").lstrip("/"))
-    found = {}
-    for name in sorted(names):
-        for folder in MODEL_SUBDIRS:
-            rel = Path(folder) / name
-            try:
-                src = base / rel
-                if ".." not in rel.parts and src.is_file():
-                    found[str(rel)] = src.stat().st_size
-            except OSError:
-                pass
-    return found
-
-
-def _copy_one(rel, size):
-    src = Path(MODEL_BASE_DIR) / rel
-    dest = LOCAL_MODEL_DIR / rel
-    if dest.is_file() and dest.stat().st_size == size:
-        return 0.0
-    # atomic (.part + rename): ComfyUI never sees a half-written model; None when the job is ending
-    return hf_storage.copy_file(src, dest, _PREFETCH_STOP)
+    extra = [n for n in _extra_model_dirs() if n not in MODEL_SUBDIRS]
+    return dict(hf_prefetch.plan_files(workflows, Path(MODEL_BASE_DIR), list(MODEL_SUBDIRS) + extra, MODEL_EXTS,
+                                       extra_folders=extra))
 
 
 def _prefetch_decision(total):
@@ -493,66 +528,99 @@ def _prefetch_decision(total):
                                     mem_available=mem)
 
 
-def prefetch_models(workflows):
-    """Copy the job's model files to local NVMe. Runs in a background thread
-    while ComfyUI starts; main() waits for it before submitting a workflow.
-    Copies run in daemon threads and stop between chunks when the job ends,
-    so a cancelled or failed job never waits for a multi-GiB copy (the old
-    ThreadPoolExecutor workers were joined at interpreter exit)."""
+def _remove_gate():
     try:
-        files = _referenced_model_files(workflows)
+        (CUSTOM_NODES_DIR / GATE_FILE_NAME).unlink()
+    except OSError:
+        pass
+
+
+def _install_gate():
+    """hf/model_gate.py into ComfyUI's custom_nodes: a model load waits for its unfinished local copy."""
+    try:
+        source = GATE_SOURCE.read_text(encoding="utf-8")
+        CUSTOM_NODES_DIR.mkdir(parents=True, exist_ok=True)
+        target = CUSTOM_NODES_DIR / GATE_FILE_NAME
+        tmp = target.with_name(target.name + ".tmp")
+        tmp.write_text(source + "\n_comfy_entry()\n", encoding="utf-8")
+        os.replace(tmp, target)
+    except OSError as err:
+        log(f"prefetch: the model-load gate could not be installed ({err}); ComfyUI finds unfinished copies in the "
+            "model library instead")
+
+
+def _clear_plan():
+    """No plan for this job: the gate (if ComfyUI loaded it) passes every lookup through; an earlier job's plan in a
+    reused machine must not apply."""
+    for name in ("plan.json", "plan.json.tmp"):
+        try:
+            (PREFETCH_STATE_DIR / name).unlink()
+        except OSError:
+            pass
+
+
+def _prepare_prefetch(workflows):
+    """Find the job's model files and write the copy plan in first-use order (the gate reads it). Runs in the prefetch
+    thread while ComfyUI starts; the prompt is submitted only after this returns (_PREFETCH_PLANNED). Returns the
+    hf.prefetch.Prefetcher, or None when nothing is copied."""
+    try:
+        _clear_plan()
+        files = list(_referenced_model_files(workflows).items())
         if not files:
             log("prefetch: no model files to copy")
-            return
-        total = sum(files.values())
+            return None
+        total = sum(size for _, size in files)
         ok, reason = _prefetch_decision(total)
         if not ok:
             log(f"prefetch: skipped, {reason}")
-            return
-        log(f"prefetch: copying {len(files)} model file(s), {total / 2**30:.1f} GiB, "
-            f"to local NVMe ({LOCAL_MODEL_DIR})")
+            return None
+        prefetcher = hf_prefetch.Prefetcher(Path(MODEL_BASE_DIR), LOCAL_MODEL_DIR, PREFETCH_STATE_DIR, files,
+                                             threads=PREFETCH_THREADS, stop=_PREFETCH_STOP, log=log,
+                                             workers=_PREFETCH_THREADS)
+        prefetcher.write_plan()
+        log(f"prefetch: copying {len(files)} model file(s), {total / 2**30:.1f} GiB, to local NVMe "
+            f"({LOCAL_MODEL_DIR}) in first-use order")
+        return prefetcher
+    except Exception as err:  # noqa: BLE001 - prefetch is an optimisation only
+        log(f"prefetch: skipped after error ({err})")
+        _clear_plan()
+        return None
+
+
+def prefetch_models(prefetcher):
+    """Run the planned copies. Copies run in daemon threads and stop between chunks when the job ends, so a
+    cancelled or failed job never waits for a multi-GiB copy."""
+    try:
+        total = sum(size for _, size in prefetcher.files)
         started = time.time()
-        # Largest first so the long copies start early.
-        pending = sorted(files.items(), key=lambda kv: kv[1], reverse=True)
-        lock = threading.Lock()
-
-        def worker():
-            while not _PREFETCH_STOP.is_set():
-                with lock:
-                    if not pending:
-                        return
-                    rel, size = pending.pop(0)
-                try:
-                    secs = _copy_one(rel, size)
-                    if secs:
-                        log(f"prefetch: {rel} ({size / 2**30:.1f} GiB) in {secs:.0f}s "
-                            f"({size / 2**20 / max(secs, 0.001):.0f} MiB/s)")
-                except Exception as err:  # noqa: BLE001 - fall back to /assets for this file
-                    log(f"prefetch: {rel} failed ({err}); ComfyUI will read it from /assets")
-
-        threads = [threading.Thread(target=worker, name=f"hf-prefetch-{i}", daemon=True)
-                   for i in range(min(PREFETCH_THREADS, len(pending)))]
-        _PREFETCH_THREADS.extend(threads)
-        for t in threads:
-            t.start()
-        for t in threads:
-            while t.is_alive() and not _PREFETCH_STOP.is_set():
-                t.join(0.5)
-        if _PREFETCH_STOP.is_set():
+        if not prefetcher.run():
             return
         elapsed = time.time() - started
         log(f"prefetch: done in {elapsed:.0f}s "
             f"({total / 2**20 / max(elapsed, 0.001):.0f} MiB/s overall)")
     except Exception as err:  # noqa: BLE001 - prefetch is an optimisation only
-        log(f"prefetch: skipped after error ({err})")
+        log(f"prefetch: stopped after error ({err})")
 
 
 def _prefetch_with_phase(workflows):
-    if _CTX is not None:
-        _CTX.phase("prefetch", "start")
+    """The prefetch thread: plan (then _PREFETCH_PLANNED is set), then copy. `finished` is always written, so a model
+    load waiting in the gate never waits for a prefetch that is gone."""
+    global _PREFETCHER
     try:
-        prefetch_models(workflows)
+        if _CTX is not None:
+            _CTX.phase("prefetch", "start")
+        try:
+            _PREFETCHER = _prepare_prefetch(workflows)
+        finally:
+            _PREFETCH_PLANNED.set()
+        if _PREFETCHER is not None:
+            prefetch_models(_PREFETCHER)
     finally:
+        try:
+            PREFETCH_STATE_DIR.mkdir(parents=True, exist_ok=True)
+            (PREFETCH_STATE_DIR / "finished").touch()
+        except OSError:
+            pass
         if _CTX is not None:
             _CTX.phase("prefetch", "end")
 
@@ -695,6 +763,9 @@ def start_comfyui(extra_args=None):
         env.update(_LAUNCH.env)
     _PROC_ARGS = args
     _OOM_BEFORE = _SAMPLER.oom_kill_count() if _SAMPLER is not None else None
+    global _COMFY_LOG
+    if _COMFY_LOG is None:  # created before the pump threads start: they only ever write to it (L9.338)
+        _COMFY_LOG = hf_error_report.ComfyLog(_runner_dir())
     _CTX.phase("comfy_start", "start")
     _mark_discarded_previews(args)
     # stdout/stderr are relayed line by line so ComfyUI's own logs still reach
@@ -705,12 +776,37 @@ def start_comfyui(extra_args=None):
 
 
 def _comfy_line(text):
-    """Every ComfyUI output line goes to the preview relay when it consumes them (R-PREVIEW-01)."""
+    """Every ComfyUI output line goes to the preview relay when it consumes them (R-PREVIEW-01), and to
+    /output/_halofuse/comfyui.log (L9.338: the runner's own capture, independent of the cloud stream)."""
+    if _COMFY_LOG is not None:
+        _COMFY_LOG.write(text)
     consume = getattr(_RELAY, "on_comfy_line", None)
     if consume is not None:
         consume(text)
     if _USER_NODES is not None:
         _USER_NODES.on_comfy_line(text)
+    _model_wait_line(text)
+
+
+def _model_wait_seconds():
+    """Seconds model loads have waited in the gate so far (an open wait counts up to now)."""
+    opened = _MODEL_WAIT["open"]
+    return _MODEL_WAIT["total"] + (time.monotonic() - opened if opened is not None else 0.0)
+
+
+def _model_wait_line(text):
+    """The gate's wait lines (hf/model_gate.py) become a model_wait phase, so slow starts are visible."""
+    try:
+        if text.startswith("[halofuse] model wait: "):
+            _MODEL_WAIT["open"] = time.monotonic()
+            _CTX.phase("model_wait", "start", detail=text[len("[halofuse] model wait: "):].split(" (", 1)[0])
+        elif text.startswith("[halofuse] model wait done: "):
+            if _MODEL_WAIT["open"] is not None:
+                _MODEL_WAIT["total"] += time.monotonic() - _MODEL_WAIT["open"]
+                _MODEL_WAIT["open"] = None
+            _CTX.phase("model_wait", "end", detail=text[len("[halofuse] model wait done: "):])
+    except Exception:  # noqa: BLE001 - relaying a line must never fail
+        pass
 
 
 def _mark_discarded_previews(args):
@@ -738,6 +834,7 @@ def _death(proc):
     class_type = _RELAY.current["class_type"] if _RELAY is not None else None
     if node is not None:
         cls = dict(cls, node=node, class_type=class_type)
+    _error_file("process_died", cls, returncode=proc.returncode)
     return hf_sup.ComfyDied(proc.returncode, cls, node, class_type)
 
 
@@ -754,8 +851,9 @@ def wait_ready(proc):
             if _SAMPLER is not None and _OOM_BEFORE is not None:
                 now = _SAMPLER.oom_kill_count()
                 delta = None if now is None else now - _OOM_BEFORE
-            die(6, f"ComfyUI exited during startup (code {proc.returncode})",
-                hf_classify.classify_exit(proc.returncode, oom_kill_delta=delta, tail=proc.tail(), during="startup"))
+            cls = hf_classify.classify_exit(proc.returncode, oom_kill_delta=delta, tail=proc.tail(), during="startup")
+            _error_file("startup_failed", cls, returncode=proc.returncode)
+            die(6, f"ComfyUI exited during startup (code {proc.returncode})", cls)
         try:
             stats = http_json("/system_stats", timeout=5)
             names = ", ".join(d.get("name", "?") for d in stats.get("devices", []))
@@ -799,6 +897,8 @@ def _after_ready(stats):
 
 
 def submit(workflow, targets=None):
+    global _SUBMITTED
+    _SUBMITTED = workflow
     payload = {"prompt": workflow, "client_id": CLIENT_ID}
     if targets:
         payload["partial_execution_targets"] = targets
@@ -810,7 +910,9 @@ def submit(workflow, targets=None):
         body = err.read().decode("utf-8", errors="replace")
         log(f"ComfyUI rejected the workflow (HTTP {err.code}):")
         _raw(body)
-        raise WorkflowFailure(3, "workflow validation failed", hf_classify.classify_rejection(err.code, body))
+        cls = hf_classify.classify_rejection(err.code, body)
+        _error_file("validation_failed", cls)
+        raise WorkflowFailure(3, "workflow validation failed", cls)
     except (urllib.error.URLError, OSError) as err:
         proc = _CTX.proc
         if proc is not None and proc.poll() is not None:
@@ -828,10 +930,11 @@ def submit(workflow, targets=None):
         # with only part of the graph run (often ending in exit 5, no output).
         _log_node_errors(node_errors)
         if os.environ.get("ALLOW_PARTIAL_OUTPUTS", "") not in ("1", "true", "yes"):
+            cls = hf_classify.classify_node_errors(node_errors)
+            _error_file("validation_failed", cls)
             raise WorkflowFailure(
                 3, f"{len(node_errors)} node(s) failed validation; their outputs "
-                   "would be skipped (set ALLOW_PARTIAL_OUTPUTS=1 to run the rest anyway)",
-                hf_classify.classify_node_errors(node_errors))
+                   "would be skipped (set ALLOW_PARTIAL_OUTPUTS=1 to run the rest anyway)", cls)
         log("ALLOW_PARTIAL_OUTPUTS set: running the outputs that validated")
     log(f"workflow queued, prompt_id={prompt_id}")
     if _RELAY is not None:
@@ -897,6 +1000,7 @@ def wait_done(proc, prompt_id):
     start = time.monotonic()
     last_beat = start
     last_answer = start
+    waited_before = _model_wait_seconds()
     _CTX.phase("execute", "start", prompt_id=prompt_id, **_wf_fields())
     try:
         while True:
@@ -905,13 +1009,16 @@ def wait_done(proc, prompt_id):
                 log("stop signal received: interrupting ComfyUI")
                 _interrupt_comfyui(prompt_id)
                 _CTX.check_cancel()
-            if JOB_TIMEOUT and elapsed > JOB_TIMEOUT:
+            # L9.338: time a model load spent waiting for its local copy is not render time (that wait used to happen
+            # before submit, outside this per-render limit)
+            if JOB_TIMEOUT and elapsed - (_model_wait_seconds() - waited_before) > JOB_TIMEOUT:
                 _CTX.timed_out = True
                 if _CTX.manifest_total:
                     _interrupt_comfyui(prompt_id)  # the next entry must not queue behind a runaway prompt
-                raise WorkflowFailure(4, f"job exceeded JOB_TIMEOUT_SECONDS={JOB_TIMEOUT}",
-                                      {"code": "timeout", "message": hf_classify.message_for("timeout"),
-                                       "detail": f"JOB_TIMEOUT_SECONDS={JOB_TIMEOUT}"})
+                cls = {"code": "timeout", "message": hf_classify.message_for("timeout"),
+                       "detail": f"JOB_TIMEOUT_SECONDS={JOB_TIMEOUT}"}
+                _error_file("timeout", cls, prompt_id=prompt_id)
+                raise WorkflowFailure(4, f"job exceeded JOB_TIMEOUT_SECONDS={JOB_TIMEOUT}", cls)
             if proc.poll() is not None:
                 raise _death(proc)
             try:
@@ -931,10 +1038,12 @@ def wait_done(proc, prompt_id):
                         event = item[0]
                         data = item[1] if len(item) > 1 else {}
                         if event in ("execution_error", "execution_interrupted"):
-                            log(f"{event}:")
-                            _raw(json.dumps(data, indent=2))
                             cls = (hf_classify.classify_execution_error(data) if event == "execution_error"
                                    else hf_classify.classify_interrupted(data))
+                            # L9.338: ONE line (a lossy stream cannot split it); the complete error is in error.json
+                            log(f"{event}: {hf_error_report.oneline(data, cls)}")
+                            if event == "execution_error":
+                                _error_file("execution_error", cls, data=data, prompt_id=prompt_id)
                     _collect_temp(prompt_id, entry)
                     raise WorkflowFailure(1, "workflow execution failed", cls or {
                         "code": "execution_error", "message": hf_classify.message_for("execution_error")})
@@ -966,6 +1075,7 @@ def _unresponsive(proc, silent):
     class_type = _RELAY.current["class_type"] if _RELAY is not None else None
     if node is not None:
         cls = dict(cls, node=node, class_type=class_type)
+    _error_file("unresponsive", cls, returncode=proc.returncode)
     return hf_sup.ComfyDied(proc.returncode, cls, node, class_type)
 
 
@@ -1473,8 +1583,12 @@ def _run():
     prefetch = None
     if PREFETCH_MODELS:
         workflows = [entry[0] for entry in manifest] if manifest is not None else [workflow]
+        _install_gate()  # before ComfyUI starts; it waits only for files of the plan written below
+        os.environ["HF_PREFETCH_STATE"] = str(PREFETCH_STATE_DIR)  # start_comfyui() copies os.environ
         prefetch = threading.Thread(target=_prefetch_with_phase, args=(workflows,), daemon=True)
         prefetch.start()
+    else:
+        _remove_gate()
     proc = start_comfyui()
     _CTX.proc = proc
     exit_code = 0
@@ -1482,7 +1596,15 @@ def _run():
         _after_ready(_ready_with_user_nodes(proc))
         proc = _CTX.proc
         _check_user_nodes([entry[0] for entry in manifest] if manifest is not None else [workflow])
-        if prefetch is not None and prefetch.is_alive():
+        if prefetch is not None and not PREFETCH_BEFORE_SUBMIT:
+            while not _PREFETCH_PLANNED.wait(0.5):  # finding the model files; the copies themselves are not awaited
+                _CTX.check_cancel()
+            if prefetch.is_alive() and _PREFETCHER is not None:
+                left, left_bytes = _PREFETCHER.remaining()
+                log(f"submitting now; model prefetch continues in the background in first-use order ({left} file(s), "
+                    f"{left_bytes / 2**30:.1f} GiB left). A model needed before its copy finishes waits for that copy "
+                    "only.")
+        elif prefetch is not None and prefetch.is_alive():
             log("waiting for model prefetch to finish before submitting")
             _CTX.phase("prefetch_wait", "start")
             while prefetch.is_alive():
@@ -1542,8 +1664,10 @@ def main():
         raise
     except BaseException:
         if _CTX is not None:
-            _CTX.error({"code": "runner_error", "message": hf_classify.message_for("runner_error"),
-                        "detail": traceback.format_exc()[-8000:]})
+            cls = {"code": "runner_error", "message": hf_classify.message_for("runner_error"),
+                   "detail": traceback.format_exc()[-8000:]}
+            _CTX.error(cls)
+            _error_file("runner_error", dict(cls, detail=traceback.format_exc()))
         _finish(1)
         raise
     _finish(0)
@@ -1551,6 +1675,9 @@ def main():
 
 def _finish(code):
     _stop_background()
+    if _COMFY_LOG is not None:
+        _COMFY_LOG.close()
+    _finish_error_file(code)
     if _CTX is not None:
         _CTX.finish(code)
     if _HEARTBEAT is not None:

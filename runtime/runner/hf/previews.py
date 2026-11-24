@@ -30,6 +30,10 @@ _EXT = {"image/jpeg": "jpg", "image/png": "png"}
 _METHODS = ("latent2rgb", "taesd", "none")
 _NODE_SAFE = re.compile(r"[^A-Za-z0-9-]")
 _FALLBACK_RE = re.compile(r"TAESD previews enabled, but could not find\s+(\S+)")
+# core comfy/sd.py VAE(): a vae_approx decoder file whose weights match no known layout -> no previewer
+_DECODER_FILE_RE = re.compile(r"vae_approx[/\\]([A-Za-z0-9_.-]{1,120})")
+_NO_WEIGHTS = "No VAE weights detected"
+_DECODER_WINDOW = 20   # lines between naming the decoder file and core's "no weights" warning
 
 
 def stage_of(class_type) -> str:
@@ -118,6 +122,11 @@ class LiveRelay:
         self._output_dropped = 0
         self._seen_outputs = set()
         self._cached = {}           # prompt_id -> node ids core served from its cache (execution_cached)
+        self._frames = {}           # (prompt_id, node) -> latent frames ComfyUI sent (before the throttle)
+        self._no_frames_sent = set()
+        self._decoder_seen = None   # (file stem, line number) of the last vae_approx file a line named
+        self._decoder_failed = set()
+        self._line_no = 0
 
     # -- registration --------------------------------------------------------------------------------------
     def expect_prompt(self, workflow, **context):
@@ -204,6 +213,7 @@ class LiveRelay:
             self.em.emit("node", prompt_id=prev["prompt_id"], **self._ctx(prev["prompt_id"]), node=prev["node"],
                          class_type=prev["class_type"], state="done", stage=stage_of(prev["class_type"]),
                          dur=round(now - (prev["since"] or now), 3))
+            self._mark_no_frames(prev["prompt_id"], prev["node"], prev["class_type"])
         if node is not None and prev["node"] != str(node):
             ct = self._class_type(prompt_id, node)
             self.em.emit("node", prompt_id=prompt_id, **self._ctx(prompt_id), node=str(node), class_type=ct,
@@ -268,6 +278,11 @@ class LiveRelay:
     def on_preview(self, mime, image, meta):
         if not self.previews_enabled:
             return
+        with self._lock:
+            pid = meta.get("prompt_id") or self.current["prompt_id"]
+            raw_node = meta.get("node_id") or meta.get("display_node_id") or self.current["node"]
+            key = (pid, None if raw_node is None else str(self._fold(pid, raw_node)))
+            self._frames[key] = self._frames.get(key, 0) + 1
         if not self.throttle.allow():
             return
         dropped = self.throttle.take_dropped()
@@ -296,9 +311,45 @@ class LiveRelay:
         fields["dropped"] = dropped
         self.em.emit("preview", prompt_id=prompt_id, **self._ctx(prompt_id), **fields)
 
+    def _mark_no_frames(self, prompt_id, node, class_type) -> None:
+        """A sampler node that reported steps but never sent a step preview: the image has no preview decoder (and no
+        colour factors) for this model family, or previews are off in core. One `no_step_previews` mark per node, so
+        the Live tab says why it stays empty instead of showing nothing."""
+        # the method must be known: with --preview-method given through extra args the relay cannot tell "none"
+        if not self.previews_enabled or self.preview_method in (None, "none") or node is None:
+            return
+        if stage_of(class_type) != "sample":
+            return  # segmentation, upscale, video loaders... report progress too but never send step previews
+        key = (prompt_id, str(node))
+        with self._lock:
+            stepped = key in self._steps
+            framed = self._frames.get(key, 0) > 0
+            if not stepped or framed or key in self._no_frames_sent:
+                return
+            self._no_frames_sent.add(key)
+        detail = f"{node} {class_type}" if class_type else str(node)
+        self.em.emit("phase", phase="no_step_previews", state="mark", detail=detail[:120])
+
     def on_comfy_line(self, line) -> None:
-        """Call for each ComfyUI output line: a missing preview decoder becomes one `preview_fallback` mark."""
-        if self._fallback_sent or not isinstance(line, str):
+        """Call for each ComfyUI output line: a missing preview decoder becomes one `preview_fallback` mark, a decoder
+        file core could not load ("No VAE weights detected" right after a line naming vae_approx/<file>) one
+        `preview_decoder_failed` mark per file."""
+        if not isinstance(line, str):
+            return
+        failed = None
+        with self._lock:  # stdout and stderr are pumped by two threads
+            self._line_no += 1
+            named = _DECODER_FILE_RE.search(line)
+            if named:
+                self._decoder_seen = (named.group(1).rsplit(".", 1)[0], self._line_no)
+            if _NO_WEIGHTS in line and self._decoder_seen is not None:
+                stem, at = self._decoder_seen
+                if self._line_no - at <= _DECODER_WINDOW and stem not in self._decoder_failed:
+                    self._decoder_failed.add(stem)
+                    failed = stem
+        if failed:
+            self.em.emit("phase", phase="preview_decoder_failed", state="mark", detail=failed[:120])
+        if self._fallback_sent:
             return
         m = _FALLBACK_RE.search(line)
         if not m:

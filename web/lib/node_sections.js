@@ -64,6 +64,9 @@ function renderItem(H, item, ctx) {
   let media = null;
   if (item.kind === "text") {
     media = H("pre", { className: "hf-node-pre", text: String(item.text ?? "") });
+  } else if (url && ctx.isBroken?.(url)) {
+    // the file failed to load (removed from the job folder): say so instead of a broken-image icon
+    media = H("span", { className: "hf-node-chip hf-node-pending", text: "File no longer in the job folder" });
   } else if (url && MEDIA_KINDS.has(item.kind)) {
     media = ctx.imgFor ? ctx.imgFor(item, url) : H("img", { src: url, loading: "lazy" });
     media.alt = caption || `${item.kind} preview`;
@@ -85,7 +88,7 @@ function renderItem(H, item, ctx) {
 
 /**
  * The sections list. ctx: {board, jobId, previewUrl(jobId, name), viewUrl(ref), onFocusNode(id)?, imgFor(item,url)?,
- * compact} - compact = the panel's job card: one line per node with its newest picture, at most 6 nodes.
+ * isBroken(url)?, compact} - compact = the panel's job card: one line per node with its newest picture, at most 6 nodes.
  */
 export function renderNodeSections(H, ctx) {
   const v = sectionsView(ctx.board);

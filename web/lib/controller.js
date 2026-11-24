@@ -11,7 +11,7 @@ export const PREVIEW_MODES = [
   ["none", "No preview", "Renders without previews in this panel. Outputs are still saved to the output folder."],
   ["check", "Workflow check", "Checks nodes, models, input files and values against the cloud runtime. No GPU is started and nothing is billed."],
   ["draft", "Quick draft", "Renders a reduced copy (smaller size, fewer steps or frames). Your graph is not changed; the draft workflow can be inspected."],
-  ["live", "Live preview (experimental)", "Shows the render while it runs (step previews, masks, results) so you can stop it early. Needs the new HaloFuse runtime image; not yet verified end to end. Final outputs are unaffected."],
+  ["live", "Live preview (experimental)", "Shows the render while it runs (step previews, masks, results) so you can stop it early. Needs the HaloFuse cloud runtime (the Original image sends no live previews); not yet verified on a real cloud render. Final outputs are unaffected."],
 ];
 // Step preview method of a live render (the "model preview override", C-4 6a): ComfyUI --preview-method.
 export const PREVIEW_METHODS = [
@@ -37,7 +37,7 @@ export class Controller {
     this.state = {
       settings: null, skus: [], skuError: null, instanceType: "", rate: null, rateLoading: false,
       previewMode: "final", previewMethod: "latent2rgb", previewMethods: null, renderRepeats: 1, busy: false, message: null,
-      preflight: null, consent: null, draft: null, upload: null, fetch: null, fetchConsent: null,
+      preflight: null, consent: null, draft: null, upload: null, fetch: null, fetchConsent: null, capacityAsk: null,
       queueDraft: [], recent: [], recentError: null,
     };
     this._subs = new Set();
@@ -88,7 +88,7 @@ export class Controller {
   }
 
   async setInstanceType(sku) {
-    this._set({ instanceType: sku });
+    this._set({ instanceType: sku, capacityAsk: null });
     this.loadRate();
     try { await this.api.saveSettings({ instance_type: sku }); } catch { /* kept for this session */ }
   }
@@ -146,6 +146,37 @@ export class Controller {
       this.say(check?.ok ? "Workflow check passed on the new runtime. Nothing was started."
         : "Checked again on the new runtime. Nothing was started.", check?.ok ? "success" : "warning");
     } catch (err) { this.say(err.message, "danger"); } finally { this._set({ busy: false }); }
+  }
+
+  /** L9.338: switch the GPU type from the Workflow Check's memory warning, then check again on it. */
+  async switchGpuAndCheck(sku) {
+    if (this.state.busy || !sku) return;
+    await this.setInstanceType(sku);
+    await this.recheck();
+  }
+
+  /** The render paused on a "likely too small" machine: switch to the offered GPU type and run the same action. */
+  async capacitySwitch() {
+    const a = this.state.capacityAsk;
+    if (!a?.switchTo || this.state.busy) return;
+    this._set({ capacityAsk: null });
+    await this.setInstanceType(a.switchTo.instance_type);
+    await a.retry();
+  }
+
+  /** Render on the selected machine anyway: the artist's decision holds for this machine and this estimate (also when
+   *  the render resumes after a model download); a different workflow or machine is asked again. */
+  async capacityAnyway() {
+    const a = this.state.capacityAsk;
+    if (!a || this.state.busy) return;
+    this._set({ capacityAsk: null });
+    this._capacityOk = `${a.from}\n${a.reason}`;
+    await a.retry();
+  }
+
+  capacityCancel() {
+    this._set({ capacityAsk: null });
+    this.say("Cancelled. Nothing was started.", "neutral");
   }
 
   // ---------- reattach / recent ----------
@@ -220,7 +251,7 @@ export class Controller {
   async render() {
     if (this.state.busy) return;
     if (!this.state.instanceType && this.state.previewMode !== "check") { this.say("Pick a GPU first.", "warning"); return; }
-    this._set({ busy: true, preflight: null, consent: null, fetchConsent: null, draft: null });
+    this._set({ busy: true, preflight: null, consent: null, fetchConsent: null, draft: null, capacityAsk: null });
     try {
       const { workflow, uiWorkflow, workflowName, summary, links } = await this._capture();
       if (summary) this.say(summary, "neutral");
@@ -279,6 +310,14 @@ export class Controller {
   _gate(check, proceed, again) {
     if (!check) return true;
     if (check.blocking?.length) { this.say(`${check.blocking.length} problem(s) must be fixed first. Nothing was started.`, "danger"); return false; }
+    // L9.338 memory guard before paying: a machine that is likely too small asks first (switch / anyway / cancel)
+    const sel = check.capacity?.selected;
+    if (sel?.verdict === "likely_insufficient" && this._capacityOk !== `${sel.instance_type}\n${sel.reasons?.[0] || ""}`) {
+      this._set({ capacityAsk: { from: sel.instance_type, reason: sel.reasons?.[0] || "", switchTo: check.capacity_switch || null,
+        ram: sel.ram_estimate_gb || null, retry: again || (() => this.runQueue()) } });
+      this.say(`${sel.instance_type} is likely too small for this workflow. Nothing was started: choose below.`, "warning");
+      return false;
+    }
     const m = check.models || {};
     if (m.missing?.length) { this.say(`${m.missing.length} model(s) were not found locally or in the cloud library. Nothing was started.`, "danger"); return false; }
     if (m.uploading?.length) { this.say("A model upload is still running. Render again when it has finished.", "warning"); return false; }

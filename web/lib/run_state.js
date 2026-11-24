@@ -8,6 +8,9 @@ const SAFE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const B64 = /^[A-Za-z0-9+/]+={0,2}$/;
 const MAX_INLINE = 900_000; // characters of base64 kept inline per preview
 const MAX_PREVIEWS = 200; // newest kept for display; older ones stay in the persisted log
+// The cloud platform's own log line when the runtime image is not on the machine yet (L9.338 time split). Only looked
+// for before the runner starts, so a ComfyUI line about pulling images is never mistaken for it.
+const IMAGE_PULL_RE = /\bimage\b.*\bnot cached\b.*\bpull|\bpulling\b.*\bimage\b/i;
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const gb = (mb) => (num(mb) == null ? null : Math.round((mb / 1024) * 100) / 100);
@@ -36,6 +39,7 @@ export class RunState {
     this._errors = [];
     this._dropped = 0;
     this._final = null;
+    this._timeline = { firstTs: null, states: [], pullAt: null, firstNodeAt: null, bootSeen: false };
     this.version = 0;
   }
 
@@ -43,6 +47,7 @@ export class RunState {
   ingest(e) {
     if (!e) return;
     const d = e.data || {};
+    this._clock(e, d);
     switch (e.kind) {
       case "phase": this._phase(e, d); break;
       case "node": this._node(e, d); break;
@@ -62,6 +67,17 @@ export class RunState {
         if (e.level === "error") this._errors.push({ seq: e.seq, ts: e.ts, code: null, message: e.text, node_id: e.node_id, class_type: null, detail: null });
     }
     this.version += 1;
+  }
+
+  /** L9.338: what the Summary's time split needs (queue, image pull, first node). */
+  _clock(e, d) {
+    const t = this._timeline;
+    if (num(e.ts) == null) return;
+    if (t.firstTs == null) t.firstTs = e.ts;
+    if (e.kind === "state" && d.to) t.states.push({ ts: e.ts, from: str(d.from), to: String(d.to) });
+    else if (e.kind === "phase" && d.phase === "boot") t.bootSeen = true;
+    else if (t.pullAt == null && !t.bootSeen && e.source !== "runner" && IMAGE_PULL_RE.test(e.text || "")) t.pullAt = e.ts;
+    else if (e.kind === "node" && d.state === "start" && t.firstNodeAt == null) t.firstNodeAt = e.ts;
   }
 
   _phase(e, d) {
@@ -177,6 +193,7 @@ export class RunState {
       errors: this._errors.slice(),
       droppedLines: this._dropped,
       final: this._final,
+      timeline: { ...this._timeline, states: this._timeline.states.slice() },
     };
   }
 }
