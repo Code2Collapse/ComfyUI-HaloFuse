@@ -1001,7 +1001,17 @@ def job_summary(rec: dict, store: JobStore | None = None) -> dict:
                   if isinstance(rec.get("error"), dict) else None),
         "log_total": total,
         "preview_mode": rec.get("preview_mode"), "preview_method": rec.get("preview_method"),
+        "live_support": _live_support(rec),
     }
+
+
+def _live_support(rec: dict) -> dict:
+    """Whether the runtime this job ran on relays live previews (the Live tab's runtime label); never raises."""
+    try:
+        from . import live_previews
+        return live_previews.runtime_support(rec.get("runtime"))
+    except Exception:  # noqa: BLE001 - a summary never fails on a display hint
+        return {"state": "unknown", "note": None}
 
 
 def job_detail(rec: dict, store: JobStore | None = None) -> dict:

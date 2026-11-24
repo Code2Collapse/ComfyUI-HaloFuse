@@ -66,9 +66,9 @@ def prefetch_plan(total, *, src_fs, dst_fs, disk_free, mem_available) -> tuple:
     return True, f"copying {_gib(total)} to local disk"
 
 
-def copy_file(src, dest, stop, chunk: int = 64 * 2**20):
+def copy_file(src, dest, stop, chunk: int = 64 * 2**20, on_chunk=None):
     """Copy src to dest via dest.part (atomic rename). Returns the seconds taken, or None when `stop` was set
-    (the partial file is removed)."""
+    (the partial file is removed). `on_chunk(n)` (optional) is called after each block of n bytes is written."""
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(dest.name + ".part")
@@ -84,6 +84,8 @@ def copy_file(src, dest, stop, chunk: int = 64 * 2**20):
                 if not block:
                     break
                 fout.write(block)
+                if on_chunk is not None:
+                    on_chunk(len(block))
     except BaseException:
         _unlink(tmp)
         raise

@@ -88,7 +88,8 @@ export class HaloFuseConsole {
       this.tabButtons.activity.hidden = true;
     }
     // Live view state (PREVIEW_DESIGN 4.1); images are reused across renders so a frame never re-downloads
-    this._imgs = createImageCache(this.doc, (name) => o.previewUrl(this.session.id, name));
+    // a file that fails to load re-renders the pane once, which then shows a placeholder with the reason
+    this._imgs = createImageCache(this.doc, (name) => o.previewUrl(this.session.id, name), 160, () => this._renderPane(true));
     this._live = { selected: null, mode: "overlay", message: null, autoPending: false, userPicked: false };
     this._announce = H("p", { className: "hf-sr-only", attrs: { "aria-live": "polite" } });
     this._announcedAt = 0;
@@ -169,14 +170,21 @@ export class HaloFuseConsole {
     this.selectTab(ids[i]);
   }
 
-  /** One <img> per node item URL, reused across renders (no re-fetch, no flicker). */
+  /** One <img> per node item URL, reused across renders (no re-fetch, no flicker). A URL that fails to load is
+   *  remembered and the pane re-renders once to show the reason instead of a broken image. */
   _nodeImg(item, url) {
     this._nodeImgs = this._nodeImgs || new Map();
+    this._nodeBroken = this._nodeBroken || new Set();
     let img = this._nodeImgs.get(url);
     if (!img) {
       img = this.doc.createElement("img");
       img.decoding = "async";
       img.loading = "lazy";
+      img.addEventListener("error", () => {
+        if (this._nodeBroken.has(url)) return;
+        this._nodeBroken.add(url);
+        this._renderPane(true);
+      });
       img.src = url;
       this._nodeImgs.set(url, img);
       while (this._nodeImgs.size > 200) this._nodeImgs.delete(this._nodeImgs.keys().next().value);
@@ -188,10 +196,13 @@ export class HaloFuseConsole {
     const s = this.session;
     const job = s.job;
     const view = s.live.view({ nowS: Date.now() / 1000, job, progress: run.progress || job?.progress,
-      marks: run.marks, droppedLines: run.droppedLines });
+      marks: run.marks, droppedLines: run.droppedLines, nodes: run.nodes });
     return {
       view, model: s.live, job, isQueue: s.kind === "queue", stopping: s.stopping,
       imgFor: (name, role) => this._imgs.get(name, role),
+      isBroken: (name) => this._imgs.isBroken(name),
+      videoFor: (name, role) => this._imgs.video(name, role),
+      urlFor: (name) => this._imgs.url(name),
       message: this._live.message,
       selectedMask: this._live.selected, overlayMode: this._live.mode,
       onStop: () => this._liveAction(() => s.stop("now"), "Stop requested. Waiting for the cloud to confirm."),
@@ -239,6 +250,7 @@ export class HaloFuseConsole {
       this.logView.reset();
       this._imgs.clear();
       this._nodeImgs?.clear();
+      this._nodeBroken?.clear();
       this._live = { selected: null, mode: this._live.mode, message: null, autoPending: true, userPicked: false };
     }
     if (this._live.autoPending && this.session.job) {
@@ -298,7 +310,7 @@ export class HaloFuseConsole {
       el = H("div", { className: "hf-scroll" }, renderLive(H, live), renderNodeSections(H, {
         board: s.nodes, jobId: s.id, previewUrl: (jobId, name) => this.o.previewUrl(jobId, name),
         viewUrl: this.o.viewUrl, onFocusNode: (id) => this.o.onFocusNode(id),
-        imgFor: (item, url) => this._nodeImg(item, url) }));
+        imgFor: (item, url) => this._nodeImg(item, url), isBroken: (url) => !!this._nodeBroken?.has(url) }));
       this._announceStep(live.view);
     }
     else {

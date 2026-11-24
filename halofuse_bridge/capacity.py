@@ -7,6 +7,10 @@ Three kinds of numbers, always labelled:
   tensor a decode of the declared latent produces (frames x height x width x 3 x 4 bytes x batch);
 * hard limits (`verdict: "blocked"`) - only physical impossibilities: a single model file larger than the GPU memory
   and host RAM together, or the decoded frames alone larger than host RAM (ComfyUI keeps IMAGE tensors in host RAM);
+* host-RAM estimate (`ram_estimate_gb`, L9.338) - at least ComfyUI itself (RAM_BASE_BYTES, measured) + the largest
+  model + the decoded frames; at most the same with every model. When even the lower figure exceeds the machine's
+  RAM the verdict is "likely_insufficient" (measured 2026-11-23: a 64 GB machine was killed at 58-59 GB, exit -9,
+  on a workflow whose largest model is 61.7 GiB). Labelled an estimate: ComfyUI may stream weights it maps from disk;
 * estimates (`basis: "calibrated_estimate"`) - peaks scaled from earlier runs of the same model set on this
   installation (C-3 `final.peak`), linear in latent size and labelled as such (attention grows faster than linearly,
   so scaling up underestimates). Without calibration data activation memory is reported as unknown, never guessed.
@@ -36,6 +40,11 @@ _cal_lock = threading.Lock()
 
 VRAM_COMFORT = 0.85   # share of GPU memory weights may fill before we call it tight
 RAM_COMFORT = 0.90
+# Host RAM of the runtime with ComfyUI booted and no model loaded: 7.4-9.2 GB in the owner's run 2026-11-23 (HaloFuse
+# image, 147 packs; "Resources: RAM" between ComfyUI ready and the first model load). 8 GiB = the middle of that range.
+RAM_BASE_BYTES = 8 * GIB
+# Verdicts that put the selected machine at risk of being killed, worth a one-click switch before paying.
+SWITCH_VERDICTS = ("blocked", "likely_insufficient")
 
 
 @dataclass(frozen=True)
@@ -227,6 +236,14 @@ def _gb(value) -> float | None:
     return None if value is None else round(value / GIB, 2)
 
 
+def ram_estimate(work: Workload) -> tuple[int, int]:
+    """(low, high) host-RAM estimate in bytes: ComfyUI itself + the largest model (low) or every model (high), plus the
+    decoded frames. Model sizes are facts; RAM_BASE_BYTES is measured; the sum is an estimate."""
+    frames = work.decoded_bytes or 0
+    return (RAM_BASE_BYTES + work.largest_model_bytes + frames,
+            RAM_BASE_BYTES + work.weights_bytes + frames)
+
+
 def assess_sku(work: Workload, sku, calibration: list[dict]) -> dict:
     """Verdict for one GPU type: blocked | likely_insufficient | tight | ok | unknown, with reasons and basis."""
     vram = sku.gpu_memory_gb * GIB if sku.gpu_memory_gb else None
@@ -234,6 +251,7 @@ def assess_sku(work: Workload, sku, calibration: list[dict]) -> dict:
     reasons, verdict, basis = [], "ok", "weights_only"
     largest, total, decoded = work.largest_model_bytes, work.weights_bytes, work.decoded_bytes
     est = _calibrated(work, calibration)
+    ram_low, ram_high = ram_estimate(work)
 
     if vram is None or ram is None:
         reasons.append("GPU memory or host RAM of this GPU type is not published, so it was not compared")
@@ -262,6 +280,13 @@ def assess_sku(work: Workload, sku, calibration: list[dict]) -> dict:
             if decoded is not None and decoded > 0.5 * ram:
                 verdict = "tight"
                 reasons.append(f"the decoded frames take {_gb(decoded)} GB of {_gb(ram)} GB host RAM")
+            if largest and ram_low > ram:
+                verdict, basis = "likely_insufficient", "ram_estimate"
+                frames = f" + the decoded frames ({_gb(decoded)} GB)" if decoded else ""
+                reasons.insert(0, f"needs about {_gb(ram_low)} GB of host RAM or more (ComfyUI itself about "
+                                  f"{_gb(RAM_BASE_BYTES)} GB + the largest model {_gb(largest)} GB{frames}), but this "
+                                  f"machine has {_gb(ram)} GB: the system is likely to stop ComfyUI when it runs out "
+                                  "of memory (killed, exit -9)")
             if est is not None:
                 basis = "calibrated_estimate"
                 if est["peak_vram_mb"] is not None and est["peak_vram_mb"] * MIB > vram:
@@ -274,7 +299,9 @@ def assess_sku(work: Workload, sku, calibration: list[dict]) -> dict:
                                    f"{_gb(ram)} GB ({est['label']})")
     out = {"instance_type": sku.instance_type, "gpu_type": sku.gpu_type, "gpu_memory_gb": sku.gpu_memory_gb,
            "memory_gb": sku.memory_gb, "core_count": sku.core_count, "verdict": verdict, "basis": basis,
-           "reasons": reasons, "estimate": est}
+           "reasons": reasons, "estimate": est,
+           "ram_estimate_gb": {"low": _gb(ram_low), "high": _gb(ram_high)} if largest else None,
+           "vram_weights_gb": {"largest": _gb(largest), "all": _gb(total)} if largest else None}
     return out
 
 
@@ -319,5 +346,29 @@ def assess(work: Workload, skus: list, *, calibration: list[dict] | None = None,
     if not any(r["estimate"] for r in rows):
         facts["notes"].append("No measured run of these models exists yet, so activation memory (resolution and "
                               "frame count) is not estimated.")
+    if work.largest_model_bytes:
+        low, high = ram_estimate(work)
+        facts["ram_estimate"] = {
+            "low_gb": _gb(low), "high_gb": _gb(high), "base_gb": _gb(RAM_BASE_BYTES),
+            "label": "estimate: ComfyUI itself (measured) + the largest model (low) or every model (high) + the decoded "
+                     "frames; activation memory is not included"}
     return {"facts": facts, "skus": rows, "selected": selected, "recommended": recommended,
-            "blocked": bool(selected and selected["verdict"] == "blocked")}
+            "blocked": bool(selected and selected["verdict"] == "blocked"),
+            "switch": switch_offer(rows, selected, recommended)}
+
+
+def switch_offer(rows: list[dict], selected: dict | None, recommended: str | None) -> dict | None:
+    """L9.338 (owner: no dead ends): when the selected machine is blocked or likely too small, the smallest machine
+    whose verdict is "ok" (or else "tight"), as a one-click switch: {instance_type, gpu_type, gpu_memory_gb, memory_gb,
+    from_instance_type, verdict, reason}. None when nothing better is listed."""
+    if not selected or selected.get("verdict") not in SWITCH_VERDICTS or not recommended:
+        return None
+    if recommended == selected.get("instance_type"):
+        return None
+    target = next((r for r in rows if r["instance_type"] == recommended), None)
+    if target is None or target["verdict"] not in ("ok", "tight"):
+        return None
+    return {"instance_type": target["instance_type"], "gpu_type": target["gpu_type"],
+            "gpu_memory_gb": target["gpu_memory_gb"], "memory_gb": target["memory_gb"],
+            "from_instance_type": selected["instance_type"], "verdict": selected["verdict"],
+            "reason": (selected.get("reasons") or [""])[0]}
