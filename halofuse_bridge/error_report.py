@@ -309,6 +309,20 @@ def _technical(entry: dict, headline: str) -> str:
     return text
 
 
+_PACK_RE = re.compile(r"custom_nodes[\\/]+([^\\/\"']+)[\\/]")
+
+
+def culprit_pack(entry: dict) -> str | None:
+    """The node pack whose code raised the error: the DEEPEST custom_nodes/<pack>/ frame of the traceback
+    (owner 2026-11-24: a pack patching core made the KSampler fail, and the advice said to check the KSampler)."""
+    tb = entry.get("traceback")
+    text = "".join(tb) if isinstance(tb, list) else str(tb or "")
+    text += "\n" + str(entry.get("printed_block") or "")
+    packs = [m.group(1) for m in _PACK_RE.finditer(text)]
+    packs = [p for p in packs if not p.startswith("halofuse_") and not p.endswith(".py")]
+    return packs[-1] if packs else None
+
+
 def explain(entry: dict, source: str = "runtime_file", dropped_lines: int | None = None) -> dict:
     """Plain-English headline, explanation, next steps and the complete technical text for one error entry."""
     entry = dict(entry or {})
@@ -390,12 +404,19 @@ def explain(entry: dict, source: str = "runtime_file", dropped_lines: int | None
         first = _first_line(message) or _first_line(entry.get("detail")) or _first_line(entry.get("printed_block"))
         exc = entry.get("exception_type")
         reason = f"{exc}: {first}" if exc and first and not first.startswith(str(exc)) else (first or exc or "")
-        headline = f"{who or 'A node'} failed" + (f": {reason}" if reason else "")
+        pack = culprit_pack(entry)
+        headline = f"{who or 'A node'} failed" + (f" inside the node pack {pack}" if pack else "") + (f": {reason}" if reason else "")
         explanation = "A node raised an error while the workflow was running. The exact Python error is below."
         steps = [f"Open {who} on the canvas and check its inputs, connected models and settings." if who else
                  "Find the failing node with the technical detail below and check its inputs.",
                  "Read the error message and the last lines of the traceback below; they name the cause.",
                  "Fix it and render again."]
+        if pack:
+            explanation += (f" The error was raised inside the node pack {pack} (the last pack in the traceback), "
+                            f"not by {who or 'the node'}'s own settings.")
+            steps = [f"The cause is the node pack {pack}: update it, or bypass its node in the workflow, then render "
+                     "again."] + steps[1:]
+            fact("Node pack", pack)
     else:
         d = describe(code)
         headline = d.title + (f" ({who})" if who else "")

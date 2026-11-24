@@ -549,6 +549,24 @@ def _install_gate():
             "model library instead")
 
 
+COMPAT_FILE_NAME = "halofuse_compat_shims.py"
+COMPAT_SOURCE = _HERE / "hf" / "compat_shims.py"
+
+
+def _install_compat():
+    """hf/compat_shims.py into ComfyUI's custom_nodes: older node packs keep working on a newer core (owner 2026-11-24)."""
+    try:
+        if not CUSTOM_NODES_DIR.is_dir():  # a real ComfyUI always has it; never create one just for the shim
+            return
+        source = COMPAT_SOURCE.read_text(encoding="utf-8")
+        target = CUSTOM_NODES_DIR / COMPAT_FILE_NAME
+        tmp = target.with_name(target.name + ".tmp")
+        tmp.write_text(source, encoding="utf-8")
+        os.replace(tmp, target)
+    except OSError as err:
+        log(f"compat shims could not be installed ({err})")
+
+
 def _clear_plan():
     """No plan for this job: the gate (if ComfyUI loaded it) passes every lookup through; an earlier job's plan in a
     reused machine must not apply."""
@@ -1580,6 +1598,7 @@ def _run():
         previews_enabled=(os.environ.get("HF_PREVIEW") or "off").strip().lower() == "live",
         throttle=hf_events.PreviewThrottle(float(os.environ.get("HF_PREVIEW_MIN_INTERVAL") or 2.0)))
     _start_telemetry()
+    _install_compat()  # before ComfyUI starts: older node packs on a newer core
     prefetch = None
     if PREFETCH_MODELS:
         workflows = [entry[0] for entry in manifest] if manifest is not None else [workflow]
