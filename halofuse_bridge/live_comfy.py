@@ -65,7 +65,9 @@ def gateway_url(settings: dict) -> str:
 def availability(settings: dict) -> str | None:
     """None when Live ComfyUI can start, else the reason in words (naming the setting to change)."""
     if not settings.get("live_comfy_enabled"):
-        return "Live ComfyUI is off. Turn on the setting live_comfy_enabled to use it."
+        # owner 2026-11-24: the old text named a setting that has no switch in the panel
+        return ("Live ComfyUI is not available yet: it needs a HaloFuse relay gateway, which is not set up. "
+                "Your administrator turns it on once the gateway exists; there is no switch for it in this panel.")
     url = gateway_url(settings)
     if not url:
         return "Live ComfyUI needs a relay gateway: set live_gateway_url to its https:// address."

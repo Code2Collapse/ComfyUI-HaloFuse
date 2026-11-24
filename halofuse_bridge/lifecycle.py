@@ -141,6 +141,19 @@ def close_backend(backend) -> None:
             pass
 
 
+_SHOW_REASON_CODES = {"input_upload_failed", "storage_error", "session_failed", "too_large", "unknown"}
+_ANY_URL_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://\S+")
+
+
+def _visible_reason(detail) -> str:
+    """The backend's own reason, safe to show: cloud hosts and storage addresses removed, URLs dropped, short."""
+    if not detail:
+        return ""
+    text = _ANY_URL_RE.sub("<address>", redact(str(detail)))
+    text = " ".join(text.split())
+    return text[:300] + ("..." if len(text) > 300 else "")
+
+
 def as_halofuse_error(exc: BaseException) -> HaloFuseError:
     """C-1 BackendError -> its code + branded user_message; anything else -> a generic branded message.
 
@@ -151,7 +164,12 @@ def as_halofuse_error(exc: BaseException) -> HaloFuseError:
     if isinstance(exc, BackendError):
         if exc.detail:
             _log.info("HaloFuse backend error %s: %s", exc.code, exc.detail)
-        return HaloFuseError(exc.code, exc.user_message, int(exc.status or 502))
+        message = exc.user_message
+        reason = _visible_reason(exc.detail)
+        if reason and exc.code in _SHOW_REASON_CODES:
+            # owner 2026-11-24: "could not upload the job inputs" alone is a dead end - say why (hosts removed)
+            message = f"{message} Reason: {reason}"
+        return HaloFuseError(exc.code, message, int(exc.status or 502))
     _log.warning("HaloFuse internal error: %s", redact(f"{type(exc).__name__}: {exc}"))
     return HaloFuseError("internal", brand.message("unknown"), 500)
 
