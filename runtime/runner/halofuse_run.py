@@ -434,20 +434,41 @@ def write_extra_model_paths():
     names = list(MODEL_SUBDIRS)
     extra = _extra_model_dirs()
     names += extra
+    actual = _actual_model_dirs()
     lines = []
     if PREFETCH_MODELS:
         # Listed first: ComfyUI returns the first match, so a prefetched local
         # copy wins over the /assets original. Files never prefetched are still
         # found under halofuse below.
         lines += ["halofuse_local:", f"  base_path: {LOCAL_MODEL_DIR}"]
-        lines += [f"  {name}: {name}" for name in names]
+        lines += [f"  {name}: {actual.get(name, name)}" for name in names]
     lines += ["halofuse:", f"  base_path: {MODEL_BASE_DIR}"]
-    lines += [f"  {name}: {name}" for name in names]
+    lines += [f"  {name}: {actual.get(name, name)}" for name in names]
+    for name, real in actual.items():
+        if real != name:
+            log(f"model folder {name} is spelled {real} in the model library; ComfyUI searches it under that name")
     EXTRA_MODEL_PATHS.write_text("\n".join(lines) + "\n")
     log(f"model search base: {MODEL_BASE_DIR}")
     if extra:
         log(f"extra model folders: {', '.join(extra)}")
     _link_extra_model_dirs(extra)
+
+
+def _actual_model_dirs():
+    """{standard folder: the library directory with that name in any letter case} (owner 2026-11-24: the library
+    check matched names without regard to case, the Linux mount does not - 'VAE' was invisible as 'vae')."""
+    try:
+        present = [p.name for p in Path(MODEL_BASE_DIR).iterdir() if p.is_dir()]
+    except OSError:
+        return {}
+    out = {}
+    for name in MODEL_SUBDIRS:
+        if name in present:
+            continue
+        match = next((d for d in present if d.lower() == name.lower()), None)
+        if match:
+            out[name] = match
+    return out
 
 
 def _extra_model_dirs():
@@ -494,6 +515,23 @@ def _link_extra_model_dirs(names):
             log(f"could not link models/{name}: {err}")
 
 
+def _resolve_model_names(manifest, workflow):
+    """Point every model name at a file the cloud really has (hf/prefetch.resolve_model_names); log what changed and
+    say plainly which names exist nowhere in the model library (owner 2026-11-24: check said OK, cloud said missing)."""
+    workflows = [entry[0] for entry in manifest] if manifest is not None else [workflow]
+    extra = [n for n in _extra_model_dirs() if n not in MODEL_SUBDIRS]
+    try:
+        changes, missing = hf_prefetch.resolve_model_names(workflows, Path(MODEL_BASE_DIR),
+                                                           [_actual_model_dirs().get(n, n) for n in MODEL_SUBDIRS] + extra, MODEL_EXTS)
+    except Exception as err:  # noqa: BLE001 - never stop a job over this lookup
+        log(f"model name check skipped ({type(err).__name__})")
+        return
+    for node_id, key, old, new in changes:
+        log(f"model path fixed: node #{node_id} {key}: {old} -> {new} (found by file name in the model library)")
+    for node_id, key, name in missing:
+        log(f"model not in the cloud model library: node #{node_id} {key}: {name}")
+
+
 def _referenced_model_files(workflows):
     """{rel: size} of the model files under MODEL_BASE_DIR that these API-format workflows name, in first-use order.
 
@@ -502,7 +540,7 @@ def _referenced_model_files(workflows):
     every match is returned as a path relative to MODEL_BASE_DIR.
     """
     extra = [n for n in _extra_model_dirs() if n not in MODEL_SUBDIRS]
-    return dict(hf_prefetch.plan_files(workflows, Path(MODEL_BASE_DIR), list(MODEL_SUBDIRS) + extra, MODEL_EXTS,
+    return dict(hf_prefetch.plan_files(workflows, Path(MODEL_BASE_DIR), [_actual_model_dirs().get(n, n) for n in MODEL_SUBDIRS] + extra, MODEL_EXTS,
                                        extra_folders=extra))
 
 
@@ -1609,6 +1647,7 @@ def _run():
         throttle=hf_events.PreviewThrottle(float(os.environ.get("HF_PREVIEW_MIN_INTERVAL") or 2.0)))
     _start_telemetry()
     _install_compat()  # before ComfyUI starts: older node packs on a newer core
+    _resolve_model_names(manifest, workflow)
     prefetch = None
     if PREFETCH_MODELS:
         workflows = [entry[0] for entry in manifest] if manifest is not None else [workflow]

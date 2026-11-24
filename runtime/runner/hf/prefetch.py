@@ -270,3 +270,66 @@ class Prefetcher:
                 (self.state / "finished").touch()
             except OSError:
                 pass
+
+
+def resolve_model_names(workflows: list, base: Path, folders: list, exts: tuple, max_depth: int = 4) -> tuple:
+    """Make every model name in the workflows point at a file that exists under `base`, the way the cloud sees it.
+
+    Owner 2026-11-24: Workflow Check found vae/minimax-h3/minimax_h3_video_vae_fp16.safetensors in the library, yet the
+    cloud ComfyUI rejected the same name ("value not in list"). A name that exists at <base>/<folder>/<name> is left
+    alone. Otherwise the file is searched by FILE NAME inside each model folder (depth-limited) and the input is
+    rewritten to the path found there. Returns (changes, missing): changes = [(node_id, input, old, new)],
+    missing = [(node_id, input, name)] for names found nowhere. Mutates the workflows in place."""
+    base = Path(base)
+    changes, missing = [], []
+    index: dict = {}
+
+    def folder_index(folder):
+        if folder not in index:
+            hits = {}
+            root = base / folder
+            try:
+                stack = [(root, 0)]
+                while stack:
+                    d, depth = stack.pop()
+                    for p in d.iterdir():
+                        if p.is_dir() and depth < max_depth:
+                            stack.append((p, depth + 1))
+                        elif p.name.lower().endswith(exts):
+                            hits.setdefault(p.name.lower(), []).append(p.relative_to(root).as_posix())
+            except OSError:
+                pass
+            index[folder] = hits
+        return index[folder]
+
+    for wf in workflows:
+        if not isinstance(wf, dict):
+            continue
+        for node_id, node in wf.items():
+            inputs = node.get("inputs") if isinstance(node, dict) else None
+            if not isinstance(inputs, dict):
+                continue
+            for key, value in list(inputs.items()):
+                if not (isinstance(value, str) and value.lower().endswith(exts)):
+                    continue
+                name = value.replace("\\", "/").lstrip("/")
+                if ".." in Path(name).parts:
+                    continue
+                if any((base / f / name).is_file() for f in folders):
+                    if name != value:
+                        inputs[key] = name
+                        changes.append((str(node_id), key, value, name))
+                    continue
+                file_name = name.rsplit("/", 1)[-1].lower()
+                found = None
+                for f in folders:
+                    rels = folder_index(f).get(file_name) or []
+                    if rels:
+                        found = rels[0]
+                        break
+                if found is not None:
+                    inputs[key] = found
+                    changes.append((str(node_id), key, value, found))
+                else:
+                    missing.append((str(node_id), key, value))
+    return changes, missing
