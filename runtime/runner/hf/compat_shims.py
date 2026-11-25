@@ -49,7 +49,33 @@ def _install_minimax_final_layer_shim():
     return True
 
 
-try:
-    _install_minimax_final_layer_shim()
-except Exception as _err:  # noqa: BLE001 - a shim must never stop ComfyUI from starting
-    print(f"[halofuse] compat: MiniMax H3 shim not installed ({type(_err).__name__})", flush=True)
+def _install_minimax_time_shift_slope_shim():
+    """Core 0.46 removed time_shift_slope: the audio carry/slope moved into MiniMaxH3Model.forward(), which wraps
+    _forward. Packs that replace _forward with the older copy still multiply the audio output by it; inside the new
+    forward() that factor must be 1, which makes their output exactly core 0.46's [-video, -audio]
+    (owner 2026-11-25: "module 'comfy.ldm.minimax.model' has no attribute 'time_shift_slope'")."""
+    try:
+        import comfy.ldm.minimax.model as mm
+    except Exception:  # noqa: BLE001
+        return False
+    if hasattr(mm, "time_shift_slope"):
+        return False
+
+    def time_shift_slope(sigma, shift_v=None, shift_a=None):
+        try:
+            import torch
+            return torch.ones_like(sigma) if isinstance(sigma, torch.Tensor) else torch.tensor(1.0)
+        except Exception:  # noqa: BLE001
+            return 1.0
+
+    mm.time_shift_slope = time_shift_slope
+    print("[halofuse] compat: MiniMax H3 time_shift_slope restored for older node packs (factor 1: core 0.46 "
+          "applies the audio slope outside _forward)", flush=True)
+    return True
+
+
+for _shim in (_install_minimax_final_layer_shim, _install_minimax_time_shift_slope_shim):
+    try:
+        _shim()
+    except Exception as _err:  # noqa: BLE001 - a shim must never stop ComfyUI from starting
+        print(f"[halofuse] compat: {_shim.__name__} not installed ({type(_err).__name__})", flush=True)
