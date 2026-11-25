@@ -28,7 +28,7 @@ from . import outputs as hf_outputs
 
 LIVE_LONG_EDGE = 640  # owner 2026-11-24: 384 px live frames looked too poor
 
-_EXT = {"image/jpeg": "jpg", "image/png": "png"}
+_EXT = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 _METHODS = ("latent2rgb", "taesd", "none")
 _NODE_SAFE = re.compile(r"[^A-Za-z0-9-]")
 _FALLBACK_RE = re.compile(r"TAESD previews enabled, but could not find\s+(\S+)")
@@ -207,6 +207,38 @@ class LiveRelay:
                 self._queue_output_thumbs(prompt_id, str(node), output)
         elif kind in ("execution_error", "execution_interrupted", "execution_success"):
             self._on_executing(prompt_id, None)
+        elif kind == "kj_preview_override":
+            self._on_kj_preview(data)
+
+    def _on_kj_preview(self, data):
+        """KJNodes ModelPreviewOverride sends its own websocket event per step (not core's binary preview): a JPEG, or
+        an animated video/mp4 / image/webp when preview_frames > 1 (owner 2026-11-25: the Live tab never showed it).
+        A still goes through the step-frame path; a clip becomes a small animated WebP on the same path."""
+        if not self.previews_enabled:
+            return
+        b64, mime = data.get("image"), str(data.get("mime") or "image/jpeg")
+        if not b64:
+            return
+        try:
+            raw = base64.b64decode(b64)
+        except (ValueError, TypeError):
+            return
+        node = data.get("node_id")
+        with self._lock:
+            pid = self.current["prompt_id"]
+            if node is not None and data.get("step") is not None and data.get("total"):
+                try:
+                    self._steps[(pid, str(self._fold(pid, node)))] = (int(data["step"]), int(data["total"]))
+                except (TypeError, ValueError):
+                    pass
+        meta = {"prompt_id": pid, "node_id": node}
+        if mime in ("image/jpeg", "image/png"):
+            self.on_preview(mime, raw, meta)
+            return
+        clip = hf_frames.animated_webp(raw, mime, self.max_bytes, 384,
+                                       fps=data.get("fps"))
+        if clip is not None:
+            self.on_preview("image/webp", clip.data, dict(meta, _prefitted=clip))
 
     def _on_executing(self, prompt_id, node):
         now = self.clock()
@@ -303,10 +335,11 @@ class LiveRelay:
         fields = {"kind": "latent", "node": None if node is None else str(node), "mime": mime, "bytes": len(image)}
         if self._write_atomic(self.preview_dir / name, image):  # full-quality last frame, for delivery
             fields["path"] = f"{hf_outputs.RESERVED_DIR}/previews/{name}"
-        fitted = hf_frames.fit(image, mime, self.max_bytes, LIVE_LONG_EDGE)
+        fitted = meta.get("_prefitted") or hf_frames.fit(image, mime, self.max_bytes, LIVE_LONG_EDGE)
         if fitted is not None:
             seq_frame = self._next_frame_seq()
-            live_name = f"f{seq_frame:06d}_latent_{node_safe(node or 'latent')}.jpg"
+            live_ext = "webp" if fitted.mime == "image/webp" else "jpg"
+            live_name = f"f{seq_frame:06d}_latent_{node_safe(node or 'latent')}.{live_ext}"
             if self._write_atomic(self.live_dir / live_name, fitted.data):
                 fields["name"] = live_name
                 self._prune_ring()

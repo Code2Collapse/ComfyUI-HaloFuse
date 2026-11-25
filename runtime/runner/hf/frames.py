@@ -164,3 +164,55 @@ def video_sheet(path, max_bytes: int, long_edge: int = 512):
                 cap.release()
             except Exception:  # noqa: BLE001
                 pass
+
+
+def animated_webp(data: bytes, mime: str, max_bytes: int, long_edge: int = 384, max_frames: int = 16,
+                  fps: float | None = None):
+    """An animated sampling preview (KJNodes ModelPreviewOverride sends video/mp4 or animated image/webp) as a small
+    animated WebP that fits one live line (owner 2026-11-25: the Live tab showed no sampling animation). Up to
+    `max_frames` evenly spaced frames; size and quality step down until it fits. Returns Fitted or None (never raises).
+    A browser plays an animated WebP inside a plain <img>, so the Live stage and the node card need no video player."""
+    try:
+        from PIL import Image, ImageSequence  # noqa: WPS433
+    except Exception:  # noqa: BLE001
+        return None
+    frames = []
+    try:
+        if mime == "video/mp4":
+            import av  # noqa: WPS433 - ComfyUI core depends on PyAV
+            with av.open(io.BytesIO(data)) as container:
+                stream = container.streams.video[0]
+                if fps is None and stream.average_rate:
+                    fps = float(stream.average_rate)
+                frames = [f.to_image() for f in container.decode(stream)]
+        else:
+            with Image.open(io.BytesIO(data)) as img:
+                if fps is None and img.info.get("duration"):
+                    fps = 1000.0 / float(img.info["duration"])
+                frames = [f.convert("RGB").copy() for f in ImageSequence.Iterator(img)]
+    except Exception:  # noqa: BLE001 - undecodable clip
+        return None
+    if not frames:
+        return None
+    if len(frames) > max_frames:
+        step = len(frames) / max_frames
+        frames = [frames[int(i * step)] for i in range(max_frames)]
+    duration = int(1000.0 / (fps or 12.0)) or 83
+    for edge in (long_edge, 320, 256, 192, 160):
+        scaled = []
+        for f in frames:
+            f = f.convert("RGB")
+            if max(f.size) > edge:
+                f = f.copy()
+                f.thumbnail((edge, edge), Image.LANCZOS)
+            scaled.append(f)
+        for quality in (70, 55, 40, 28):
+            buf = io.BytesIO()
+            try:
+                scaled[0].save(buf, format="WEBP", save_all=True, append_images=scaled[1:], duration=duration,
+                               loop=0, quality=quality, method=4)
+            except Exception:  # noqa: BLE001 - Pillow without WebP
+                return None
+            if buf.tell() <= max_bytes:
+                return Fitted(buf.getvalue(), "image/webp", scaled[0].width, scaled[0].height)
+    return None

@@ -323,10 +323,16 @@ export class HaloFuseConsole {
     }
     else if (this.tab === "live") {
       const live = this._liveCtx(run);
-      el = H("div", { className: "hf-scroll" }, renderLive(H, live), renderNodeSections(H, {
+      // owner 2026-11-25: ONE scroll box for the Live tab, kept across renders - only its content is replaced, so the
+      // browser keeps the scroll position while frames arrive (a new box per render lost it during a running render)
+      if (!this._liveScroll) this._liveScroll = H("div", { className: "hf-scroll" });
+      el = this._liveScroll;
+      const keep = el.scrollTop;
+      el.replaceChildren(renderLive(H, live), renderNodeSections(H, {
         board: s.nodes, jobId: s.id, previewUrl: (jobId, name) => this.o.previewUrl(jobId, name),
         viewUrl: this.o.viewUrl, onFocusNode: (id) => this.o.onFocusNode(id),
         imgFor: (item, url) => this._nodeImg(item, url), isBroken: (url) => !!this._nodeBroken?.has(url) }));
+      el.scrollTop = keep;
       this._announceStep(live.view);
     }
     else {
@@ -339,22 +345,18 @@ export class HaloFuseConsole {
     }
     const panel = this.panels[this.tab];
     const prevScroll = panel.firstChild?.scrollTop || 0;
-    const prevHeight = panel.firstChild?.scrollHeight || 0;
     const prevTech = panel.querySelector?.(".hf-tech")?.scrollTop || 0;
-    // owner 2026-11-25: the Live tab is rebuilt on every update; its new images are still loading, so the new
-    // content was briefly shorter and the browser clamped the scroll back to the top ("cannot scroll at all").
-    // Hold the previous content height until the next render.
-    if (this.tab === "live" && prevHeight > 1) {
-      el.classList.add("hf-scroll-hold");
-      el.append(H("div", { className: "hf-scroll-marker", style: { top: `${prevHeight - 1}px` },
-                           attrs: { "aria-hidden": "true" } }));
-    }
     // keep keyboard focus on the same control across a re-render (buttons carry data-hf-key)
     const active = this.doc.activeElement;
     const key = active && panel.contains(active) ? active.getAttribute?.("data-hf-key") : null;
-    if (this.tab === "live" || this.tab === "problems") panel.replaceChildren(el, this._announce);
-    else panel.replaceChildren(el);
-    el.scrollTop = prevScroll;
+    if (this.tab === "live" && el.parentNode === panel) {
+      // the Live tab's scroll box stays in place (detaching it on every render reset its scroll position)
+      if (this._announce.parentNode !== panel) panel.append(this._announce);
+    } else {
+      if (this.tab === "live" || this.tab === "problems") panel.replaceChildren(el, this._announce);
+      else panel.replaceChildren(el);
+      if (this.tab !== "live") el.scrollTop = prevScroll;
+    }
     const tech = prevTech ? panel.querySelector?.(".hf-tech") : null;
     if (tech) tech.scrollTop = prevTech;
     if (key) panel.querySelector(`[data-hf-key="${key}"]`)?.focus({ preventScroll: true });

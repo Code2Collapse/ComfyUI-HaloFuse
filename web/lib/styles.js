@@ -120,9 +120,6 @@ export const HF_CSS = `
 .hf-console .hf-tabpanel > .hf-live { flex: 0 0 auto; overflow: visible; }
 .hf-tabpanel[hidden] { display: none; }
 .hf-scroll { overflow: auto; overscroll-behavior: contain; padding: 12px; flex: 1 1 auto; min-height: 0; }
-/* Live tab re-render: a 1 px marker at the old content height keeps the scroll position from being clamped */
-.hf-scroll.hf-scroll-hold { position: relative; }
-.hf-scroll-marker { position: absolute; left: 0; width: 1px; height: 1px; pointer-events: none; visibility: hidden; }
 .hf-toolbar { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--hf-border); background: var(--hf-bg); }
 .hf-toolbar .hf-btn, .hf-toolbar .hf-select, .hf-toolbar .hf-input { font-size: 12px; padding: 4px 9px; height: 28px; }
 .hf-toolbar .hf-search { flex: 1 1 200px; max-width: 360px; }
@@ -246,9 +243,9 @@ export const HF_CSS = `
 .hf-live-exp { color: var(--hf-muted); font-size: 12px; flex: 1 1 200px; }
 .hf-live-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .hf-live-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); gap: 12px; min-height: 0; flex: 1 1 auto; }
-.hf-live-stage { position: relative; margin: 0; min-height: 200px; background: #111 repeating-conic-gradient(#1a1a1a 0 25%, #141414 0 50%) 0 0 / 16px 16px;
+.hf-live-stage { position: relative; margin: 0; min-height: 200px; height: clamp(200px, 42vh, 560px); /* fixed: a frame that is still loading never changes the page height (owner 2026-11-25 scroll) */ background: #111 repeating-conic-gradient(#1a1a1a 0 25%, #141414 0 50%) 0 0 / 16px 16px;
   border: 1px solid var(--hf-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.hf-live-frame, .hf-live-canvas { display: block; width: 100%; height: 100%; max-height: 62vh; object-fit: contain; image-rendering: auto; }
+.hf-live-frame, .hf-live-canvas { display: block; width: 100%; height: 100%; max-height: none; object-fit: contain; image-rendering: auto; }
 .hf-live-stale .hf-live-frame, .hf-live-stale .hf-thumb { opacity: .55; }
 .hf-live-empty { color: var(--hf-muted); padding: 24px; text-align: center; max-width: 42ch; }
 .hf-live-step { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 18px; display: flex; align-items: center;
@@ -293,8 +290,8 @@ export const HF_CSS = `
 .hf-node-title { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hf-node-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
 .hf-node-item { margin: 0; min-width: 0; }
-.hf-node-item img, .hf-node-item video { width: 100%; max-height: 220px; object-fit: contain; display: block; background: #000; border-radius: 4px; }
-.hf-nodes-compact .hf-node-item img { max-height: 90px; margin-top: 4px; }
+.hf-node-item img, .hf-node-item video { width: 100%; height: 220px; max-height: 220px; object-fit: contain; display: block; background: #000; border-radius: 4px; }
+.hf-nodes-compact .hf-node-item img { height: 90px; max-height: 90px; margin-top: 4px; }
 .hf-node-item audio { width: 100%; display: block; }
 .hf-node-item figcaption { font-size: 11px; color: var(--hf-muted); padding-top: 2px; overflow-wrap: anywhere; }
 .hf-node-item img.hf-node-mask { background: repeating-conic-gradient(#3a3a3a 0% 25%, #2a2a2a 0% 50%) 50% / 16px 16px; }
