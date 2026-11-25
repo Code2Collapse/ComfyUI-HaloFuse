@@ -229,6 +229,12 @@ export const HF_CSS = `
 .hf-panel-window .hf-root { height: 100%; }
 .hf-panel-window .hf-root > .hf-head { display: none; } /* the window title already says HaloFuse */
 .hf-pill .hf-pill-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hf-pill .hf-pill-main { display: inline-flex; gap: 8px; align-items: center; min-width: 0; background: none; border: 0;
+  padding: 0; color: inherit; font: inherit; cursor: pointer; }
+.hf-pill .hf-pill-stop { flex: none; border: 1px solid var(--hf-border); border-radius: 999px; padding: 2px 10px;
+  background: var(--hf-bg); color: var(--hf-err, #f87171); font: inherit; font-size: 12px; cursor: pointer; }
+.hf-pill .hf-pill-stop:hover:not(:disabled) { border-color: var(--hf-err, #f87171); }
+.hf-pill .hf-pill-stop:disabled { opacity: .6; cursor: default; }
 .hf-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
 
 @media (max-width: 640px) {

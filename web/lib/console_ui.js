@@ -5,7 +5,7 @@ import { bindH, copyText } from "./dom.js";
 import { FloatingWindow } from "./console_window.js";
 import { LogView } from "./console_logs.js";
 import { problemsSignature, renderProblems, renderProgress, renderSummary, renderTelemetry } from "./console_panes.js";
-import { cancelInfo, isTerminal, progressText, statusInfo } from "./job_view.js";
+import { cancelActions, cancelInfo, isTerminal, progressText, statusInfo } from "./job_view.js";
 import { createImageCache, renderLive } from "./live_preview.js";
 import { formatEntry } from "./log_model.js";
 import { renderNodeSections } from "./node_sections.js";
@@ -219,6 +219,24 @@ export class HaloFuseConsole {
     };
   }
 
+  /** The minimized pill's Stop: the same real cancel as the console's Stop, after a confirmation. */
+  async _pillStop() {
+    const s = this.session;
+    if (!s.id || this._pillStopping === s.id) return;
+    const ok = this.win.confirm ? this.win.confirm("Stop this cloud render now? Work that is not finished is lost.") : true;
+    if (!ok) return;
+    this._pillStopping = s.id;
+    this._refreshChrome();
+    try {
+      await s.stop("now");
+    } catch (err) {
+      this.win.alert?.(`Could not stop the render: ${err?.message || err}`);
+    } finally {
+      this._pillStopping = null;
+      this._refreshChrome();
+    }
+  }
+
   async _liveAction(fn, okText) {
     this._live.message = null;
     try {
@@ -281,8 +299,13 @@ export class HaloFuseConsole {
     this.statusBadge.textContent = ci ? ci.label : st.label;
     const label = job?.label ? `${job.label} · ${s.id}` : s.id;
     this.window.setJobLabel(label);
-    const prog = job ? progressText(this.session.run.snapshot().progress || job.progress, job.status) : "";
-    this.window.setPill(`HaloFuse · ${prog || st.label}`, st.tone);
+    const ended = !!job && isTerminal(job);
+    // owner 2026-11-25: the pill kept saying "Running" after the job had ended - the last progress phase of the
+    // render outlived it. A finished job shows its real status; only a live job shows progress.
+    const prog = job && !ended ? progressText(this.session.run.snapshot().progress || job.progress, job.status) : "";
+    this.window.setPill(`HaloFuse · ${prog || (ci && !ended ? ci.label : st.label)}`, ended ? st.tone : (ci ? ci.tone : st.tone));
+    const stoppable = !!job && !ended && s.kind === "job" && cancelActions(job).now;
+    this.window.setPillAction(stoppable ? () => this._pillStop() : null, this._pillStopping === s.id);
     const errors = this.session.store.counts().error;
     this.tabButtons.problems._count.textContent = errors ? String(errors) : "";
     this.tabButtons.problems._count.className = `hf-count${errors ? " hf-tone-danger" : ""}`;

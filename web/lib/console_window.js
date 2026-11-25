@@ -51,8 +51,13 @@ export class FloatingWindow {
     }
     this.pillText = H("span", { className: "hf-pill-text", text: title });
     this.pillDot = H("span", { className: "hf-dot hf-tone-neutral" });
-    this.pill = H("button", { className: "hf-pill", type: "button", hidden: true, title: `Restore the HaloFuse ${label}`,
+    this.pillRestore = H("button", { className: "hf-pill-main", type: "button", title: `Restore the HaloFuse ${label}`,
       attrs: { "aria-label": `Restore the HaloFuse ${label}` }, onclick: () => this.restore() }, this.pillDot, this.pillText);
+    // owner 2026-11-25: stop a running cloud job without reopening the console (shown only while one runs)
+    this.pillStop = H("button", { className: "hf-pill-stop", type: "button", hidden: true, text: "Stop",
+      title: "Stop this cloud render now", onclick: (ev) => { ev.stopPropagation(); this._pillAction?.(); } });
+    this.pill = H("div", { className: "hf-pill", hidden: true, attrs: { role: "group", "aria-label": `HaloFuse ${label}` } },
+      this.pillRestore, this.pillStop);
 
     this._onPointerDown = (ev) => this._pointerDown(ev);
     this._onResize = () => this._scheduleFit();
@@ -102,7 +107,7 @@ export class FloatingWindow {
     this.el.hidden = true;
     this.pill.hidden = false;
     this._persist();
-    this.pill.focus({ preventScroll: true });
+    this.pillRestore.focus({ preventScroll: true });
     this._emit();
   }
 
@@ -131,6 +136,14 @@ export class FloatingWindow {
   setPill(text, tone = "neutral") {
     this.pillText.textContent = text;
     this.pillDot.className = `hf-dot hf-tone-${tone}`;
+  }
+
+  /** A Stop button on the minimized pill: `fn` while a job runs, null to hide it. */
+  setPillAction(fn, busy = false) {
+    this._pillAction = fn || null;
+    this.pillStop.hidden = !fn;
+    this.pillStop.disabled = !!busy;
+    this.pillStop.textContent = busy ? "Stopping…" : "Stop";
   }
 
   /** Persisted view preferences (tab, timestamps, sources). */
