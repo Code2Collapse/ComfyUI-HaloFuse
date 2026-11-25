@@ -8915,7 +8915,7 @@
      "scipy>=1.11.0",
      "numpy>=1.24.0"
     ],
-    "source": "requirements.txt at 229ff7c4d3f7"
+    "source": "requirements.txt at 77ae2064c2b3"
    },
    "system_deps": [],
    "model_download": {
@@ -8948,15 +8948,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "229ff7c4d3f7beaa508b621c91931de3a1901247",
+    "commit": "77ae2064c2b32ff181e542d582ad5871e3890dae",
     "version": null,
-    "pinned_at": "2026-11-25",
-    "content_sha256": "99789656a1afe52f5e5de9de79fa01ffcc40f0181b63a17a1a5feb694ba3315a",
-    "pin_source": "default branch HEAD on 2026-11-25 (update_pins.py)"
+    "pinned_at": "2026-11-26",
+    "content_sha256": "04def98b98e8c83caff955634295983552e6893c27707a15c23e79af256c2adb",
+    "pin_source": "default branch HEAD on 2026-11-26 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "pin moved from 6d39050037d6 to 229ff7c4d3f7 on 2026-11-25 (update_pins.py); no build or import test at the new pin yet"
+    "evidence": "pin moved from 229ff7c4d3f7 to 77ae2064c2b3 on 2026-11-26 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Trying to create a customware of ComfyUI to use it for Minimax",
@@ -8967,11 +8967,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "229ff7c4d3f7beaa508b621c91931de3a1901247",
-    "head_date": "2026-11-25T06:13:04Z",
+    "head_commit": "77ae2064c2b32ff181e542d582ad5871e3890dae",
+    "head_date": "2026-11-25T20:09:00Z",
     "submodules": [],
     "committed_weight_bytes": 5510600,
-    "probed_at": "2026-11-25"
+    "probed_at": "2026-11-26"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
