@@ -34,9 +34,9 @@ class Contract(NamedTuple):
 
 # The HaloFuse image and the snapshot of its node set move TOGETHER (scripts/update_snapshot.py rewrites these two
 # lines after CI pushed an image; the tag prefix is the catalog profile the image was built from).
-# CI build of commit a876c02 (profile full); manifest digest
-# sha256:bc7db623ca32316d847567cf3a3adfa5ecdf89d95df0fa1566f75923bc6735ae (checked anonymously pullable 2026-11-25)
-HALOFUSE_IMAGE = "ghcr.io/code2collapse/halofuse-runtime:full-sha-a876c024f81ca4f621158662a4344cff2095b04d"
+# CI build of commit ff5e447 (profile full); manifest digest
+# sha256:96a351715bd4262f15296d9e68c7cb1398eb36ecbe4d9030b2ddefd1644f9dcc (checked anonymously pullable 2026-11-25)
+HALOFUSE_IMAGE = "ghcr.io/code2collapse/halofuse-runtime:full-sha-ff5e447e44609e5517b6fdb6b9ec94d435e6471a"
 HALOFUSE_SNAPSHOT_PROFILE = "full"
 
 CONTRACTS = {
