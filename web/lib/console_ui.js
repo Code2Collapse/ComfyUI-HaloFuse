@@ -339,7 +339,16 @@ export class HaloFuseConsole {
     }
     const panel = this.panels[this.tab];
     const prevScroll = panel.firstChild?.scrollTop || 0;
+    const prevHeight = panel.firstChild?.scrollHeight || 0;
     const prevTech = panel.querySelector?.(".hf-tech")?.scrollTop || 0;
+    // owner 2026-11-25: the Live tab is rebuilt on every update; its new images are still loading, so the new
+    // content was briefly shorter and the browser clamped the scroll back to the top ("cannot scroll at all").
+    // Hold the previous content height until the next render.
+    if (this.tab === "live" && prevHeight > 1) {
+      el.classList.add("hf-scroll-hold");
+      el.append(H("div", { className: "hf-scroll-marker", style: { top: `${prevHeight - 1}px` },
+                           attrs: { "aria-hidden": "true" } }));
+    }
     // keep keyboard focus on the same control across a re-render (buttons carry data-hf-key)
     const active = this.doc.activeElement;
     const key = active && panel.contains(active) ? active.getAttribute?.("data-hf-key") : null;

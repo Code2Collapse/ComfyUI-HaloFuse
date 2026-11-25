@@ -120,6 +120,9 @@ export const HF_CSS = `
 .hf-console .hf-tabpanel > .hf-live { flex: 0 0 auto; overflow: visible; }
 .hf-tabpanel[hidden] { display: none; }
 .hf-scroll { overflow: auto; overscroll-behavior: contain; padding: 12px; flex: 1 1 auto; min-height: 0; }
+/* Live tab re-render: a 1 px marker at the old content height keeps the scroll position from being clamped */
+.hf-scroll.hf-scroll-hold { position: relative; }
+.hf-scroll-marker { position: absolute; left: 0; width: 1px; height: 1px; pointer-events: none; visibility: hidden; }
 .hf-toolbar { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--hf-border); background: var(--hf-bg); }
 .hf-toolbar .hf-btn, .hf-toolbar .hf-select, .hf-toolbar .hf-input { font-size: 12px; padding: 4px 9px; height: 28px; }
 .hf-toolbar .hf-search { flex: 1 1 200px; max-width: 360px; }
