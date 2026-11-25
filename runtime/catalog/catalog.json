@@ -2951,7 +2951,7 @@
     "commit": "2f18256c5b5063937106f29a8e0a7db3ae3869b7",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "0be18ac1bbc64151bd9ad372fb22074d3d7c9cd9d14f578cdc414bc15c18629a",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -4031,7 +4031,7 @@
     "version": "1.7.2",
     "reason": "Comfy Registry package version (the registry does not expose the source commit)",
     "pinned_at": "2026-11-20",
-    "content_sha256": null
+    "content_sha256": "2d4fcb47eb4f6590f96cc64c527351f32b95c18f02a259ff5a2a723c79d9aef8"
    },
    "verified": {
     "status": "IMPORT VERIFIED",
@@ -4364,7 +4364,7 @@
     "commit": "8846653446a6b13582da11793faf950325a398e0",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "89270c77c6ff578733bf67038666a67870aca67eaffa9753f4ee886d824633b1",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -4444,7 +4444,7 @@
     "commit": "72495e806bc2ab9c41581e15ccaa1bcf83c477e8",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "4f5ca8bd1ac54d744e10a24ba4c0f9a43b08ec3c06ad1f64b9fd76ebf1b54466",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -4804,7 +4804,7 @@
     "commit": "9f2ac3c1a9400366686906af8c2558001c609ef2",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "11e0b2d8dec70b066baaf8588bf5731cbde9d02f923464d59d78fedd4f425c43",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -5068,7 +5068,7 @@
     "commit": "4d738d23aef4dbdd2951fa0fc1d454dcef19ca61",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "f3206125544ba5ee8cbe7f7dd280f58b09de431de09803e64ecbc212b6e65b13",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -5376,7 +5376,7 @@
     "commit": "26545cc2dd95bc3d27f056016300673bdeee78f5",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "8822149a07591377de32a041b2deca0e6573670e1730e6dc79f64997e2f2a5ae",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -5644,7 +5644,7 @@
     "commit": "b0a8efc23c9d902d7ebd8fe3f79515a23d343bc2",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "d15db368105229cdcca3e238bbf8316d8956c61340e37341851c4763c8377e50",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -6365,7 +6365,7 @@
     "commit": "3a0a3f5f18260fc914f96a8c7f0f23c835e881cd",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "b3acb5484ebddb91eeb01aa8eb1b6fc5579d1586e3ec60ea011adcc0fd3b95f8",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -6848,7 +6848,7 @@
     "commit": "f8f029fab458f7ef09142edd23a6c678856b4850",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "66ffe90a59d51744247a4b933cbcc054e9b9e0936d62aeed87eed3632df633aa",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -8915,7 +8915,7 @@
      "scipy>=1.11.0",
      "numpy>=1.24.0"
     ],
-    "source": "requirements.txt at 6d39050037d6"
+    "source": "requirements.txt at 229ff7c4d3f7"
    },
    "system_deps": [],
    "model_download": {
@@ -8948,15 +8948,15 @@
    ],
    "enabled_by_default": false,
    "pin": {
-    "commit": "6d39050037d631007f669b2e37684d38e147a8c4",
+    "commit": "229ff7c4d3f7beaa508b621c91931de3a1901247",
     "version": null,
-    "pinned_at": "2026-11-23",
-    "content_sha256": "2fa5bdcf75705ed01bd7a3551f7b416acd78dba5973fb487ba790a46bf79082e",
-    "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
+    "pinned_at": "2026-11-25",
+    "content_sha256": "99789656a1afe52f5e5de9de79fa01ffcc40f0181b63a17a1a5feb694ba3315a",
+    "pin_source": "default branch HEAD on 2026-11-25 (update_pins.py)"
    },
    "verified": {
     "status": "NOT VERIFIED",
-    "evidence": "pin moved from caaa01df1a6e to 6d39050037d6 on 2026-11-23 (update_pins.py); no build or import test at the new pin yet"
+    "evidence": "pin moved from 6d39050037d6 to 229ff7c4d3f7 on 2026-11-25 (update_pins.py); no build or import test at the new pin yet"
    },
    "source_list": "Main custom-node collection",
    "description": "Trying to create a customware of ComfyUI to use it for Minimax",
@@ -8967,11 +8967,11 @@
     "archived": false,
     "fork": false,
     "default_branch": "main",
-    "head_commit": "6d39050037d631007f669b2e37684d38e147a8c4",
-    "head_date": "2026-11-23T12:02:44Z",
+    "head_commit": "229ff7c4d3f7beaa508b621c91931de3a1901247",
+    "head_date": "2026-11-25T06:13:04Z",
     "submodules": [],
     "committed_weight_bytes": 5510600,
-    "probed_at": "2026-11-23"
+    "probed_at": "2026-11-25"
    },
    "needs_owner": "licence decision 12 (copyleft)"
   },
@@ -9101,7 +9101,7 @@
     "commit": "fe69967a3a4ff88860cbc9af3cd0712ac3bd020f",
     "version": null,
     "pinned_at": "2026-11-23",
-    "content_sha256": null,
+    "content_sha256": "dcb2b2353bc182390f094812a6ffefcccd958bea51d0cb88527f41ae8890fd5b",
     "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
@@ -10429,7 +10429,7 @@
     "commit": "b43184f41d5aca84808f37da220ccceba4b48bde",
     "version": null,
     "pinned_at": "2026-11-23",
-    "content_sha256": null,
+    "content_sha256": "bb23a4f6eee6c2c91e3d0ccef746bd2e8160de0f274e73d13a067346a5d3d2bc",
     "pin_source": "default branch HEAD on 2026-11-23 (update_pins.py)"
    },
    "verified": {
@@ -10501,7 +10501,7 @@
     "commit": "09c7a1cb519a6a65e8443c4993cde24935af03da",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "5398678d118067baeebc35a410c56423557a25da7c68749228371533114195bb",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -10815,7 +10815,7 @@
     "commit": "d8521d14fe0d721d80cd9417fff5a559cbc21aba",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "b62c0bae48a5bc8ebf10b6187a4108c4283a96cda36794af44bb8b2ee1faae79",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -15495,7 +15495,7 @@
     "commit": "2bd011b043f87023a2d86a82cd23d594a9793e10",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "181ce78dbf314d61732a4aaea3e6126c44f12f3fe8a8b87903c9da16b255e2e3",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -16725,7 +16725,7 @@
     "commit": "5e3a20737f4abad337141779b586c2df0e8c42f8",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "23ecbfacf3c110de86f122bb684958271250fef90ccdb00fede81bae6c5fe66a",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -18304,7 +18304,7 @@
     "commit": "de0ff5d2c2ea435d29f800abfa568cffdfb94773",
     "version": null,
     "pinned_at": "2026-11-20",
-    "content_sha256": null,
+    "content_sha256": "a6c7f4850ebf2bfe08ce6499a0c0756b3496a36f226362575c50c6c33622779f",
     "pin_source": "default branch HEAD on 2026-11-20 (GitHub API)"
    },
    "verified": {
@@ -20282,7 +20282,7 @@
     "commit": "897514ae1d4711d7e356dcce5953a0c750ffaf68",
     "version": null,
     "pinned_at": "2026-11-24",
-    "content_sha256": null,
+    "content_sha256": "c023c2e61a7e7e0717ec8de0bf36ca79e93995da5302345953fd65b2690558b0",
     "pin_source": "owner workflow 2026-11-24"
    },
    "verified": {
