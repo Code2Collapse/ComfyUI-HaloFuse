@@ -95,6 +95,79 @@ def collect_new(before, output_dir, subdir_name) -> list:
     return sorted(moved)
 
 
+def windows_name_parts(name) -> list:
+    """'SHOT\\SHOT_00001.mov' -> ['SHOT', 'SHOT_00001.mov']; [] when the name has no backslash or only unsafe parts."""
+    if "\\" not in name:
+        return []
+    return [p for p in name.split("\\") if p not in ("", ".", "..")]
+
+
+def fix_windows_names(output_dir) -> list:
+    """Files whose NAME contains a backslash become the folders that were meant (owner 2026-11-25: a filename_prefix
+    typed on Windows, "SHOT\\SHOT_V001", made one Linux file named 'SHOT\\SHOT_V001_00001.mov' in /output, which cloud
+    storage and Windows downloads handle badly). Returns [(old, new)]; never raises."""
+    output_dir = Path(output_dir)
+    renamed = []
+    for src in sorted(snapshot(output_dir)):
+        parts = windows_name_parts(src.name)
+        if not parts:
+            continue
+        try:
+            dest = _free_destination(src.parent.joinpath(*parts))
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(src, dest)
+            renamed.append((src, dest))
+        except OSError:
+            continue
+    return renamed
+
+
+UPLOAD_BYTES_PER_S = 4 * 1024 * 1024   # conservative cloud-storage upload rate for the post-render hold
+MIN_HOLD_S, MAX_HOLD_S = 15.0, 900.0
+
+
+def hold_seconds(total_bytes, env=None) -> float:
+    """How long to keep the machine up after the outputs are written, so the storage sync can finish uploading
+    them before the machine is shut down (owner 2026-11-25: a 193 MB .mov never reached storage, provider error
+    output_drain_failed: "drain budget (60s) exhausted with pending writes still queued").
+    HF_OUTPUT_HOLD_S overrides (0 = no hold)."""
+    env = os.environ if env is None else env
+    raw = str(env.get("HF_OUTPUT_HOLD_S") or "").strip()
+    if raw:
+        try:
+            return max(0.0, min(MAX_HOLD_S, float(raw)))
+        except ValueError:
+            pass
+    if total_bytes <= 0:
+        return 0.0
+    return max(MIN_HOLD_S, min(MAX_HOLD_S, total_bytes / UPLOAD_BYTES_PER_S))
+
+
+def flush_outputs(output_dir, log=print, sleep=None, env=None) -> float:
+    """fsync every output file, sync the filesystem, then hold for hold_seconds(). Returns the seconds held."""
+    import time as _time
+    sleep = sleep or _time.sleep
+    files = list_outputs(output_dir)
+    total = 0
+    for f in files:
+        try:
+            total += f.stat().st_size
+            with open(f, "rb") as fh:
+                os.fsync(fh.fileno())
+        except OSError:
+            continue
+    try:
+        os.sync()
+    except (AttributeError, OSError):
+        pass
+    hold = hold_seconds(total, env)
+    if hold > 0:
+        log(f"keeping the machine up {hold:.0f} s so cloud storage can receive {len(files)} output file(s) "
+            f"({total / 1048576:.1f} MiB) before shutdown")
+        sleep(hold)
+    return hold
+
+
 def _safe_part(value) -> bool:
     if not isinstance(value, str):
         return False

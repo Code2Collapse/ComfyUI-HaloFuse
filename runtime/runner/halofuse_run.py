@@ -1288,6 +1288,9 @@ def _decode_from_latent(workflow, candidate, targets=None):
 
 def report_outputs():
     _CTX.phase("collect_outputs", "start")
+    for old, new in hf_outputs.fix_windows_names(OUTPUT_DIR):
+        log(f"output name with a Windows backslash moved into its folder: {old.name} -> "
+            f"{new.relative_to(OUTPUT_DIR).as_posix()}")
     files = hf_outputs.list_outputs(OUTPUT_DIR)
     for f in files:
         size = f.stat().st_size
@@ -1712,6 +1715,13 @@ def _run():
             {"code": "cancelled", "message": hf_classify.message_for("cancelled")})
     finally:
         shutdown(_CTX.proc)
+        try:  # after ComfyUI stopped: the outputs must reach cloud storage before the machine goes away
+            if not _CTX.cancel.is_set():  # a stop request means: end now, do not keep billing
+                _CTX.phase("output_sync", "start")
+                hf_outputs.flush_outputs(OUTPUT_DIR, log)
+                _CTX.phase("output_sync", "end")
+        except Exception as err:  # noqa: BLE001 - never turns a finished render into a failure
+            log(f"output sync wait skipped ({type(err).__name__}: {err})")
 
     if manifest is not None:
         if exit_code == 0:

@@ -36,6 +36,36 @@ _FALLBACK_RE = re.compile(r"TAESD previews enabled, but could not find\s+(\S+)")
 _DECODER_FILE_RE = re.compile(r"vae_approx[/\\]([A-Za-z0-9_.-]{1,120})")
 _NO_WEIGHTS = "No VAE weights detected"
 _DECODER_WINDOW = 20   # lines between naming the decoder file and core's "no weights" warning
+_DECODER_PATH_RE = re.compile(r"""['"]([^'"]*vae_approx[/\\][^'"]{1,200})['"]""")
+
+
+def decoder_diagnosis(path):
+    """Why core could not use a vae_approx decoder file, from its safetensors header only (never the weights), or None.
+
+    Owner 2026-11-25: core 0.46 loads a MiniMax H3 preview decoder only in the 3D TAEH3 layout (keys 'decoder.N.*',
+    'decoder.22.bias' with 12 outputs). Kijai's 2D taeh3 (keys '1.weight', ... without 'decoder.') works inside KJ's
+    Model Preview Override but not as ComfyUI's own sampler preview."""
+    import json as _json
+    import struct
+    try:
+        with open(path, "rb") as f:
+            size = struct.unpack("<Q", f.read(8))[0]
+            if not 0 < size <= 4 * 1024 * 1024:
+                return "not a safetensors file"
+            header = _json.loads(f.read(size))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, struct.error):
+        return "unreadable or not a safetensors file"
+    keys = [k for k in header if k != "__metadata__"]
+    if not keys:
+        return "empty file"
+    if "decoder.22.bias" in header:
+        return None  # the layout core reads: the failure has another cause
+    if any(k.split(".", 1)[0].isdigit() for k in keys) and not any(k.startswith("decoder.") for k in keys):
+        return ("2D decoder layout (Kijai taeh3_2d); ComfyUI's own preview needs the 3D TAEH3 file, KJ Model Preview "
+                "Override can still use this one")
+    return f"unknown layout (first key {sorted(keys)[0]})"
 
 
 def stage_of(class_type) -> str:
@@ -382,14 +412,18 @@ class LiveRelay:
             self._line_no += 1
             named = _DECODER_FILE_RE.search(line)
             if named:
-                self._decoder_seen = (named.group(1).rsplit(".", 1)[0], self._line_no)
+                full = _DECODER_PATH_RE.search(line)
+                self._decoder_seen = (named.group(1).rsplit(".", 1)[0], self._line_no, full.group(1) if full else None)
             if _NO_WEIGHTS in line and self._decoder_seen is not None:
-                stem, at = self._decoder_seen
+                stem, at, path = self._decoder_seen
                 if self._line_no - at <= _DECODER_WINDOW and stem not in self._decoder_failed:
                     self._decoder_failed.add(stem)
-                    failed = stem
+                    failed = (stem, path)
         if failed:
-            self.em.emit("phase", phase="preview_decoder_failed", state="mark", detail=failed[:120])
+            stem, path = failed
+            why = decoder_diagnosis(path) if path else None
+            detail = f"{stem}: {why}" if why else stem
+            self.em.emit("phase", phase="preview_decoder_failed", state="mark", detail=detail[:200])
         if self._fallback_sent:
             return
         m = _FALLBACK_RE.search(line)

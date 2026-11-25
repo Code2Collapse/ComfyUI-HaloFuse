@@ -767,6 +767,17 @@ class JobWatcher:
             info["cancel_state"] = c.get("state")
         rec = store.mutate(job_id, fn)
         outcome = info["outcome"]
+        late_code = getattr(job, "error_code", None)
+        if outcome == "succeeded" and late_code:
+            # owner 2026-11-25: the cloud said "succeeded" but its storage sync gave up (output_drain_failed);
+            # the 193 MB render never reached storage and nothing said so. Our own words: the cloud's message
+            # names its storage product.
+            text = ("The render finished, but the cloud did not finish copying the output files to storage before "
+                    "the machine shut down. Some outputs may be missing from this job and from your computer."
+                    if late_code == "output_drain_failed" else
+                    f"The render finished, but the cloud reported a problem afterwards ({late_code}). "
+                    "Check that every output arrived.")
+            store.append_event(job_id, "note", level="warning", text=text, data={"code": late_code})
         if info.get("cancel_state") == "cancel_confirmed":
             _cancel_event(store, job_id, "cancel_confirmed", rec,
                           "The cloud service confirmed the job ended (billing end itself is not reported).")
