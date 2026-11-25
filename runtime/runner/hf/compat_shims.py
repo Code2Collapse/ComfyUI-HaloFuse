@@ -74,7 +74,78 @@ def _install_minimax_time_shift_slope_shim():
     return True
 
 
-for _shim in (_install_minimax_final_layer_shim, _install_minimax_time_shift_slope_shim):
+def _restore_core_methods(mm, owner) -> list:
+    """Put core's own MiniMaxH3Model methods back on `owner`, taken from a fresh, unpatched copy of
+    comfy/ldm/minimax/model.py (a node pack may already have replaced them: custom nodes load in no fixed order).
+    Every method of the fresh class whose code differs from the one on `owner` is restored (the cache pack replaces
+    both _forward and _run_blocks). Returns the restored names."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("halofuse_core_minimax_reference", mm.__file__)
+    ref = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ref)
+    restored = []
+    core_cls = ref.MiniMaxH3Model
+    for name, value in vars(core_cls).items():
+        if not callable(value) or name.startswith("__") or name == "forward":
+            continue
+        mine = owner.__dict__.get(name)
+        if getattr(mine, "__code__", None) is not None and getattr(value, "__code__", None) is not None                 and mine.__code__.co_filename != value.__code__.co_filename:
+            setattr(owner, name, value)
+            restored.append(name)
+    for name in [n for n, v in vars(owner).items() if callable(v) and n not in vars(core_cls)
+                 and n.startswith("_") and not n.startswith("__") and n != "forward"]:
+        pass  # pack-only helpers stay; core code never calls them
+    return restored
+
+
+def _install_minimax_pack_fallback():
+    """Owner 2026-11-25: ComfyUI-MiniMaxH3-Cache replaces MiniMaxH3Model._forward with a copy of older core code that
+    breaks on core 0.46 in several places (FinalLayer args, time_shift_slope, PackedLayout(frame_count=...)). When an
+    error comes from inside that pack's code, run core's own _forward for the rest of this ComfyUI session: the render
+    is correct, only the pack's cache speed-up is lost. One plain log line says so."""
+    try:
+        import comfy.ldm.minimax.model as mm
+    except Exception:  # noqa: BLE001
+        return False
+    cls = getattr(mm, "MiniMaxH3Model", None)
+    if cls is None or getattr(cls, "_halofuse_fallback_wrapped", False):
+        return False
+    original_forward = cls.forward
+
+    def forward(self, *args, **kwargs):
+        try:
+            return original_forward(self, *args, **kwargs)
+        except (TypeError, AttributeError, ValueError) as err:
+            owner = type(self)
+            patched = getattr(owner, "_forward", None)
+            pack_file = getattr(getattr(patched, "__code__", None), "co_filename", "") or ""
+            core_file = mm.__file__ or ""
+            tb = err.__traceback__
+            from_pack = False
+            while tb is not None:
+                fn = tb.tb_frame.f_code.co_filename or ""
+                # the frame belongs to the code that replaced core's _forward (any folder name), or names the pack
+                if (pack_file and fn == pack_file and pack_file != core_file) or "MiniMaxH3-Cache" in fn:
+                    from_pack = True
+                    break
+                tb = tb.tb_next
+            if not from_pack or getattr(owner, "_halofuse_core_forward", False):
+                raise
+            restored = _restore_core_methods(mm, owner)
+            owner._halofuse_core_forward = True
+            print(f"[halofuse] compat: ComfyUI-MiniMaxH3-Cache does not work with this ComfyUI "
+                  f"({type(err).__name__}: {err}); running MiniMax H3 with core's own code instead "
+                  f"(same result, without the pack's cache speed-up; restored: {', '.join(restored) or 'nothing'})", flush=True)
+            return original_forward(self, *args, **kwargs)
+
+    forward.__wrapped__ = original_forward
+    cls.forward = forward
+    cls._halofuse_fallback_wrapped = True
+    return True
+
+
+for _shim in (_install_minimax_final_layer_shim, _install_minimax_time_shift_slope_shim,
+              _install_minimax_pack_fallback):
     try:
         _shim()
     except Exception as _err:  # noqa: BLE001 - a shim must never stop ComfyUI from starting
